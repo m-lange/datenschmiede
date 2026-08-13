@@ -48,6 +48,51 @@ export interface WebviewStrings {
 	fkColumnRequiredError: string;
 	fkColumnNotFoundError: string;
 
+	generatorColumnHeader: string;
+	generatorEmptyOption: string;
+	generatorNotFoundSuffix: string;
+	generatorCustomGroupLabel: string;
+	generatorBuiltinGroupLabel: string;
+	generatorEditParamsLabel: string;
+	generatorDialogNoParams: string;
+	generatorParamEmptyOption: string;
+	generatorCloseLabel: string;
+	generatorRequiredSuffix: string;
+	generatorTrueLabel: string;
+	generatorFalseLabel: string;
+	/** Warnungstexte — Kurzfassungen der Meldungen aus table/editorProvider.ts für den Zell-Tooltip. */
+	genWarnNotFound: string;
+	genWarnFkOnly: string;
+	genWarnParamMissing: string;
+	genWarnParamInvalid: string;
+	genWarnRefNotFound: string;
+
+	outputSectionTitle: string;
+	outputFileNameLabel: string;
+	outputFileNameHint: string;
+	outputFileNamePlaceholder: string;
+	outputAddVariableButton: string;
+	outputVariableGroupLabel: string;
+	outputColumnGroupLabel: string;
+	/** Anzeigenamen der eingebauten Dateinamen-Variablen (siehe FILE_NAME_VARIABLES in table/model.ts). */
+	outputVarDate: string;
+	outputVarTime: string;
+	outputVarDatetime: string;
+	outputVarTimestamp: string;
+	outputVarSchema: string;
+	outputVarTable: string;
+	outputVarRecords: string;
+	outputFormatLabel: string;
+	outputCsvSectionLabel: string;
+	csvDelimiterLabel: string;
+	csvDelimiterTab: string;
+	csvQuoteAllLabel: string;
+	csvDecimalLabel: string;
+	csvDateFormatLabel: string;
+	csvDatetimeFormatLabel: string;
+	csvIncludeHeaderLabel: string;
+	csvEncodingLabel: string;
+
 	emptyStateText: string;
 	emptyStateAction: string;
 
@@ -97,6 +142,50 @@ const en: WebviewStrings = {
 	fkColumnRequiredError: 'Select a referenced column.',
 	fkColumnNotFoundError: 'This column was not found in the referenced table.',
 
+	generatorColumnHeader: 'Column generator',
+	generatorEmptyOption: '— default by data type —',
+	generatorNotFoundSuffix: ' (not found)',
+	generatorCustomGroupLabel: 'Custom generators',
+	generatorBuiltinGroupLabel: 'Built-in generators',
+	generatorEditParamsLabel: 'Edit generator parameters',
+	generatorDialogNoParams: 'This generator has no parameters.',
+	generatorParamEmptyOption: '— select —',
+	generatorCloseLabel: 'Close',
+	generatorRequiredSuffix: ' *',
+	generatorTrueLabel: 'true',
+	generatorFalseLabel: 'false',
+	genWarnNotFound: 'This generator was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
+	genWarnFkOnly: 'The Foreign Key generator can only be used on foreign key columns.',
+	genWarnParamMissing: 'Required parameter "{0}" has no value.',
+	genWarnParamInvalid: 'Parameter "{0}" has an invalid value.',
+	genWarnRefNotFound: 'Parameter "{0}" references "{1}", which was not found. It may have been deleted or renamed.',
+
+	outputSectionTitle: 'Output',
+	outputFileNameLabel: 'File name',
+	outputFileNameHint:
+		'Combine fixed text with dynamic values. Dynamic parts appear as tags — click a tag to remove it. Empty uses "schema_table".',
+	outputFileNamePlaceholder: 'e.g. customers_{date}',
+	outputAddVariableButton: 'Add dynamic value',
+	outputVariableGroupLabel: 'Variables',
+	outputColumnGroupLabel: 'Column value (first record)',
+	outputVarDate: 'Current date',
+	outputVarTime: 'Current time',
+	outputVarDatetime: 'Current date + time',
+	outputVarTimestamp: 'Unix timestamp',
+	outputVarSchema: 'Schema',
+	outputVarTable: 'Table name',
+	outputVarRecords: 'Number of records',
+	outputFormatLabel: 'File type',
+	outputCsvSectionLabel: 'CSV settings',
+	csvDelimiterLabel: 'Column separator',
+	csvDelimiterTab: 'Tab',
+	csvQuoteAllLabel: 'Wrap every value in double quotes',
+	csvDecimalLabel: 'Decimal separator',
+	csvDateFormatLabel: 'Date format',
+	csvDatetimeFormatLabel: 'Timestamp format',
+	csvIncludeHeaderLabel: 'Write header row',
+	csvEncodingLabel: 'Encoding',
+
 	emptyStateText: 'No columns yet.',
 	emptyStateAction: 'Add first column',
 
@@ -145,6 +234,51 @@ const de: WebviewStrings = {
 	fkTableSelfReferenceError: 'Eine Tabelle kann nicht sich selbst referenzieren.',
 	fkColumnRequiredError: 'Spalte auswählen.',
 	fkColumnNotFoundError: 'Diese Spalte wurde in der referenzierten Tabelle nicht gefunden.',
+
+	generatorColumnHeader: 'Spaltengenerator',
+	generatorEmptyOption: '— Standard je Datentyp —',
+	generatorNotFoundSuffix: ' (nicht gefunden)',
+	generatorCustomGroupLabel: 'Eigene Generatoren',
+	generatorBuiltinGroupLabel: 'Eingebaute Generatoren',
+	generatorEditParamsLabel: 'Generator-Parameter bearbeiten',
+	generatorDialogNoParams: 'Dieser Generator hat keine Parameter.',
+	generatorParamEmptyOption: '— auswählen —',
+	generatorCloseLabel: 'Schließen',
+	generatorRequiredSuffix: ' *',
+	generatorTrueLabel: 'wahr',
+	generatorFalseLabel: 'falsch',
+	genWarnNotFound:
+		'Dieser Generator wurde nicht gefunden. Seine .tdgen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.',
+	genWarnFkOnly: 'Der Fremdschlüssel-Generator kann nur für Fremdschlüssel-Spalten verwendet werden.',
+	genWarnParamMissing: 'Pflichtparameter „{0}“ hat keinen Wert.',
+	genWarnParamInvalid: 'Parameter „{0}“ hat einen ungültigen Wert.',
+	genWarnRefNotFound: 'Parameter „{0}“ referenziert „{1}“ — wurde nicht gefunden, möglicherweise gelöscht oder umbenannt.',
+
+	outputSectionTitle: 'Ausgabe',
+	outputFileNameLabel: 'Dateiname',
+	outputFileNameHint:
+		'Fester Text kombiniert mit dynamischen Werten. Dynamische Teile erscheinen als Tags — Klick auf ein Tag entfernt es. Leer verwendet „schema_tabelle“.',
+	outputFileNamePlaceholder: 'z. B. customers_{date}',
+	outputAddVariableButton: 'Dynamischen Wert einfügen',
+	outputVariableGroupLabel: 'Variablen',
+	outputColumnGroupLabel: 'Spaltenwert (erster Datensatz)',
+	outputVarDate: 'Aktuelles Datum',
+	outputVarTime: 'Aktuelle Uhrzeit',
+	outputVarDatetime: 'Aktuelles Datum + Uhrzeit',
+	outputVarTimestamp: 'Unix-Zeitstempel',
+	outputVarSchema: 'Schema',
+	outputVarTable: 'Tabellenname',
+	outputVarRecords: 'Datensatzanzahl',
+	outputFormatLabel: 'Dateityp',
+	outputCsvSectionLabel: 'CSV-Einstellungen',
+	csvDelimiterLabel: 'Spaltentrenner',
+	csvDelimiterTab: 'Tabulator',
+	csvQuoteAllLabel: 'Jeden Wert in doppelte Anführungszeichen setzen',
+	csvDecimalLabel: 'Dezimaltrenner',
+	csvDateFormatLabel: 'Datumsformat',
+	csvDatetimeFormatLabel: 'Zeitstempelformat',
+	csvIncludeHeaderLabel: 'Kopfzeile schreiben',
+	csvEncodingLabel: 'Encoding',
 
 	emptyStateText: 'Noch keine Spalten vorhanden.',
 	emptyStateAction: 'Erste Spalte hinzufügen',

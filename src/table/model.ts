@@ -6,6 +6,8 @@
  * table/toml.ts) und nach jeder Änderung wieder zu TOML serialisiert.
  */
 
+import type { GeneratorConfig } from '../generator/types';
+
 /** Vordefinierte, gebräuchliche Datentypen für synthetische Testdaten. */
 export const COLUMN_TYPES = [
 	'string',
@@ -34,6 +36,63 @@ export interface Column {
 	/** Name der referenzierten Spalte in dieser Tabelle (nur relevant, wenn `fk` true ist). */
 	fkColumn: string;
 	description: string;
+	/**
+	 * Generator dieser Spalte (siehe src/generator/) — `undefined`, solange
+	 * keiner gewählt ist; beim Generator-Lauf greift dann ein Standard je
+	 * Datentyp (FK-Spalten bekommen den Fremdschlüssel-Generator automatisch).
+	 */
+	generator?: GeneratorConfig;
+}
+
+/** Einstellungen der CSV-Ausgabe einer Tabelle (siehe python/generate.py fürs Gegenstück). */
+export interface CsvOptions {
+	/** Spaltentrenner, z. B. ";" oder ",". */
+	delimiter: string;
+	/** Jeden Wert in doppelte Anführungszeichen setzen (sonst nur bei Bedarf). */
+	quoteAll: boolean;
+	/** Dezimaltrenner für Zahlenwerte, "." oder ",". */
+	decimal: string;
+	/** Datumsformat (Python strftime, z. B. "%Y-%m-%d"). */
+	dateFormat: string;
+	/** Zeitstempelformat (Python strftime, z. B. "%Y-%m-%d %H:%M:%S"). */
+	datetimeFormat: string;
+	/** Kopfzeile mit den Spaltennamen schreiben. */
+	includeHeader: boolean;
+	/** Datei-Encoding, z. B. "utf-8". */
+	encoding: string;
+}
+
+/** Ausgabe-Einstellungen einer Tabelle: Dateiname (mit `{…}`-Variablen) und Dateityp-Konfiguration. */
+export interface OutputConfig {
+	/**
+	 * Dateiname ohne Endung, als Vorlage mit `{…}`-Variablen — konstante
+	 * Textteile plus dynamische Teile wie `{date}`, `{timestamp}` oder
+	 * `{column:name}` (Wert der Spalte aus dem ersten generierten Datensatz),
+	 * siehe FILE_NAME_VARIABLES. Leer -> beim Lauf `schema_name`.
+	 */
+	fileName: string;
+	/** Dateityp der Ausgabe — vorerst ausschließlich "csv". */
+	format: string;
+	csv: CsvOptions;
+}
+
+/** Eingebaute Dateinamen-Variablen (`{…}`), die der Generator-Lauf beim Schreiben auflöst. */
+export const FILE_NAME_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'schema', 'table', 'records'] as const;
+
+export function createDefaultOutput(): OutputConfig {
+	return {
+		fileName: '',
+		format: 'csv',
+		csv: {
+			delimiter: ';',
+			quoteAll: true,
+			decimal: '.',
+			dateFormat: '%Y-%m-%d',
+			datetimeFormat: '%Y-%m-%d %H:%M:%S',
+			includeHeader: true,
+			encoding: 'utf-8',
+		},
+	};
 }
 
 export interface Table {
@@ -41,10 +100,11 @@ export interface Table {
 	name: string;
 	description: string;
 	columns: Column[];
+	output: OutputConfig;
 }
 
 export function createEmptyTable(name = ''): Table {
-	return { schema: '', name, description: '', columns: [] };
+	return { schema: '', name, description: '', columns: [], output: createDefaultOutput() };
 }
 
 /**

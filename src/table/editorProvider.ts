@@ -6,6 +6,11 @@ import { fullDocumentRange, getNonce } from '../util';
 import { getWebviewStrings } from './webviewStrings';
 import { validateTable, Issue } from './validation';
 import { TableOption, listTables, toTableOptions } from './repository';
+import { GeneratorBase } from '../generator/base';
+import { listGenerators, toGeneratorList } from '../generator/repository';
+import { listLookups, toLookupRefs } from '../lookup/repository';
+import { GeneratorParameter, KnownLookupRef } from '../generator/types';
+import { isCustomGeneratorId } from '../generator/custom';
 
 export type { TableOption } from './repository';
 
@@ -19,6 +24,36 @@ type ParsedDocument = { table: Table } | { error: unknown };
 const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.columnWidths';
 
 /**
+ * Ein Generator, wie ihn die Webview braucht (serialisierbare Beschreibung
+ * statt der GeneratorBase-Instanz): Auswahl-Liste, Parameter-Dialog und
+ * Anzeige-Text werden daraus clientseitig aufgebaut (siehe media/table.js).
+ */
+export interface GeneratorOption {
+	id: string;
+	label: string;
+	description: string;
+	parameters: GeneratorParameter[];
+	/** Anzeige-Vorlage mit `{param}`-Platzhaltern (siehe fillDisplayTemplate in generator/types.ts). */
+	displayTemplate?: string;
+	/** `true` für benutzerdefinierte Generatoren aus `.tdgen`-Dateien. */
+	custom: boolean;
+	/** `true` für den Fremdschlüssel-Generator — nur für FK-Spalten wählbar. */
+	fkOnly: boolean;
+}
+
+function toGeneratorOptions(generators: GeneratorBase[]): GeneratorOption[] {
+	return generators.map((generator) => ({
+		id: generator.id,
+		label: generator.name,
+		description: generator.description,
+		parameters: generator.parameters,
+		displayTemplate: generator.displayTemplate,
+		custom: isCustomGeneratorId(generator.id),
+		fkOnly: generator.id === 'foreign-key',
+	}));
+}
+
+/**
  * Custom-Text-Editor für .td-Dateien.
  *
  * Die Datei auf der Festplatte bleibt normaler TOML-Text (siehe toml.ts).
@@ -26,8 +61,9 @@ const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.columnWidths';
  * synchron: Änderungen im Formular werden als TOML zurückgeschrieben,
  * externe Änderungen am Text (z. B. Undo, Git, manuelles Bearbeiten) werden
  * neu geparst und an die Webview gesendet. Inhaltliche Probleme (z. B. eine
- * Fremdschlüssel-Spalte ohne referenzierte Tabelle) landen zusätzlich als
- * Diagnostics in VS Codes Problems-Ansicht.
+ * Fremdschlüssel-Spalte ohne referenzierte Tabelle, oder eine
+ * Generator-Konfiguration, deren Referenzen nicht mehr existieren) landen
+ * zusätzlich als Diagnostics in VS Codes Problems-Ansicht.
  */
 export class TableEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.tableEditor';
@@ -51,12 +87,13 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	 */
 	private readonly openDocuments = new Set<vscode.TextDocument>();
 	/**
-	 * Beobachtet .td-Dateien im Workspace, um die FK-„Referenzierte Tabelle“-
-	 * Liste aktuell zu halten — nicht nur bei Anlegen/Löschen, sondern auch
-	 * bei inhaltlichen Änderungen, da die Liste `schema.name` statt des
-	 * Dateipfads anzeigt.
+	 * Beobachtet .td-, .tdgen- und .lkp-Dateien im Workspace, um die
+	 * FK-„Referenzierte Tabelle“-Liste, die Generator-Auswahl und die
+	 * Nachschlagelisten-Auswahl aktuell zu halten — nicht nur bei
+	 * Anlegen/Löschen, sondern auch bei inhaltlichen Änderungen, da alle drei
+	 * Listen logische Namen statt Dateipfade anzeigen.
 	 */
-	private readonly tableFilesWatcher: vscode.FileSystemWatcher;
+	private readonly watchers: vscode.FileSystemWatcher[] = [];
 	/**
 	 * Zuletzt ermittelte Tabellenliste des Workspace, für die Validierung von
 	 * FK-Referenzen (siehe validateTable). Wird bei jedem Broadcast
@@ -67,17 +104,24 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	 * teuer.
 	 */
 	private cachedTableOptions: TableOption[] = [];
+	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), analog zu cachedTableOptions. */
+	private cachedGenerators: GeneratorBase[] = [];
+	/** Zuletzt ermittelte Nachschlagelisten (.lkp), analog zu cachedTableOptions. */
+	private cachedLookups: KnownLookupRef[] = [];
 	/** Inhaltliche Probleme (z. B. fehlende FK-Referenz) für die VS-Code-Problems-Ansicht. */
 	private readonly diagnostics: vscode.DiagnosticCollection;
 	private readonly closeDocSub: vscode.Disposable;
-	private tableOptionsBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
+	private optionsBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(private readonly context: vscode.ExtensionContext) {
-		this.tableFilesWatcher = vscode.workspace.createFileSystemWatcher('**/*.td');
-		const refresh = () => this.scheduleTableOptionsBroadcast();
-		this.tableFilesWatcher.onDidCreate(refresh);
-		this.tableFilesWatcher.onDidDelete(refresh);
-		this.tableFilesWatcher.onDidChange(refresh);
+		const refresh = () => this.scheduleOptionsBroadcast();
+		for (const pattern of ['**/*.td', '**/*.tdgen', '**/*.lkp']) {
+			const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+			watcher.onDidCreate(refresh);
+			watcher.onDidDelete(refresh);
+			watcher.onDidChange(refresh);
+			this.watchers.push(watcher);
+		}
 
 		this.diagnostics = vscode.languages.createDiagnosticCollection('td');
 		this.closeDocSub = vscode.workspace.onDidCloseTextDocument((doc) => {
@@ -88,11 +132,13 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	}
 
 	public dispose(): void {
-		this.tableFilesWatcher.dispose();
+		for (const watcher of this.watchers) {
+			watcher.dispose();
+		}
 		this.diagnostics.dispose();
 		this.closeDocSub.dispose();
-		if (this.tableOptionsBroadcastTimer) {
-			clearTimeout(this.tableOptionsBroadcastTimer);
+		if (this.optionsBroadcastTimer) {
+			clearTimeout(this.optionsBroadcastTimer);
 		}
 	}
 
@@ -114,7 +160,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		// Frisch einlesen statt den (evtl. noch leeren oder veralteten) Cache zu
 		// nehmen, damit beim Öffnen nicht kurz fälschlich "Tabelle nicht
 		// gefunden" aufblitzt, bevor der erste Broadcast durchgelaufen ist.
-		void this.refreshTableOptionsCache().then(() => this.updateDiagnostics(document));
+		void this.refreshOptionsCache().then(() => this.updateDiagnostics(document));
 
 		// Wird gesetzt, bevor wir selbst einen WorkspaceEdit auf das Dokument
 		// anwenden, damit das dadurch ausgelöste onDidChangeTextDocument nicht
@@ -137,7 +183,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				return;
 			}
 			this.updateDiagnostics(document);
-			this.scheduleTableOptionsBroadcast();
+			this.scheduleOptionsBroadcast();
 			if (ignoreNextChange) {
 				ignoreNextChange = false;
 				return;
@@ -155,9 +201,17 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			switch (message.type) {
 				case 'ready': {
 					const state = this.readState(document);
-					const tableOptions = await this.refreshTableOptionsCache();
+					await this.refreshOptionsCache();
 					const columnWidths = this.context.globalState.get<Record<string, number>>(COLUMN_WIDTHS_STATE_KEY, {});
-					void webviewPanel.webview.postMessage({ type: 'init', strings, tableOptions, columnWidths, ...state });
+					void webviewPanel.webview.postMessage({
+						type: 'init',
+						strings,
+						tableOptions: this.cachedTableOptions,
+						generatorOptions: toGeneratorOptions(this.cachedGenerators),
+						lookupOptions: this.cachedLookups,
+						columnWidths,
+						...state,
+					});
 					break;
 				}
 				case 'edit': {
@@ -206,7 +260,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	/**
 	 * Aktualisiert die Problems-Ansicht für dieses Dokument: bei kaputtem
 	 * TOML der Syntaxfehler an seiner Position, sonst die inhaltlichen
-	 * Prüfungen aus validation.ts (z. B. FK ohne referenzierte Tabelle).
+	 * Prüfungen aus validation.ts — FK-Probleme als Fehler,
+	 * Generator-Probleme als Warnungen.
 	 */
 	private updateDiagnostics(document: vscode.TextDocument): void {
 		const result = this.parseDocument(document);
@@ -231,7 +286,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	}
 
 	private buildValidationDiagnostics(document: vscode.TextDocument, table: Table): vscode.Diagnostic[] {
-		const issues = validateTable(table, this.cachedTableOptions);
+		const issues = validateTable(table, this.cachedTableOptions, this.cachedGenerators, this.cachedLookups);
 		if (issues.length === 0) {
 			return [];
 		}
@@ -243,7 +298,11 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			const line = info ? info.nameLine ?? info.columnsLine : 0;
 			const lineIndex = Math.min(line, Math.max(0, document.lineCount - 1));
 			const range = document.lineAt(lineIndex).range;
-			const diagnostic = new vscode.Diagnostic(range, this.formatIssueMessage(issue), vscode.DiagnosticSeverity.Error);
+			const diagnostic = new vscode.Diagnostic(
+				range,
+				this.formatIssueMessage(issue),
+				issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
+			);
 			diagnostic.source = 'Datenschmiede';
 			diagnostic.code = issue.kind;
 			return diagnostic;
@@ -271,28 +330,88 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					label,
 					issue.detail ?? '',
 				);
+			case 'gen-not-found':
+				return vscode.l10n.t(
+					'Column "{0}": generator "{1}" was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
+					label,
+					issue.detail ?? '',
+				);
+			case 'gen-fk-only':
+				return vscode.l10n.t('Column "{0}": the Foreign Key generator can only be used on foreign key columns.', label);
+			case 'gen-param-missing':
+				return vscode.l10n.t('Column "{0}": generator parameter "{1}" has no value.', label, issue.paramName ?? '');
+			case 'gen-param-invalid':
+				return vscode.l10n.t(
+					'Column "{0}": generator parameter "{1}" has an invalid value ("{2}").',
+					label,
+					issue.paramName ?? '',
+					issue.detail ?? '',
+				);
+			case 'gen-table-not-found':
+				return vscode.l10n.t(
+					'Column "{0}": generator parameter "{1}" references table "{2}", which was not found. It may have been deleted, renamed, or moved.',
+					label,
+					issue.paramName ?? '',
+					issue.detail ?? '',
+				);
+			case 'gen-column-not-found':
+				return vscode.l10n.t(
+					'Column "{0}": generator parameter "{1}" references column "{2}", which was not found in the referenced table.',
+					label,
+					issue.paramName ?? '',
+					issue.detail ?? '',
+				);
+			case 'gen-lookup-not-found':
+				return vscode.l10n.t(
+					'Column "{0}": generator parameter "{1}" references lookup list "{2}", which was not found. It may have been deleted or renamed.',
+					label,
+					issue.paramName ?? '',
+					issue.detail ?? '',
+				);
+			case 'gen-lookup-column-not-found':
+				return vscode.l10n.t(
+					'Column "{0}": generator parameter "{1}" references column "{2}", which was not found in the lookup list.',
+					label,
+					issue.paramName ?? '',
+					issue.detail ?? '',
+				);
+			case 'gen-own-column-not-found':
+				return vscode.l10n.t(
+					'Column "{0}": the combine template references column "{1}", which does not exist in this table (or is the column itself).',
+					label,
+					issue.detail ?? '',
+				);
 			default:
 				return issue.kind;
 		}
 	}
 
-	/** Liest die Tabellenliste neu ein und hält sie als `cachedTableOptions` für die (synchrone) FK-Validierung vor. */
-	private async refreshTableOptionsCache(): Promise<TableOption[]> {
-		this.cachedTableOptions = toTableOptions(await listTables());
-		return this.cachedTableOptions;
+	/** Liest Tabellen-, Generator- und Nachschlagelisten-Liste neu ein und hält sie für die (synchrone) Validierung vor. */
+	private async refreshOptionsCache(): Promise<void> {
+		const [tables, generators, lookups] = await Promise.all([listTables(), listGenerators(), listLookups()]);
+		this.cachedTableOptions = toTableOptions(tables);
+		this.cachedGenerators = toGeneratorList(generators);
+		this.cachedLookups = toLookupRefs(lookups);
 	}
 
 	/**
-	 * Schickt allen offenen .td-Webviews die aktuelle Tabellen-Liste (z. B. nach
-	 * Anlegen/Löschen/Umbenennen einer Tabelle) und validiert alle offenen
-	 * Dokumente neu — so erscheint z. B. eine referenzierte Tabelle, die
-	 * inzwischen gelöscht wurde, sofort als Problem, auch wenn das Dokument
-	 * mit der FK-Spalte selbst gerade nicht bearbeitet wird.
+	 * Schickt allen offenen .td-Webviews die aktuellen Auswahllisten (z. B.
+	 * nach Anlegen/Löschen/Umbenennen einer Tabelle, eines Generators oder
+	 * einer Nachschlageliste) und validiert alle offenen Dokumente neu — so
+	 * erscheint z. B. ein referenzierter Generator, der inzwischen gelöscht
+	 * wurde, sofort als Problem, auch wenn das Dokument mit der Spalte selbst
+	 * gerade nicht bearbeitet wird.
 	 */
-	private async broadcastTableOptions(): Promise<void> {
-		const tableOptions = await this.refreshTableOptionsCache();
+	private async broadcastOptions(): Promise<void> {
+		await this.refreshOptionsCache();
+		const generatorOptions = toGeneratorOptions(this.cachedGenerators);
 		for (const panel of this.panels) {
-			void panel.webview.postMessage({ type: 'tableOptions', tableOptions });
+			void panel.webview.postMessage({
+				type: 'options',
+				tableOptions: this.cachedTableOptions,
+				generatorOptions,
+				lookupOptions: this.cachedLookups,
+			});
 		}
 		for (const document of this.openDocuments) {
 			this.updateDiagnostics(document);
@@ -300,13 +419,13 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	}
 
 	/** Debounced, damit z. B. beim Tippen im Namensfeld nicht bei jeder Änderung der ganze Workspace neu gelesen wird. */
-	private scheduleTableOptionsBroadcast(): void {
-		if (this.tableOptionsBroadcastTimer) {
-			clearTimeout(this.tableOptionsBroadcastTimer);
+	private scheduleOptionsBroadcast(): void {
+		if (this.optionsBroadcastTimer) {
+			clearTimeout(this.optionsBroadcastTimer);
 		}
-		this.tableOptionsBroadcastTimer = setTimeout(() => {
-			this.tableOptionsBroadcastTimer = undefined;
-			void this.broadcastTableOptions();
+		this.optionsBroadcastTimer = setTimeout(() => {
+			this.optionsBroadcastTimer = undefined;
+			void this.broadcastOptions();
 		}, 400);
 	}
 

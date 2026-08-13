@@ -4,8 +4,11 @@
 	"language.td.alias": "Table Definition",
 	"language.tdproject.alias": "Test Data Project",
 	"language.lkp.alias": "Lookup List",
+	"language.tdgen.alias": "Generator",
 	"command.newTable.title": "New Table…",
 	"command.newProject.title": "New Test Data Project…",
 	"command.newLookup.title": "New Lookup List…",
+	"command.newGenerator.title": "New Generator…",
+	"command.runGeneration.title": "Generate Test Data",
 	"command.selectPythonInterpreter.title": "Select Python Interpreter…"
 }

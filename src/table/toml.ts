@@ -1,11 +1,12 @@
 import { parse, TomlError } from 'smol-toml';
-import { Column, Table } from './model';
+import { Column, CsvOptions, OutputConfig, Table, createDefaultOutput } from './model';
 import { ParseError, tomlString } from '../tomlUtil';
+import { encodeGeneratorConfigLines, parseGeneratorConfig } from '../generator/configToml';
 
 /** Liest den TOML-Text einer .td-Datei in unser Tabellenmodell ein. */
 export function parseTableText(text: string): Table {
 	if (!text.trim()) {
-		return { schema: '', name: '', description: '', columns: [] };
+		return { schema: '', name: '', description: '', columns: [], output: createDefaultOutput() };
 	}
 
 	let data: Record<string, unknown>;
@@ -26,12 +27,13 @@ export function parseTableText(text: string): Table {
 		name: toStr(data.name),
 		description: toStr(data.description),
 		columns,
+		output: toOutput(data.output),
 	};
 }
 
 function toColumn(raw: unknown): Column {
 	const c = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-	return {
+	const column: Column = {
 		name: toStr(c.name),
 		type: toStr(c.type) || 'string',
 		pk: c.pk === true,
@@ -40,6 +42,34 @@ function toColumn(raw: unknown): Column {
 		fkColumn: toStr(c.fk_column),
 		description: toStr(c.description),
 	};
+	// Den Generator-Teil parst der jeweilige Generator selbst (siehe
+	// generator/configToml.ts).
+	const generator = parseGeneratorConfig(c);
+	if (generator) {
+		column.generator = generator;
+	}
+	return column;
+}
+
+/** Liest den `[output]`-Block (fehlende Werte bekommen die Standardwerte, siehe createDefaultOutput). */
+function toOutput(raw: unknown): OutputConfig {
+	const output = createDefaultOutput();
+	const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+	output.fileName = toStr(o.file_name);
+	output.format = toStr(o.format) || 'csv';
+
+	const csv = (o.csv && typeof o.csv === 'object' ? o.csv : {}) as Record<string, unknown>;
+	const defaults = output.csv;
+	output.csv = {
+		delimiter: toStr(csv.delimiter) || defaults.delimiter,
+		quoteAll: typeof csv.quote_all === 'boolean' ? csv.quote_all : defaults.quoteAll,
+		decimal: toStr(csv.decimal) || defaults.decimal,
+		dateFormat: toStr(csv.date_format) || defaults.dateFormat,
+		datetimeFormat: toStr(csv.datetime_format) || defaults.datetimeFormat,
+		includeHeader: typeof csv.include_header === 'boolean' ? csv.include_header : defaults.includeHeader,
+		encoding: toStr(csv.encoding) || defaults.encoding,
+	};
+	return output;
 }
 
 function toStr(value: unknown): string {
@@ -61,6 +91,10 @@ export function serializeTable(table: Table): string {
 	lines.push(`name = ${tomlString(table.name)}`);
 	lines.push(`description = ${tomlString(table.description)}`);
 
+	// Der [output]-Block muss vor den [[columns]]-Tabellen stehen — dahinter
+	// würde TOML ihn als weiteren Schlüssel der letzten Spalte lesen.
+	lines.push(...serializeOutput(table.output));
+
 	for (const column of table.columns) {
 		lines.push('');
 		lines.push('[[columns]]');
@@ -75,10 +109,34 @@ export function serializeTable(table: Table): string {
 			lines.push(`fk_column = ${tomlString(column.fkColumn)}`);
 		}
 		lines.push(`description = ${tomlString(column.description)}`);
+		// Der Generator-Teil kommt vom Generator selbst — und muss als
+		// letztes stehen, weil [columns.generator_params] eine Untertabelle
+		// eröffnet (siehe generator/configToml.ts).
+		lines.push(...encodeGeneratorConfigLines(column.generator, tomlString));
 	}
 
 	lines.push('');
 	return lines.join('\n');
+}
+
+/** Schreibt den `[output]`-Block (Dateiname + CSV-Einstellungen). */
+function serializeOutput(output: OutputConfig): string[] {
+	const lines: string[] = [];
+	lines.push('');
+	lines.push('[output]');
+	lines.push(`file_name = ${tomlString(output.fileName)}`);
+	lines.push(`format = ${tomlString(output.format || 'csv')}`);
+	lines.push('');
+	lines.push('[output.csv]');
+	const csv: CsvOptions = output.csv;
+	lines.push(`delimiter = ${tomlString(csv.delimiter)}`);
+	lines.push(`quote_all = ${csv.quoteAll ? 'true' : 'false'}`);
+	lines.push(`decimal = ${tomlString(csv.decimal)}`);
+	lines.push(`date_format = ${tomlString(csv.dateFormat)}`);
+	lines.push(`datetime_format = ${tomlString(csv.datetimeFormat)}`);
+	lines.push(`include_header = ${csv.includeHeader ? 'true' : 'false'}`);
+	lines.push(`encoding = ${tomlString(csv.encoding)}`);
+	return lines;
 }
 
 /** Zeilenposition einer `[[columns]]`-Tabelle im Rohtext, für Diagnostics. */
@@ -106,6 +164,12 @@ export function findColumnLineInfo(text: string): ColumnLineInfo[] {
 		if (/^\s*\[\[columns\]\]/.test(line)) {
 			current = { columnsLine: i, nameLine: null };
 			result.push(current);
+			continue;
+		}
+		if (/^\s*\[columns\.generator_params\]/.test(line)) {
+			// Ab hier gehören Schlüssel (auch `name`) zur Parameter-Untertabelle,
+			// nicht mehr zur Spalte selbst.
+			current = null;
 			continue;
 		}
 		if (current && current.nameLine === null && /^\s*name\s*=/.test(line)) {

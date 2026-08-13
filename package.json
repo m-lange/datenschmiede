@@ -2,7 +2,7 @@
   "name": "datenschmiede-td",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "l10n": "./l10n",
   "publisher": "datenschmiede",
   "private": true,
@@ -68,6 +68,20 @@
           "light": "./icons/lookup-light.svg",
           "dark": "./icons/lookup-dark.svg"
         }
+      },
+      {
+        "id": "tdgen",
+        "aliases": [
+          "%language.tdgen.alias%",
+          "tdgen"
+        ],
+        "extensions": [
+          ".tdgen"
+        ],
+        "icon": {
+          "light": "./icons/tdgen-light.svg",
+          "dark": "./icons/tdgen-dark.svg"
+        }
       }
     ],
     "customEditors": [
@@ -100,6 +114,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "datenschmiede.generatorEditor",
+        "displayName": "Generator Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.tdgen"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "commands": [
@@ -122,6 +146,17 @@
         "command": "datenschmiede.selectPythonInterpreter",
         "title": "%command.selectPythonInterpreter.title%",
         "category": "Datenschmiede"
+      },
+      {
+        "command": "datenschmiede.newGenerator",
+        "title": "%command.newGenerator.title%",
+        "category": "Datenschmiede"
+      },
+      {
+        "command": "datenschmiede.runGeneration",
+        "title": "%command.runGeneration.title%",
+        "category": "Datenschmiede",
+        "icon": "$(play)"
       }
     ],
     "menus": {
@@ -137,6 +172,17 @@
         {
           "command": "datenschmiede.newLookup",
           "group": "navigation"
+        },
+        {
+          "command": "datenschmiede.newGenerator",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "datenschmiede.runGeneration",
+          "when": "activeCustomEditorId == datenschmiede.projectEditor",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
@@ -150,7 +196,13 @@
           "command": "datenschmiede.newLookup"
         },
         {
+          "command": "datenschmiede.newGenerator"
+        },
+        {
           "command": "datenschmiede.selectPythonInterpreter"
+        },
+        {
+          "command": "datenschmiede.runGeneration"
         }
       ]
     }

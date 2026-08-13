@@ -33,6 +33,7 @@
 	/** @typedef {{kind:'table',path:string,label:string,found:boolean,checked:boolean,locked:boolean,secondary:boolean,referencedTable?:string,records?:string}} ProjectPickerTableNode */
 	/** @typedef {ProjectPickerGroupNode | ProjectPickerTableNode} ProjectPickerNode */
 	/** @typedef {{path:string,label:string,resolved:boolean,ok:boolean}} PythonStatus */
+	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
 	/** @typedef {import('../src/project/webviewStrings').ProjectWebviewStrings} ProjectWebviewStrings */
 
 	/** @type {ProjectWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
@@ -45,6 +46,8 @@
 	let activeTab = 'overview';
 	/** @type {ProjectPickerNode[]} */
 	let pickerTree = [];
+	/** @type {OutputFileRow[]} Ausgabedateien-Übersicht (eine Zeile je ausgewählter Tabelle), kommt vom Extension-Host. */
+	let outputFiles = [];
 	/** @type {PythonStatus | null} */
 	let pythonStatus = null;
 	/** Aktueller Suchtext für den Tabellen-Tab (rein clientseitig, kein Extension-Host-Roundtrip nötig). */
@@ -199,8 +202,9 @@
 	// ---------------------------------------------------------------------
 
 	function renderOverviewTab() {
-		const section = el('section', { className: 'tab-panel field-group card' });
+		const stack = el('div', { className: 'tab-panel overview-stack' });
 
+		const section = el('section', { className: 'field-group card' });
 		section.appendChild(
 			renderTextField('f-name', strings.fieldNameLabel, project.name, strings.fieldNamePlaceholder, (v) => {
 				project.name = v;
@@ -208,8 +212,143 @@
 		);
 		section.appendChild(renderDescriptionField());
 		section.appendChild(renderPythonField());
+		stack.appendChild(section);
 
-		return section;
+		stack.appendChild(renderOutputFilesCard());
+
+		return stack;
+	}
+
+	// ---------------------------------------------------------------------
+	// Übersicht: Ausgabedateien + Start-Knopf des Generator-Laufs
+	// ---------------------------------------------------------------------
+
+	/**
+	 * Zeigt die Dateinamen-Vorlage einer Tabelle rein lesend an: `{…}`-Teile
+	 * als Tags (dieselbe Optik wie das editierbare Tag-Feld im Table Editor),
+	 * fester Text dazwischen unverändert.
+	 * @param {string} template
+	 * @param {string} ext
+	 */
+	function renderFileNamePreview(template, ext) {
+		const wrap = el('span', { className: 'filename-preview' });
+		const pattern = /\{([^{}]+)\}/g;
+		let lastIndex = 0;
+		let match;
+		while ((match = pattern.exec(template)) !== null) {
+			if (match.index > lastIndex) {
+				wrap.appendChild(el('span', { text: template.slice(lastIndex, match.index) }));
+			}
+			const token = match[1];
+			const chip = el('span', { className: 'filename-tag' });
+			chip.title = `{${token}}`;
+			chip.appendChild(
+				el('i', {
+					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'}`,
+				}),
+			);
+			chip.appendChild(el('span', { text: token.startsWith('column:') ? token.slice('column:'.length) : token }));
+			wrap.appendChild(chip);
+			lastIndex = match.index + match[0].length;
+		}
+		if (lastIndex < template.length) {
+			wrap.appendChild(el('span', { text: template.slice(lastIndex) }));
+		}
+		wrap.appendChild(el('span', { className: 'filename-ext', text: ext }));
+		return wrap;
+	}
+
+	/**
+	 * Karte „Generierte Dateien“: Start-Knopf des Generator-Laufs plus eine
+	 * rein lesende Übersicht, welche Datei der Lauf für jede ausgewählte
+	 * Tabelle erzeugen wird (td-Datei, Name, Dateiname, Datensatzanzahl) —
+	 * bearbeitet wird das im Table Editor bzw. im Tabellen-Tab.
+	 */
+	function renderOutputFilesCard() {
+		const card = el('section', { className: 'field-group card' });
+
+		const toolbar = el('div', { className: 'run-toolbar' });
+		const runBtn = el('button', { className: 'run-button' });
+		runBtn.type = 'button';
+		runBtn.appendChild(el('i', { className: 'codicon codicon-play' }));
+		runBtn.appendChild(document.createTextNode(strings.runButtonLabel));
+		runBtn.addEventListener('click', () => {
+			vscode.postMessage({ type: 'runGeneration' });
+		});
+		toolbar.appendChild(runBtn);
+		card.appendChild(toolbar);
+
+		card.appendChild(el('h3', { className: 'card-title', text: strings.outputFilesTitle }));
+		card.appendChild(el('p', { className: 'hint', text: strings.outputFilesHint }));
+
+		if (outputFiles.length === 0) {
+			card.appendChild(el('p', { className: 'hint', text: strings.outputFilesEmptyText }));
+			return card;
+		}
+
+		const wrap = el('div', { className: 'columns-table-wrap' });
+		const table = el('table', { className: 'columns-table output-files-table' });
+
+		const thead = el('thead');
+		const headRow = el('tr');
+		headRow.appendChild(el('th', { className: 'col-name', text: strings.outputFilesColTable }));
+		headRow.appendChild(el('th', { className: 'col-desc', text: strings.outputFilesColFile }));
+		headRow.appendChild(el('th', { className: 'col-desc', text: strings.outputFilesColFileName }));
+		headRow.appendChild(el('th', { className: 'col-records-wide', text: strings.outputFilesColRecords }));
+		headRow.appendChild(el('th', { className: 'col-spacer' }));
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+
+		const tbody = el('tbody');
+		for (const row of outputFiles) {
+			const tr = el('tr');
+
+			const nameTd = el('td', { className: 'tree-name-cell' });
+			const nameRow = el('span', { className: 'tree-row' });
+			if (treeIcons) {
+				nameRow.appendChild(renderThemedIcon(row.found ? treeIcons.normal : treeIcons.invalid, 'tree-file-icon'));
+			}
+			nameRow.appendChild(el('span', { className: 'tree-table-label', text: row.label }));
+			if (!row.found) {
+				nameRow.appendChild(el('i', { className: 'codicon codicon-warning row-warning-icon' }));
+			}
+			nameTd.appendChild(nameRow);
+			tr.appendChild(nameTd);
+
+			tr.appendChild(el('td', { className: 'col-desc path-cell', text: row.path }));
+
+			const fileNameTd = el('td', { className: 'col-desc' });
+			if (row.found) {
+				fileNameTd.appendChild(renderFileNamePreview(row.fileName, row.ext));
+			} else {
+				fileNameTd.appendChild(el('span', { className: 'missing-file-note', text: strings.tablesMissingFileText }));
+			}
+			tr.appendChild(fileNameTd);
+
+			const recordsTd = el('td', { className: 'col-records-wide' });
+			if (row.records) {
+				const recordsWrap = el('span', { className: 'records-cell-row' });
+				recordsWrap.appendChild(
+					el('i', {
+						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
+					}),
+				);
+				const text = row.secondary
+					? `${row.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', row.referencedTable || '')}`
+					: formatRecordsDisplay(row.records);
+				recordsWrap.appendChild(el('span', { text }));
+				recordsTd.appendChild(recordsWrap);
+			}
+			tr.appendChild(recordsTd);
+
+			tr.appendChild(el('td', { className: 'col-spacer' }));
+			tbody.appendChild(tr);
+		}
+		table.appendChild(tbody);
+
+		wrap.appendChild(table);
+		card.appendChild(wrap);
+		return card;
 	}
 
 	/**
@@ -989,6 +1128,7 @@
 			case 'init':
 				strings = message.strings;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
+				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
 				pythonStatus = message.pythonStatus || null;
 				treeIcons = message.icons || null;
 				columnWidths = message.columnWidths && typeof message.columnWidths === 'object' ? message.columnWidths : {};
@@ -1002,6 +1142,7 @@
 				parseError = null;
 				project = message.project;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
+				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
 				pythonStatus = message.pythonStatus || null;
 				render();
 				break;
@@ -1011,6 +1152,9 @@
 				break;
 			case 'pickerTree':
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
+				if (Array.isArray(message.outputFiles)) {
+					outputFiles = message.outputFiles;
+				}
 				if (!parseError) {
 					render();
 				}

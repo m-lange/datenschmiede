@@ -198,13 +198,103 @@ npm run check-types   # TypeScript-Typprüfung
 npm run package        # Produktions-Build (dist/extension.js)
 ```
 
+## Spaltengeneratoren
+
+Jede Spalte einer Tabelle kann einen **Generator** zugewiesen bekommen, der
+beim Generator-Lauf ihre Werte erzeugt (Grid-Spalte **„Spaltengenerator“**
+im Table Editor). Eingebaut sind (je einer pro Datei unter
+[`src/generator/builtins/`](src/generator/builtins/)):
+
+- **Random Int** / **Random Float**: gleichverteilte Zahlen in [min, max]
+- **Faker**: realistische Werte (Namen, Adressen, E-Mails, …) über das
+  Python-Paket [faker](https://faker.readthedocs.io/), Provider und Locale
+  als vordefinierte Auswahl
+- **Nachschlageliste**: gewichtete Werte aus einer `.lkp`-Liste des
+  Workspace
+- **Kombinieren**: kombiniert die Werte anderer Spalten derselben Tabelle
+  über eine Vorlage mit `{spaltenname}`-Platzhaltern
+- **Fremdschlüssel** (Standard-Generator für FK-Spalten, wird beim Anhaken
+  der FK-Checkbox automatisch zugewiesen): zieht Werte aus der
+  referenzierten Spalte; die erste FK-Spalte einer Tabelle bestimmt
+  zusammen mit der Kardinalität des Projekts die Datensatzanzahl
+
+Ohne Generator greift ein sinnvoller Standard je Datentyp (laufende Nummer,
+UUID4, Zufallsdatum, …). Der **Stift** neben der Auswahl öffnet einen
+Parameter-Dialog mit je Parametertyp passendem Eingabefeld; die Zelle zeigt
+danach den Anzeige-Text der Konfiguration (z. B. `Random Int: 1 … 100`,
+`FK → shop.customers.id`). Probleme der Konfiguration — fehlende
+Pflichtparameter, Referenzen auf inzwischen umbenannte oder gelöschte
+Tabellen/Spalten/Nachschlagelisten/Generatoren — markieren die Zelle und
+erscheinen als **Warnungen** in der Problems-Ansicht.
+
+## Benutzerdefinierte Generatoren (`.tdgen`)
+
+Über **„Datenschmiede: Neuen Generator erstellen…“** entsteht eine
+`.tdgen`-Datei (TOML) mit eigenem Custom Editor im Stil eines
+**Jupyter-Notebooks**: Name und Beschreibung als Markdown oben, darunter
+eine dynamische **Parameter-Tabelle** (Name, Datentyp — die Spaltentypen
+erweitert um Nachschlageliste, referenzierte Tabelle und Spalte —,
+Beschreibung, optionale vordefinierte Werteliste, Pflicht-Flag) sowie drei
+Python-**Code-Zellen** mit fest vorgegebener, nicht änderbarer Signatur und
+editierbarem Rumpf:
+
+- `def generate(params, n, ctx) -> pandas.Series` (Pflicht): erzeugt die
+  Werte; `ctx` bietet `rng` (numpy), `pd`/`np`, `faker(locale)`,
+  `column("name")` (Werte anderer Spalten) und `lookup("liste", "spalte")`
+- `def parse_params(params)` (optional): wandelt die String-Parameter in
+  typisierte Werte
+- `def display_value(params)` (optional): kompakte Zusammenfassung für
+  Lauf-Protokoll/Vorschau
+
+Referenziert wird ein Generator über seinen **Namen** (`custom:<name>`),
+nicht den Dateinamen; wird die Datei gelöscht oder der Name geändert,
+melden betroffene Tabellen das als Warnung. Beispiel:
+[`samples/order_number.tdgen`](samples/order_number.tdgen).
+
+## Ausgabe je Tabelle (Dateiname + CSV)
+
+Im **Übersicht**-Tab des Table Editors legt die Karte **„Ausgabe“** fest,
+wie die generierte Datei heißt und aussieht:
+
+- **Dateiname** als Tag-Feld (an Power Automate angelehnt): fester Text
+  frei editierbar, dynamische Teile als klickbare Tags — aktuelles
+  Datum/Uhrzeit, Zeitstempel, Schema, Tabellenname, Datensatzanzahl oder
+  der Wert einer Spalte aus dem ersten generierten Datensatz (Menü
+  **„Dynamischen Wert einfügen“**; Klick auf ein Tag entfernt es). Leer
+  ergibt `schema_tabelle`
+- **Dateityp** (vorerst nur CSV) mit Spaltentrenner, „jeden Wert in
+  doppelte Anführungszeichen“, Dezimaltrenner, Datums-/Zeitstempelformat,
+  Kopfzeile und Encoding
+
+## Generator-Lauf
+
+Der **Run-Knopf** in der Editor-Titelleiste des Projekt-Editors (bzw. der
+Start-Knopf im Übersicht-Tab, Befehl **„Datenschmiede: Testdaten
+generieren“**) startet die Generierung:
+
+1. Reihenfolge bestimmen: Tabellen topologisch nach Fremdschlüssel- und
+   Generator-Referenzen, innerhalb einer Tabelle Spalte für Spalte
+   (Kombinations-Spalten nach ihren referenzierten Spalten)
+2. Daten erzeugen: hochgradig vektorisiert über **pandas/numpy**
+   ([`python/generate.py`](python/generate.py)), mit dem verknüpften
+   Python-Interpreter des Projekts; referenzierte Tabellen entstehen über
+   die Kardinalität (`5` oder `1..3` je Datensatz der referenzierten
+   Tabelle)
+3. Schreiben: eine CSV-Datei je Tabelle gemäß ihrer Ausgabe-Konfiguration
+   in den Ordner `output/` neben der Projektdatei
+
+Der Fortschritt erscheint VS-Code-typisch als Benachrichtigung mit
+Fortschrittsbalken (abbrechbar); fehlende Python-Pakete (`pandas`, `numpy`,
+`faker`) werden mit Ein-Klick-Installation gemeldet. Der Übersicht-Tab des
+Projekt-Editors zeigt vorab je ausgewählter Tabelle die **generierte
+Datei** (td-Datei, Name, Dateiname-Vorlage, Datensatzanzahl — rein lesend).
+
 ## Roadmap
 
 Die Extension wird schrittweise zu einem vollständigen Generator für
 synthetische Testdaten ausgebaut, u. a.:
 
-- Der eigentliche Generator-Lauf: erzeugt mit dem verknüpften
-  Python-Interpreter synthetische Datensätze für alle Tabellen eines
-  Testdatenprojekts
-- Generator-spezifische Optionen je Datentyp (z. B. Wertebereiche, Muster)
-- Export/Vorschau generierter Testdaten
+- Vorschau generierter Testdaten direkt in VS Code
+- Weitere Ausgabeformate (z. B. JSON, SQL-Inserts, Parquet)
+- Weitere eingebaute Generatoren (z. B. Sequenzen mit Mustern,
+  Normalverteilungen)

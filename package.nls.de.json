@@ -4,8 +4,11 @@
 	"language.td.alias": "Tabellendefinition",
 	"language.tdproject.alias": "Testdatenprojekt",
 	"language.lkp.alias": "Nachschlageliste",
+	"language.tdgen.alias": "Generator",
 	"command.newTable.title": "Neue Tabelle erstellen…",
 	"command.newProject.title": "Neues Testdatenprojekt erstellen…",
 	"command.newLookup.title": "Neue Nachschlageliste erstellen…",
+	"command.newGenerator.title": "Neuen Generator erstellen…",
+	"command.runGeneration.title": "Testdaten generieren",
 	"command.selectPythonInterpreter.title": "Python-Interpreter auswählen…"
 }

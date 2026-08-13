@@ -1190,3 +1190,391 @@ body.vscode-high-contrast-light .chart-bar {
 	margin: 4px 6px;
 	background-color: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, var(--vscode-panel-border)));
 }
+
+/* ---------- Table Editor: Generator-Spalte ---------- */
+
+.col-generator {
+	min-width: 220px;
+}
+
+/* Auswahl + Stift nebeneinander (siehe renderGeneratorCell in table.js). */
+.generator-cell-row {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.generator-cell-row .select-wrap {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.generator-edit-btn {
+	flex: 0 0 auto;
+}
+
+/* Warnungs-Markierung der Generator-Zelle: oranger Rahmen statt rot —
+   Generator-Probleme sind Warnungen (siehe validateTable), keine Fehler.
+   Die ausführliche Meldung steht in der Problems-Ansicht und als Tooltip. */
+.has-warning {
+	border-color: var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground)) !important;
+}
+
+/* ---------- Table Editor: Parameter-Dialog des Generators ---------- */
+/* Webviews haben keine nativen VS-Code-Dialoge, daher ein eigenes Modal
+   über den Widget-Theme-Variablen (siehe openParamDialog in table.js). */
+
+.dialog-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 90;
+	background-color: color-mix(in srgb, var(--vscode-widget-shadow, rgba(0, 0, 0, 0.5)) 45%, transparent);
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+}
+
+.param-dialog {
+	margin-top: 10vh;
+	width: min(420px, calc(100vw - 48px));
+	max-height: 70vh;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
+}
+
+.param-dialog-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.param-dialog-title h3 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 1em;
+}
+
+.param-dialog-icon {
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Der Schließen-Knopf ist im Dialog immer sichtbar (die icon-button-Basis
+   blendet sich sonst erst bei Zeilen-Hover ein). */
+.param-dialog .icon-button {
+	opacity: 1;
+}
+
+.param-dialog-desc {
+	margin: 0;
+}
+
+.param-field {
+	gap: 2px;
+}
+
+.param-hint {
+	margin: 2px 0 0;
+	font-size: 0.85em;
+}
+
+/* ---------- Table Editor: Ausgabe-Karte (Übersicht-Tab) ---------- */
+
+.card-title {
+	font-size: 1em;
+	margin-bottom: 2px;
+}
+
+.field-narrow {
+	max-width: 260px;
+}
+
+.filename-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.filename-row .toolbar-btn {
+	flex: 0 0 auto;
+}
+
+/* Feste Dateiendung hinter dem Tag-Feld (ergibt sich aus dem Dateityp). */
+.filename-ext {
+	flex: 0 0 auto;
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--vscode-editor-font-family);
+}
+
+/* Tag-Feld für den Dateinamen: contenteditable-Zeile, in der dynamische
+   Variablen als atomare Tags liegen (siehe renderFileNameTagField in
+   table.js) — angelehnt an die Dynamic-Content-Tags von Power Automate. */
+.tag-field {
+	flex: 1 1 260px;
+	min-width: 200px;
+	min-height: 28px;
+	display: block;
+	white-space: nowrap;
+	overflow-x: auto;
+	line-height: 1.7;
+	cursor: text;
+}
+
+.tag-field:focus {
+	border-color: var(--vscode-focusBorder);
+	outline: none;
+}
+
+/* Platzhaltertext, solange das Feld leer ist (contenteditable kennt kein
+   natives placeholder-Attribut). */
+.tag-field.tag-field-empty::before {
+	content: attr(data-placeholder);
+	color: var(--vscode-input-placeholderForeground);
+	pointer-events: none;
+}
+
+.filename-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin: 0 1px;
+	padding: 0 6px 0 4px;
+	border-radius: 999px;
+	background-color: var(--vscode-badge-background, var(--vscode-button-secondaryBackground));
+	color: var(--vscode-badge-foreground, var(--vscode-button-secondaryForeground));
+	font-size: 0.9em;
+	cursor: pointer;
+	-webkit-user-select: none;
+	user-select: none;
+	vertical-align: baseline;
+}
+
+.filename-tag:hover {
+	opacity: 0.8;
+}
+
+.filename-tag .codicon {
+	font-size: 12px;
+}
+
+/* Menü „Dynamischen Wert einfügen“: gleiche Optik wie das Kontextmenü,
+   plus nicht klickbare Gruppen-Überschriften. */
+.variable-menu {
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.context-menu-label {
+	padding: 4px 10px 2px;
+	font-size: 0.8em;
+	font-weight: 600;
+	color: var(--vscode-descriptionForeground);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.context-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.menu-item-icon {
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.csv-settings {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.csv-settings-title {
+	font-size: 0.9em;
+	font-weight: 600;
+	margin: 4px 0 0;
+	color: var(--vscode-descriptionForeground);
+}
+
+.csv-settings-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 12px 16px;
+}
+
+.csv-settings-grid .field {
+	min-width: 0;
+}
+
+.checkbox-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+
+.checkbox-field input[type='checkbox'] {
+	width: 15px;
+	height: 15px;
+	margin: 0;
+	accent-color: var(--vscode-inputOption-activeBackground, var(--vscode-focusBorder));
+	cursor: pointer;
+}
+
+/* ---------- Generator-Editor (.tdgen): Notebook-Layout ---------- */
+/* Die Oberfläche ist einem Jupyter-Notebook nachempfunden: gestapelte
+   Zellen (Markdown-Kopf, Parameter-Tabelle, Code-Zellen mit fester
+   Signatur und editierbarem Rumpf), siehe media/generator.js. */
+
+.notebook {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	margin-top: 14px;
+}
+
+.notebook-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.generator-name-input {
+	font-size: 1.25em;
+	font-weight: 600;
+	padding: 8px 10px;
+}
+
+.cell-header h3 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.95em;
+	font-family: var(--vscode-editor-font-family);
+}
+
+.cell-header .hint {
+	margin: 4px 0 0;
+}
+
+.cell-method-icon {
+	color: var(--vscode-symbolIcon-methodForeground, var(--vscode-descriptionForeground));
+}
+
+/* Code-Zelle: Signatur-Kopf (nicht editierbar) + Rumpf-Textarea, optisch
+   ein zusammenhängender Block wie eine Notebook-Codezelle. */
+.code-cell {
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background-color: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+}
+
+.code-cell-required {
+	border-left: 3px solid var(--vscode-focusBorder);
+}
+
+.code-signature {
+	padding: 6px 12px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: var(--vscode-editor-font-size);
+	color: var(--vscode-descriptionForeground);
+	background-color: var(--vscode-keybindingTable-headerBackground, var(--vscode-editorWidget-background));
+	border-bottom: 1px solid var(--card-border);
+	white-space: pre;
+	overflow-x: auto;
+	cursor: not-allowed;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.code-body {
+	display: block;
+	width: 100%;
+	min-height: 72px;
+	padding: 8px 12px 8px 28px;
+	border: none;
+	outline: none;
+	resize: none;
+	font-family: var(--vscode-editor-font-family);
+	font-size: var(--vscode-editor-font-size);
+	line-height: 1.5;
+	color: var(--vscode-editor-foreground);
+	background-color: transparent;
+	white-space: pre;
+	overflow-x: auto;
+	tab-size: 4;
+}
+
+.code-body::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.code-cell:focus-within {
+	border-color: var(--vscode-focusBorder);
+}
+
+/* ---------- Projekt-Editor: Ausgabedateien-Übersicht (Übersicht-Tab) ---------- */
+
+.output-files-table .path-cell {
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.92em;
+}
+
+/* Dateinamen-Zelle: Vorlage mit Variablen-Tags, rein lesend (siehe
+   renderOutputFilesSection in project.js). */
+.filename-preview {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+	white-space: nowrap;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.95em;
+}
+
+.filename-preview .filename-tag {
+	cursor: default;
+}
+
+.run-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Auffälliger Start-Knopf im Übersicht-Tab — Primärfarbe wie VS Codes
+   eigene Run-Buttons. */
+.run-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	color: var(--vscode-button-foreground);
+	background-color: var(--vscode-button-background);
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: var(--radius-md);
+	padding: 5px 14px 5px 10px;
+	cursor: pointer;
+}
+
+.run-button:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.run-button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.run-button .codicon {
+	font-size: 15px;
+	color: var(--vscode-testing-runAction, var(--vscode-button-foreground));
+}

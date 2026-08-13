@@ -7,6 +7,8 @@ import { getProjectWebviewStrings } from './webviewStrings';
 import { listTables, tableLabel, computeRequiredClosure, TableEntry } from '../table/repository';
 import { parseCardinality } from '../table/cardinality';
 import { ensurePythonLinked, pickPythonInterpreter, resolveLinkedInterpreter } from './python';
+import { GeneratorBase } from '../generator/base';
+import { listGenerators, toGeneratorList } from '../generator/repository';
 
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
@@ -16,6 +18,7 @@ type WebviewToExtensionMessage =
 	| { type: 'toggleTable'; path: string; checked: boolean }
 	| { type: 'selectTables'; paths: string[] }
 	| { type: 'deselectTables'; paths: string[] }
+	| { type: 'runGeneration' }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { project: Project } | { error: unknown };
 
@@ -99,6 +102,66 @@ export interface ProjectPickerTableNode {
 export type ProjectPickerNode = ProjectPickerGroupNode | ProjectPickerTableNode;
 
 /**
+ * Eine Zeile der Ausgabedateien-Übersicht im Übersicht-Tab: welche Datei der
+ * Generator-Lauf für eine ausgewählte Tabelle erzeugen wird (td-Datei,
+ * Tabellenname, Dateiname-Vorlage, Datensatzanzahl) — rein lesend, bearbeitet
+ * wird der Dateiname im Table Editor, die Datensatzanzahl im Tabellen-Tab.
+ */
+export interface OutputFileRow {
+	/** Workspace-relativer Pfad der `.td`-Datei. */
+	path: string;
+	/** Logische Identität (`schema.name`), oder der Pfad als Fallback. */
+	label: string;
+	/** Dateiname-Vorlage mit `{…}`-Variablen (Standard `{schema}_{table}`, wenn nichts konfiguriert). */
+	fileName: string;
+	/** Dateiendung inkl. Punkt, aus dem konfigurierten Dateityp (vorerst ".csv"). */
+	ext: string;
+	/** Konfigurierte Datensatzanzahl ("100" bzw. "5"/"1..3" je referenziertem Datensatz). */
+	records?: string;
+	/** `false`, wenn die `.td`-Datei nicht (mehr) lesbar ist. */
+	found: boolean;
+	/** `true` bei einer referenzierten (sekundären) Tabelle — `records` gilt je Datensatz von `referencedTable`. */
+	secondary: boolean;
+	referencedTable?: string;
+}
+
+/** Baut die Ausgabedateien-Übersicht des Übersicht-Tabs (eine Zeile je ausgewählter Tabelle). */
+function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRow[] {
+	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
+	return project.tables.map((table): OutputFileRow => {
+		const entry = byPath.get(table.path);
+		if (!entry?.table) {
+			return {
+				path: table.path,
+				label: table.path,
+				fileName: '',
+				ext: '.csv',
+				records: table.records,
+				found: false,
+				secondary: false,
+			};
+		}
+		const label = tableLabel(entry.table, entry.relativePath);
+		const outgoing = entry.table.columns.find(
+			(column) => column.fk && column.fkTable.trim() !== '' && column.fkTable.trim() !== label,
+		);
+		return {
+			path: table.path,
+			label,
+			// Ohne konfigurierten Dateinamen greift der Standard `{schema}_{table}`
+			// (siehe python/generate.py) — als Vorlage angezeigt, damit die
+			// Übersicht dieselben Variablen-Tags zeigt wie der Table Editor.
+			fileName: entry.table.output.fileName.trim() || '{schema}_{table}',
+			ext: `.${(entry.table.output.format || 'csv').toLowerCase()}`,
+			records: table.records,
+			found: true,
+			secondary: !!outgoing,
+			referencedTable: outgoing?.fkTable.trim(),
+		};
+	});
+}
+
+/**
  * Custom-Text-Editor für .tdproject-Dateien.
  *
  * Analog zu table/editorProvider.ts bleibt die Datei auf der Festplatte
@@ -122,9 +185,16 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 
 	/** Offene Projekt-Webviews samt ihrem Dokument, um sie bei Änderungen an .td-Dateien im Workspace (Tabellen-Tab) neu zu versorgen. */
 	private readonly panelDocuments = new Map<vscode.WebviewPanel, vscode.TextDocument>();
-	/** Beobachtet .td-Dateien im Workspace, damit der Tabellen-Tab (Auswahlbaum, Namen, Tabellenart primär/referenziert) aktuell bleibt. */
-	private readonly tableFilesWatcher: vscode.FileSystemWatcher;
+	/**
+	 * Beobachtet .td- und .tdgen-Dateien im Workspace, damit Tabellen-Tab und
+	 * Ausgabedateien-Übersicht aktuell bleiben — .tdgen zusätzlich, weil die
+	 * automatische Tabellen-Mitnahme auch die von Generatoren benötigten
+	 * Tabellen berücksichtigt (siehe computeRequiredClosure).
+	 */
+	private readonly watchers: vscode.FileSystemWatcher[] = [];
 	private cachedEntries: TableEntry[] = [];
+	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), für computeRequiredClosure. */
+	private cachedGenerators: GeneratorBase[] = [];
 	private entriesRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 	private readonly diagnostics: vscode.DiagnosticCollection;
 	private readonly closeDocSub: vscode.Disposable;
@@ -137,17 +207,22 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			}
 		});
 
-		this.tableFilesWatcher = vscode.workspace.createFileSystemWatcher('**/*.td');
 		const refresh = () => this.scheduleEntriesRefresh();
-		this.tableFilesWatcher.onDidCreate(refresh);
-		this.tableFilesWatcher.onDidDelete(refresh);
-		this.tableFilesWatcher.onDidChange(refresh);
+		for (const pattern of ['**/*.td', '**/*.tdgen']) {
+			const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+			watcher.onDidCreate(refresh);
+			watcher.onDidDelete(refresh);
+			watcher.onDidChange(refresh);
+			this.watchers.push(watcher);
+		}
 	}
 
 	public dispose(): void {
 		this.diagnostics.dispose();
 		this.closeDocSub.dispose();
-		this.tableFilesWatcher.dispose();
+		for (const watcher of this.watchers) {
+			watcher.dispose();
+		}
 		if (this.entriesRefreshTimer) {
 			clearTimeout(this.entriesRefreshTimer);
 		}
@@ -180,9 +255,16 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			const state = this.readState(document);
 			this.updateDiagnostics(document);
 			if ('project' in state) {
-				const pickerTree = buildPickerTree(state.project, this.cachedEntries);
+				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
+				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
 				const pythonStatus = state.project.python ? await resolveLinkedInterpreter(state.project.python) : null;
-				void webviewPanel.webview.postMessage({ type: 'update', project: state.project, pickerTree, pythonStatus });
+				void webviewPanel.webview.postMessage({
+					type: 'update',
+					project: state.project,
+					pickerTree,
+					outputFiles,
+					pythonStatus,
+				});
 			} else {
 				void webviewPanel.webview.postMessage({ type: 'parseError', message: state.parseError });
 			}
@@ -210,7 +292,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				case 'ready': {
 					await this.refreshEntriesCache();
 					const state = this.readState(document);
-					const pickerTree = 'project' in state ? buildPickerTree(state.project, this.cachedEntries) : [];
+					const pickerTree =
+						'project' in state ? buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators) : [];
+					const outputFiles = 'project' in state ? buildOutputFiles(state.project, this.cachedEntries) : [];
 					const pythonStatus =
 						'project' in state && state.project.python ? await resolveLinkedInterpreter(state.project.python) : null;
 					const columnWidths = this.context.globalState.get<Record<string, number>>(COLUMN_WIDTHS_STATE_KEY, {});
@@ -218,6 +302,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						type: 'init',
 						strings,
 						pickerTree,
+						outputFiles,
 						pythonStatus,
 						icons,
 						columnWidths,
@@ -270,10 +355,16 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						if ('project' in state) {
 							void webviewPanel.webview.postMessage({
 								type: 'pickerTree',
-								pickerTree: buildPickerTree(state.project, this.cachedEntries),
+								pickerTree: buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators),
 							});
 						}
 					}
+					break;
+				}
+				case 'runGeneration': {
+					// Der eigentliche Lauf liegt im Befehl (siehe project/run.ts) —
+					// derselbe, den auch der Run-Knopf in der Editor-Titelleiste auslöst.
+					await vscode.commands.executeCommand('datenschmiede.runGeneration', document.uri);
 					break;
 				}
 				case 'selectTables': {
@@ -337,7 +428,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 
 		const remaining = project.tables.filter((t) => t.path !== relativePath);
 		const others = new Set(remaining.map((t) => t.path));
-		if (computeRequiredClosure(others, this.cachedEntries).has(relativePath)) {
+		if (computeRequiredClosure(others, this.cachedEntries, this.cachedGenerators).has(relativePath)) {
 			const entry = this.cachedEntries.find((e) => e.relativePath === relativePath);
 			const label = entry?.table ? tableLabel(entry.table, entry.relativePath) : relativePath;
 			void vscode.window.showWarningMessage(
@@ -371,7 +462,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				nextExplicit.add(path);
 			}
 		}
-		const required = computeRequiredClosure(nextExplicit, this.cachedEntries);
+		const required = computeRequiredClosure(nextExplicit, this.cachedEntries, this.cachedGenerators);
 		const allPaths = new Set([...nextExplicit, ...required]);
 		const existingRecords = new Map(project.tables.map((t) => [t.path, t.records] as const));
 		const tables: ProjectTable[] = [...allPaths].sort().map((path) => {
@@ -407,7 +498,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		// zu entfernenden über ihre FK-Kette benötigen.
 		for (;;) {
 			const keepPaths = new Set(keep.map((t) => t.path));
-			const required = computeRequiredClosure(keepPaths, this.cachedEntries);
+			const required = computeRequiredClosure(keepPaths, this.cachedEntries, this.cachedGenerators);
 			const addBack = project.tables.filter((t) => !keepPaths.has(t.path) && required.has(t.path));
 			if (addBack.length === 0) {
 				break;
@@ -540,7 +631,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	private async refreshEntriesCache(): Promise<TableEntry[]> {
-		this.cachedEntries = await listTables();
+		const [entries, generators] = await Promise.all([listTables(), listGenerators()]);
+		this.cachedEntries = entries;
+		this.cachedGenerators = toGeneratorList(generators);
 		return this.cachedEntries;
 	}
 
@@ -555,8 +648,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		for (const [panel, document] of this.panelDocuments) {
 			const state = this.readState(document);
 			if ('project' in state) {
-				const pickerTree = buildPickerTree(state.project, this.cachedEntries);
-				void panel.webview.postMessage({ type: 'pickerTree', pickerTree });
+				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
+				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
+				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles });
 			}
 		}
 	}
@@ -637,19 +731,20 @@ function buildTableRows(project: Project, entries: TableEntry[]): ProjectTableRo
  * Ordnerstruktur, samt Auswahl-/Sperr-/Datensatz-Status je Tabelle. Tabellen
  * ohne Schema (oder mit kaputtem TOML) landen auf der Wurzelebene.
  */
-function buildPickerTree(project: Project, entries: TableEntry[]): ProjectPickerNode[] {
+function buildPickerTree(project: Project, entries: TableEntry[], generators: GeneratorBase[] = []): ProjectPickerNode[] {
 	const explicit = new Set(project.tables.map((t) => t.path));
-	const required = computeRequiredClosure(explicit, entries);
+	const required = computeRequiredClosure(explicit, entries, generators);
 	const existingRecords = new Map(project.tables.map((t) => [t.path, t.records] as const));
 
 	/**
 	 * Gesperrt (nicht abwählbar) ist eine Tabelle, wenn die *übrigen*
-	 * ausgewählten Tabellen sie über ihre FK-Ketten weiterhin benötigen —
-	 * dieselbe Regel, mit der setTableChecked das Abwählen verweigert. Der
-	 * frühere Vergleich „nur automatisch mitgenommen, nicht explizit“ griff zu
-	 * kurz: setTableChecked schreibt beim Anhaken die komplette FK-Hülle mit
-	 * in project.tables, womit jede automatisch mitgenommene Tabelle sofort
-	 * als explizit galt und ihre Checkbox fälschlich aktiv blieb.
+	 * ausgewählten Tabellen sie über ihre FK-Ketten (bzw. Generator-
+	 * Referenzen) weiterhin benötigen — dieselbe Regel, mit der
+	 * setTableChecked das Abwählen verweigert. Der frühere Vergleich „nur
+	 * automatisch mitgenommen, nicht explizit“ griff zu kurz: setTableChecked
+	 * schreibt beim Anhaken die komplette Hülle mit in project.tables, womit
+	 * jede automatisch mitgenommene Tabelle sofort als explizit galt und ihre
+	 * Checkbox fälschlich aktiv blieb.
 	 */
 	function isLockedSelection(path: string): boolean {
 		if (!explicit.has(path)) {
@@ -657,7 +752,7 @@ function buildPickerTree(project: Project, entries: TableEntry[]): ProjectPicker
 		}
 		const others = new Set(explicit);
 		others.delete(path);
-		return computeRequiredClosure(others, entries).has(path);
+		return computeRequiredClosure(others, entries, generators).has(path);
 	}
 
 	function toTableNode(entry: TableEntry): ProjectPickerTableNode {

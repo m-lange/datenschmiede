@@ -3,10 +3,12 @@
 // unkompiliertes Skript gehalten (kein Bundling nötig, keine Abhängigkeiten).
 //
 // UI-Anleihen an Oracle SQL Developer for VS Code: Tabs (hier: "Übersicht" /
-// "Spalten" statt dessen Columns/Data/Constraints/…), ein schlankes
-// Bordered-Toolbar über dem Grid, ein Grid mit Zeilennummern-Spalte sowie
-// PK-/FK-Checkbox-Spalten und eigenen Spalten für referenzierte Tabelle
-// und Kardinalität (nur aktiv, wenn FK angehakt ist).
+// "Spalten"), ein schlankes Bordered-Toolbar über dem Grid, ein Grid mit
+// Zeilennummern-Spalte, PK-/FK-Checkbox-Spalten, Spalten für referenzierte
+// Tabelle/Spalte sowie der Generator-Spalte (Auswahl + Parameter-Dialog).
+// Der Übersicht-Tab enthält zusätzlich die Ausgabe-Einstellungen: Dateiname
+// als Tag-Feld (dynamische Variablen als klickbare Tags, ähnlich Power
+// Automate) und die CSV-Konfiguration.
 (function () {
 	'use strict';
 
@@ -20,7 +22,6 @@
 	const {
 		el,
 		bindText,
-		autoGrowCellTextarea,
 		renderMarkdownField,
 		updateFieldError,
 		wrapSelectWithChevron,
@@ -45,27 +46,40 @@
 		'json',
 	];
 
+	/** Eingebaute Dateinamen-Variablen — Gegenstück zu FILE_NAME_VARIABLES in src/table/model.ts. */
+	const FILE_NAME_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'schema', 'table', 'records'];
+
 	/**
 	 * `uiHidden` ist ein rein visueller Merkzustand des Auge-Umschalters in der
 	 * Aktionsspalte (Zeile gedimmt) — bewusst ohne jede weitere Funktion, wird
 	 * nicht in die .td-Datei geschrieben (serializeTable im Extension-Host kennt
 	 * das Feld nicht) und geht bei externen Änderungen am Dokument verloren.
-	 * @typedef {{name:string,type:string,pk:boolean,fk:boolean,fkTable:string,fkColumn:string,description:string,uiHidden?:boolean}} Column
+	 * @typedef {{id:string,params:Record<string,string>}} GeneratorConfig
+	 * @typedef {{name:string,type:string,pk:boolean,fk:boolean,fkTable:string,fkColumn:string,description:string,generator?:GeneratorConfig,uiHidden?:boolean}} Column
 	 */
-	/** @typedef {{schema:string,name:string,description:string,columns:Column[]}} Table */
+	/** @typedef {{delimiter:string,quoteAll:boolean,decimal:string,dateFormat:string,datetimeFormat:string,includeHeader:boolean,encoding:string}} CsvOptions */
+	/** @typedef {{fileName:string,format:string,csv:CsvOptions}} OutputConfig */
+	/** @typedef {{schema:string,name:string,description:string,columns:Column[],output:OutputConfig}} Table */
 	/** @typedef {{label:string,columns:string[]}} TableOption */
+	/** @typedef {{name:string,type:string,description:string,choices?:string[],required?:boolean,placeholder?:string}} GeneratorParameter */
+	/** @typedef {{id:string,label:string,description:string,parameters:GeneratorParameter[],displayTemplate?:string,custom:boolean,fkOnly:boolean}} GeneratorOption */
+	/** @typedef {{name:string,columns:string[]}} LookupOption */
 	/** @typedef {import('../src/table/webviewStrings').WebviewStrings} WebviewStrings */
 
 	/** @type {WebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
 	let strings = null;
 	/** @type {Table} */
-	let state = { schema: '', name: '', description: '', columns: [] };
+	let state = { schema: '', name: '', description: '', columns: [], output: defaultOutput() };
 	/** @type {string | null} */
 	let parseError = null;
 	/** @type {'overview' | 'columns'} */
 	let activeTab = 'columns';
-	/** @type {TableOption[]} Tabellen im Workspace (Label + Spaltennamen), für die FK-Auswahl */
+	/** @type {TableOption[]} Tabellen im Workspace (Label + Spaltennamen), für FK- und Generator-Referenzen */
 	let tableOptions = [];
+	/** @type {GeneratorOption[]} Verfügbare Generatoren (eingebaute + benutzerdefinierte), kommen vom Extension-Host */
+	let generatorOptions = [];
+	/** @type {LookupOption[]} Nachschlagelisten (.lkp) im Workspace, für Lookup-Parameter */
+	let lookupOptions = [];
 	/**
 	 * Von Hand gezogene Spaltenbreiten im Grid (px), je Spalten-Schlüssel.
 	 * Kommt initial vom Extension-Host (per globalState geräteweit über alle
@@ -85,9 +99,27 @@
 		{ key: 'desc', minWidth: 180 },
 		{ key: 'refTable', minWidth: 170 },
 		{ key: 'refColumn', minWidth: 150 },
+		{ key: 'gen', minWidth: 220 },
 	];
 
 	const app = document.getElementById('app');
+
+	/** @returns {OutputConfig} Standard-Ausgabe, bis der Extension-Host den echten Stand schickt (Gegenstück zu createDefaultOutput in src/table/model.ts). */
+	function defaultOutput() {
+		return {
+			fileName: '',
+			format: 'csv',
+			csv: {
+				delimiter: ';',
+				quoteAll: true,
+				decimal: '.',
+				dateFormat: '%Y-%m-%d',
+				datetimeFormat: '%Y-%m-%d %H:%M:%S',
+				includeHeader: true,
+				encoding: 'utf-8',
+			},
+		};
+	}
 
 	function postEdit() {
 		vscode.postMessage({ type: 'edit', table: state });
@@ -169,12 +201,13 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Übersicht": Name / Schema / Beschreibung
+	// Tab "Übersicht": Name / Schema / Beschreibung + Ausgabe (Dateiname, CSV)
 	// ---------------------------------------------------------------------
 
 	function renderOverviewTab() {
-		const section = el('section', { className: 'tab-panel field-group card' });
+		const stack = el('div', { className: 'tab-panel overview-stack' });
 
+		const section = el('section', { className: 'field-group card' });
 		section.appendChild(
 			renderTextField('f-name', strings.fieldNameLabel, state.name, strings.fieldNamePlaceholder, (v) => {
 				state.name = v;
@@ -186,8 +219,11 @@
 			}),
 		);
 		section.appendChild(renderDescriptionField());
+		stack.appendChild(section);
 
-		return section;
+		stack.appendChild(renderOutputCard());
+
+		return stack;
 	}
 
 	/**
@@ -232,11 +268,601 @@
 	}
 
 	// ---------------------------------------------------------------------
+	// Übersicht: Ausgabe-Karte — Dateiname als Tag-Feld + CSV-Einstellungen
+	// ---------------------------------------------------------------------
+
+	/** Anzeigename einer Dateinamen-Variable (`{…}`-Token ohne Klammern). @param {string} token */
+	function variableLabel(token) {
+		if (token.startsWith('column:')) {
+			return token.slice('column:'.length);
+		}
+		switch (token) {
+			case 'date':
+				return strings.outputVarDate;
+			case 'time':
+				return strings.outputVarTime;
+			case 'datetime':
+				return strings.outputVarDatetime;
+			case 'timestamp':
+				return strings.outputVarTimestamp;
+			case 'schema':
+				return strings.outputVarSchema;
+			case 'table':
+				return strings.outputVarTable;
+			case 'records':
+				return strings.outputVarRecords;
+			default:
+				return token;
+		}
+	}
+
+	function renderOutputCard() {
+		const card = el('section', { className: 'field-group card' });
+		card.appendChild(el('h3', { className: 'card-title', text: strings.outputSectionTitle }));
+
+		// --- Dateiname als Tag-Feld ---
+		const nameField = el('div', { className: 'field' });
+		nameField.appendChild(el('label', { text: strings.outputFileNameLabel }));
+
+		const row = el('div', { className: 'filename-row' });
+		const tagField = renderFileNameTagField();
+		row.appendChild(tagField.element);
+		row.appendChild(el('span', { className: 'filename-ext', text: `.${(state.output.format || 'csv').toLowerCase()}` }));
+
+		const addBtn = el('button', { className: 'toolbar-btn' });
+		addBtn.type = 'button';
+		addBtn.appendChild(el('i', { className: 'codicon codicon-add' }));
+		addBtn.appendChild(document.createTextNode(strings.outputAddVariableButton));
+		addBtn.addEventListener('click', (event) => {
+			const rect = addBtn.getBoundingClientRect();
+			event.stopPropagation();
+			showVariableMenu(rect.left, rect.bottom + 2, (token) => tagField.insertVariable(token));
+		});
+		row.appendChild(addBtn);
+
+		nameField.appendChild(row);
+		nameField.appendChild(el('p', { className: 'hint', text: strings.outputFileNameHint }));
+		card.appendChild(nameField);
+
+		// --- Dateityp (vorerst nur CSV) ---
+		const formatField = el('div', { className: 'field field-narrow' });
+		const formatLabel = el('label', { text: strings.outputFormatLabel });
+		formatLabel.htmlFor = 'f-format';
+		formatField.appendChild(formatLabel);
+		const formatSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+		formatSelect.id = 'f-format';
+		const csvOption = /** @type {HTMLOptionElement} */ (el('option', { text: 'CSV' }));
+		csvOption.value = 'csv';
+		csvOption.selected = true;
+		formatSelect.appendChild(csvOption);
+		formatSelect.addEventListener('change', () => {
+			state.output.format = formatSelect.value;
+			postEdit();
+		});
+		formatField.appendChild(wrapSelectWithChevron(formatSelect));
+		card.appendChild(formatField);
+
+		// --- CSV-Einstellungen ---
+		const csvSection = el('div', { className: 'csv-settings' });
+		csvSection.appendChild(el('h4', { className: 'csv-settings-title', text: strings.outputCsvSectionLabel }));
+		const grid = el('div', { className: 'csv-settings-grid' });
+
+		grid.appendChild(
+			renderCsvSelect(strings.csvDelimiterLabel, state.output.csv.delimiter, [
+				{ value: ';', label: ';' },
+				{ value: ',', label: ',' },
+				{ value: '|', label: '|' },
+				{ value: '\t', label: strings.csvDelimiterTab },
+			], (v) => {
+				state.output.csv.delimiter = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvSelect(strings.csvDecimalLabel, state.output.csv.decimal, [
+				{ value: '.', label: '.' },
+				{ value: ',', label: ',' },
+			], (v) => {
+				state.output.csv.decimal = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.csvDateFormatLabel, state.output.csv.dateFormat, '%Y-%m-%d', (v) => {
+				state.output.csv.dateFormat = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.csvDatetimeFormatLabel, state.output.csv.datetimeFormat, '%Y-%m-%d %H:%M:%S', (v) => {
+				state.output.csv.datetimeFormat = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvSelect(strings.csvEncodingLabel, state.output.csv.encoding, [
+				{ value: 'utf-8', label: 'UTF-8' },
+				{ value: 'utf-8-sig', label: 'UTF-8 (BOM)' },
+				{ value: 'latin-1', label: 'Latin-1' },
+				{ value: 'cp1252', label: 'Windows-1252' },
+			], (v) => {
+				state.output.csv.encoding = v;
+			}),
+		);
+		csvSection.appendChild(grid);
+
+		csvSection.appendChild(
+			renderCsvCheckbox(strings.csvQuoteAllLabel, state.output.csv.quoteAll, (v) => {
+				state.output.csv.quoteAll = v;
+			}),
+		);
+		csvSection.appendChild(
+			renderCsvCheckbox(strings.csvIncludeHeaderLabel, state.output.csv.includeHeader, (v) => {
+				state.output.csv.includeHeader = v;
+			}),
+		);
+
+		card.appendChild(csvSection);
+		return card;
+	}
+
+	/**
+	 * @param {string} labelText
+	 * @param {string} current
+	 * @param {{value:string,label:string}[]} options
+	 * @param {(value: string) => void} onChange
+	 */
+	function renderCsvSelect(labelText, current, options, onChange) {
+		const field = el('div', { className: 'field' });
+		field.appendChild(el('label', { text: labelText }));
+		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+		const values = options.map((o) => o.value);
+		// Einen von Hand ins TOML geschriebenen, hier unbekannten Wert trotzdem
+		// anzeigen statt ihn stillschweigend zu ersetzen.
+		if (current && !values.includes(current)) {
+			const opt = /** @type {HTMLOptionElement} */ (el('option', { text: current }));
+			opt.value = current;
+			select.appendChild(opt);
+		}
+		for (const option of options) {
+			const opt = /** @type {HTMLOptionElement} */ (el('option', { text: option.label }));
+			opt.value = option.value;
+			select.appendChild(opt);
+		}
+		select.value = current;
+		select.addEventListener('change', () => {
+			onChange(select.value);
+			postEdit();
+		});
+		field.appendChild(wrapSelectWithChevron(select));
+		return field;
+	}
+
+	/**
+	 * @param {string} labelText
+	 * @param {string} current
+	 * @param {string} placeholder
+	 * @param {(value: string) => void} onChange
+	 */
+	function renderCsvTextInput(labelText, current, placeholder, onChange) {
+		const field = el('div', { className: 'field' });
+		field.appendChild(el('label', { text: labelText }));
+		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+		input.type = 'text';
+		input.placeholder = placeholder;
+		input.value = current || '';
+		bindText(input, onChange, postEditDebounced, postEdit);
+		field.appendChild(input);
+		return field;
+	}
+
+	/**
+	 * @param {string} labelText
+	 * @param {boolean} current
+	 * @param {(value: boolean) => void} onChange
+	 */
+	function renderCsvCheckbox(labelText, current, onChange) {
+		const wrap = el('label', { className: 'checkbox-field' });
+		const checkbox = /** @type {HTMLInputElement} */ (el('input'));
+		checkbox.type = 'checkbox';
+		checkbox.checked = current;
+		checkbox.addEventListener('change', () => {
+			onChange(checkbox.checked);
+			postEdit();
+		});
+		wrap.appendChild(checkbox);
+		wrap.appendChild(el('span', { text: labelText }));
+		return wrap;
+	}
+
+	/**
+	 * Dateiname als Tag-Feld (Power-Automate-artig): fester Text ist direkt
+	 * editierbar, dynamische `{…}`-Variablen erscheinen als atomare Tags —
+	 * per Backspace/Entfernen wie ein Zeichen löschbar, ein Klick auf ein Tag
+	 * entfernt es. Serialisiert wird zurück in die Vorlagen-Syntax
+	 * (`kunden_{date}`), die der Generator-Lauf auflöst.
+	 */
+	function renderFileNameTagField() {
+		const field = el('div', { className: 'text-input tag-field' });
+		field.contentEditable = 'true';
+		field.spellcheck = false;
+		field.setAttribute('role', 'textbox');
+		field.setAttribute('aria-label', strings.outputFileNameLabel);
+		field.setAttribute('data-placeholder', strings.outputFileNamePlaceholder);
+
+		/** @param {string} token */
+		function createChip(token) {
+			const chip = el('span', { className: 'filename-tag' });
+			chip.contentEditable = 'false';
+			chip.setAttribute('data-var', token);
+			chip.title = `{${token}}`;
+			chip.appendChild(
+				el('i', {
+					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'}`,
+				}),
+			);
+			chip.appendChild(el('span', { text: variableLabel(token) }));
+			chip.addEventListener('click', () => {
+				// Klick entfernt das Tag (siehe outputFileNameHint).
+				chip.remove();
+				commit();
+			});
+			return chip;
+		}
+
+		/** Baut den Feldinhalt aus der gespeicherten Vorlage auf. @param {string} template */
+		function build(template) {
+			field.innerHTML = '';
+			const pattern = /\{([^{}]+)\}/g;
+			let lastIndex = 0;
+			let match;
+			while ((match = pattern.exec(template)) !== null) {
+				if (match.index > lastIndex) {
+					field.appendChild(document.createTextNode(template.slice(lastIndex, match.index)));
+				}
+				field.appendChild(createChip(match[1]));
+				lastIndex = match.index + match[0].length;
+			}
+			if (lastIndex < template.length) {
+				field.appendChild(document.createTextNode(template.slice(lastIndex)));
+			}
+			refreshEmptyState();
+		}
+
+		/** Liest den Feldinhalt zurück in die Vorlagen-Syntax. */
+		function serialize() {
+			let result = '';
+			field.childNodes.forEach((node) => {
+				if (node.nodeType === Node.TEXT_NODE) {
+					result += node.textContent || '';
+				} else if (node instanceof HTMLElement && node.dataset.var) {
+					result += `{${node.dataset.var}}`;
+				} else if (node instanceof HTMLElement) {
+					// z. B. aus einem Paste stammende Elemente: nur der Text zählt.
+					result += node.textContent || '';
+				}
+			});
+			// Zeilenumbrüche und geschweifte Klammern haben im Dateinamen nichts
+			// verloren (Klammern würden mit der Vorlagen-Syntax kollidieren).
+			return result.replace(/[\r\n{}]/g, '');
+		}
+
+		function refreshEmptyState() {
+			field.classList.toggle('tag-field-empty', field.childNodes.length === 0);
+		}
+
+		function commit() {
+			state.output.fileName = serialize();
+			refreshEmptyState();
+			postEditDebounced();
+		}
+
+		field.addEventListener('input', commit);
+		field.addEventListener('blur', () => {
+			state.output.fileName = serialize();
+			postEdit();
+		});
+		field.addEventListener('keydown', (event) => {
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				field.blur();
+			}
+		});
+		field.addEventListener('paste', (event) => {
+			// Nur reinen Text übernehmen (ohne Formatierung/Zeilenumbrüche).
+			event.preventDefault();
+			const text = (event.clipboardData ? event.clipboardData.getData('text/plain') : '').replace(/[\r\n{}]/g, '');
+			document.execCommand('insertText', false, text);
+		});
+
+		/** Fügt eine Variable an der aktuellen Cursor-Position ein (sonst am Ende). @param {string} token */
+		function insertVariable(token) {
+			const chip = createChip(token);
+			const selection = window.getSelection();
+			if (selection && selection.rangeCount > 0 && field.contains(selection.anchorNode)) {
+				const range = selection.getRangeAt(0);
+				range.deleteContents();
+				range.insertNode(chip);
+				range.setStartAfter(chip);
+				range.collapse(true);
+				selection.removeAllRanges();
+				selection.addRange(range);
+			} else {
+				field.appendChild(chip);
+			}
+			state.output.fileName = serialize();
+			refreshEmptyState();
+			postEdit();
+		}
+
+		build(state.output.fileName || '');
+		return { element: field, insertVariable };
+	}
+
+	/** Räumt das aktuell offene Variablen-/Kontextmenü ab (höchstens eines gleichzeitig). @type {(() => void) | null} */
+	let closeFloatingMenu = null;
+
+	function dismissFloatingMenu() {
+		if (closeFloatingMenu) {
+			closeFloatingMenu();
+		}
+	}
+
+	/**
+	 * Menü „Dynamischen Wert einfügen“: eingebaute Variablen plus die Spalten
+	 * dieser Tabelle (Wert aus dem ersten generierten Datensatz). Gleicher
+	 * Aufbau wie das Namensraum-Kontextmenü in project.js (Webviews haben
+	 * kein natives VS-Code-Menü).
+	 * @param {number} x
+	 * @param {number} y
+	 * @param {(token: string) => void} onPick
+	 */
+	function showVariableMenu(x, y, onPick) {
+		dismissFloatingMenu();
+
+		const menu = el('div', { className: 'context-menu variable-menu' });
+		menu.setAttribute('role', 'menu');
+		menu.tabIndex = -1;
+
+		/** @param {string} label @param {string} token */
+		const addItem = (label, token) => {
+			const item = /** @type {HTMLButtonElement} */ (el('button', { className: 'context-menu-item' }));
+			item.type = 'button';
+			item.setAttribute('role', 'menuitem');
+			item.appendChild(
+				el('i', {
+					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'} menu-item-icon`,
+				}),
+			);
+			item.appendChild(el('span', { text: label }));
+			item.addEventListener('click', () => {
+				dismissFloatingMenu();
+				onPick(token);
+			});
+			menu.appendChild(item);
+		};
+
+		menu.appendChild(el('div', { className: 'context-menu-label', text: strings.outputVariableGroupLabel }));
+		for (const variable of FILE_NAME_VARIABLES) {
+			addItem(variableLabel(variable), variable);
+		}
+
+		const columnNames = state.columns.map((c) => (c.name || '').trim()).filter((n) => n.length > 0);
+		if (columnNames.length > 0) {
+			menu.appendChild(el('div', { className: 'context-menu-separator' }));
+			menu.appendChild(el('div', { className: 'context-menu-label', text: strings.outputColumnGroupLabel }));
+			for (const name of columnNames) {
+				addItem(name, `column:${name}`);
+			}
+		}
+
+		document.body.appendChild(menu);
+		const rect = menu.getBoundingClientRect();
+		menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - rect.width - 4))}px`;
+		menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - rect.height - 4))}px`;
+		menu.focus();
+
+		/** @param {MouseEvent} event */
+		const onGlobalPointerDown = (event) => {
+			if (!(event.target instanceof Node) || !menu.contains(event.target)) {
+				dismissFloatingMenu();
+			}
+		};
+		/** @param {KeyboardEvent} event */
+		const onGlobalKeyDown = (event) => {
+			if (event.key === 'Escape') {
+				event.stopPropagation();
+				dismissFloatingMenu();
+			}
+		};
+		const onWindowBlur = () => dismissFloatingMenu();
+		document.addEventListener('mousedown', onGlobalPointerDown, true);
+		document.addEventListener('keydown', onGlobalKeyDown, true);
+		window.addEventListener('blur', onWindowBlur);
+
+		closeFloatingMenu = () => {
+			closeFloatingMenu = null;
+			document.removeEventListener('mousedown', onGlobalPointerDown, true);
+			document.removeEventListener('keydown', onGlobalKeyDown, true);
+			window.removeEventListener('blur', onWindowBlur);
+			menu.remove();
+		};
+	}
+
+	// ---------------------------------------------------------------------
+	// Generatoren: Anzeige-Text + Warnungs-Prüfung (kleines Gegenstück zu
+	// GeneratorBase.displayString/validate in src/generator/base.ts — die
+	// Webview kommt ohne Modul-Bundling aus, daher dupliziert)
+	// ---------------------------------------------------------------------
+
+	/** @param {string} template @param {Record<string,string>} params */
+	function fillDisplayTemplate(template, params) {
+		return template.replace(/\{([^}]+)\}/g, (_m, name) => {
+			const value = (params[name] || '').trim();
+			return value === '' ? '?' : value;
+		});
+	}
+
+	/** @param {string} id */
+	function findGeneratorOption(id) {
+		return generatorOptions.find((o) => o.id === id) || null;
+	}
+
+	/** Anzeige-Text der Generator-Konfiguration einer Spalte (leer ohne Generator). @param {Column} column */
+	function generatorDisplayString(column) {
+		const config = column.generator;
+		if (!config || !config.id) {
+			return '';
+		}
+		if (config.id === 'foreign-key') {
+			return `FK → ${(column.fkTable || '').trim() || '?'}.${(column.fkColumn || '').trim() || '?'}`;
+		}
+		const option = findGeneratorOption(config.id);
+		if (!option) {
+			return config.id + strings.generatorNotFoundSuffix;
+		}
+		if (config.id === 'combine') {
+			// Die Vorlage enthält selbst {spalten}-Platzhalter — roh anzeigen
+			// statt sie fälschlich als Parameter-Platzhalter zu füllen.
+			const template = (config.params.template || '').trim();
+			return template ? `${option.label}: ${template}` : option.label;
+		}
+		if (option.displayTemplate) {
+			return `${option.label}: ${fillDisplayTemplate(option.displayTemplate, config.params)}`;
+		}
+		const parts = option.parameters
+			.map((p) => {
+				const value = (config.params[p.name] || '').trim();
+				return value ? `${p.name}: ${value}` : '';
+			})
+			.filter((part) => part !== '');
+		return parts.length > 0 ? `${option.label} (${parts.join(', ')})` : option.label;
+	}
+
+	/**
+	 * Worauf sich ein `column`-Parameter bezieht: der Wert des nächsten
+	 * davorstehenden `table`-/`lookup`-Parameters (siehe boundReferenceValue
+	 * in src/generator/base.ts).
+	 * @param {GeneratorOption} option
+	 * @param {GeneratorParameter} parameter
+	 * @param {Record<string,string>} params
+	 * @returns {{kind:'table'|'lookup',value:string} | null}
+	 */
+	function boundReference(option, parameter, params) {
+		const index = option.parameters.indexOf(parameter);
+		for (let i = index - 1; i >= 0; i--) {
+			const candidate = option.parameters[i];
+			if (candidate.type === 'table' || candidate.type === 'lookup') {
+				const value = (params[candidate.name] || '').trim();
+				return value ? { kind: candidate.type, value } : null;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Erste Warnung zur Generator-Konfiguration einer Spalte, oder null —
+	 * dieselben Regeln erzeugen im Extension-Host die Diagnostics der
+	 * Problems-Ansicht (siehe validateTable in src/table/validation.ts).
+	 * @param {Column} column
+	 */
+	function generatorWarning(column) {
+		const config = column.generator;
+		if (!config || !config.id) {
+			return null;
+		}
+		const option = findGeneratorOption(config.id);
+		if (!option) {
+			return strings.genWarnNotFound;
+		}
+		if (option.fkOnly && !column.fk) {
+			return strings.genWarnFkOnly;
+		}
+		if (config.id === 'combine') {
+			const template = (config.params.template || '').trim();
+			if (!template) {
+				return strings.genWarnParamMissing.replace('{0}', 'template');
+			}
+			const ownColumns = state.columns.map((c) => (c.name || '').trim());
+			const matches = template.matchAll(/\{([^{}]+)\}/g);
+			for (const match of matches) {
+				const name = match[1].trim();
+				if (name === (column.name || '').trim() || !ownColumns.includes(name)) {
+					return strings.genWarnRefNotFound.replace('{0}', 'template').replace('{1}', name);
+				}
+			}
+			return null;
+		}
+		for (const parameter of option.parameters) {
+			const value = (config.params[parameter.name] || '').trim();
+			if (value === '') {
+				if (parameter.required) {
+					return strings.genWarnParamMissing.replace('{0}', parameter.name);
+				}
+				continue;
+			}
+			switch (parameter.type) {
+				case 'integer':
+					if (!/^-?\d+$/.test(value)) {
+						return strings.genWarnParamInvalid.replace('{0}', parameter.name);
+					}
+					break;
+				case 'float':
+				case 'decimal':
+					if (!/^-?\d+([.,]\d+)?$/.test(value)) {
+						return strings.genWarnParamInvalid.replace('{0}', parameter.name);
+					}
+					break;
+				case 'boolean':
+					if (value !== 'true' && value !== 'false') {
+						return strings.genWarnParamInvalid.replace('{0}', parameter.name);
+					}
+					break;
+				case 'table':
+					if (!tableOptions.some((t) => t.label === value)) {
+						return strings.genWarnRefNotFound.replace('{0}', parameter.name).replace('{1}', value);
+					}
+					break;
+				case 'lookup':
+					if (!lookupOptions.some((l) => l.name === value)) {
+						return strings.genWarnRefNotFound.replace('{0}', parameter.name).replace('{1}', value);
+					}
+					break;
+				case 'column': {
+					const target = boundReference(option, parameter, config.params);
+					if (!target) {
+						break;
+					}
+					const columns =
+						target.kind === 'table'
+							? (tableOptions.find((t) => t.label === target.value) || { columns: [] }).columns
+							: (lookupOptions.find((l) => l.name === target.value) || { columns: [] }).columns;
+					if (columns.length > 0 && !columns.includes(value)) {
+						return strings.genWarnRefNotFound.replace('{0}', parameter.name).replace('{1}', value);
+					}
+					break;
+				}
+				default:
+					if (parameter.choices && parameter.choices.length > 0 && !parameter.choices.includes(value)) {
+						return strings.genWarnParamInvalid.replace('{0}', parameter.name);
+					}
+					break;
+			}
+		}
+		// Zahlenbereich min > max (Random Int/Float) — kleine Zusatzprüfung
+		// passend zu den builtins.
+		if ((config.id === 'random-int' || config.id === 'random-float') && config.params.min && config.params.max) {
+			const min = Number((config.params.min || '').replace(',', '.'));
+			const max = Number((config.params.max || '').replace(',', '.'));
+			if (Number.isFinite(min) && Number.isFinite(max) && min > max) {
+				return strings.genWarnParamInvalid.replace('{0}', 'min');
+			}
+		}
+		return null;
+	}
+
+	// ---------------------------------------------------------------------
 	// Tab "Spalten": Toolbar + Grid
 	// ---------------------------------------------------------------------
 
 	/** Feste Spaltenreihenfolge für das Grid, für buildColGroup (siehe common.js). */
-	const COLUMN_ORDER = ['num', 'name', 'type', 'desc', 'pk', 'fk', 'refTable', 'refColumn', 'actions'];
+	const COLUMN_ORDER = ['num', 'name', 'type', 'desc', 'pk', 'fk', 'refTable', 'refColumn', 'gen', 'actions'];
 
 	function renderColumnsTab() {
 		const section = el('section', { className: 'tab-panel columns-section' });
@@ -287,6 +913,9 @@
 		headRow.appendChild(thRefTable);
 		headRow.appendChild(thRefColumn);
 
+		const thGen = el('th', { className: 'col-generator', text: strings.generatorColumnHeader });
+		headRow.appendChild(thGen);
+
 		headRow.appendChild(el('th', { className: 'col-actions col-actions-wide' }));
 		headRow.appendChild(el('th', { className: 'col-spacer' }));
 		thead.appendChild(headRow);
@@ -298,6 +927,7 @@
 			desc: thDesc,
 			refTable: thRefTable,
 			refColumn: thRefColumn,
+			gen: thGen,
 		};
 		for (const { key, minWidth } of RESIZABLE_COLUMNS) {
 			attachColumnResizeHandle(resizableHeaders[key], cols[key], key, minWidth, columnWidths, (widths) =>
@@ -437,13 +1067,19 @@
 				column.fk && (!value || notFound),
 			);
 		};
+		refColumnTd.appendChild(wrapSelectWithChevron(columnSelect));
+		refreshColumnError();
+
+		// Generator-Zelle schon hier aufbauen, damit FK-Wechsel und
+		// Referenz-Änderungen ihre Anzeige direkt auffrischen können.
+		const genCell = renderGeneratorCell(column);
+
 		columnSelect.addEventListener('change', () => {
 			column.fkColumn = columnSelect.value;
 			postEdit();
 			refreshColumnError();
+			genCell.refresh();
 		});
-		refColumnTd.appendChild(wrapSelectWithChevron(columnSelect));
-		refreshColumnError();
 
 		tableSelect.addEventListener('change', () => {
 			column.fkTable = tableSelect.value;
@@ -454,6 +1090,7 @@
 			// automatisch zu verwerfen.
 			populateColumnOptions(columnSelect, column.fkTable, column.fkColumn);
 			refreshColumnError();
+			genCell.refresh();
 		});
 
 		const fkTd = el('td', { className: 'col-flag' });
@@ -463,11 +1100,22 @@
 				columnSelect.disabled = !column.fk;
 				refreshTableError();
 				refreshColumnError();
+				// FK anhaken weist automatisch den Fremdschlüssel-Generator zu;
+				// Abhaken entfernt ihn wieder (andere Generatoren bleiben).
+				if (column.fk && !column.generator) {
+					column.generator = { id: 'foreign-key', params: {} };
+					postEdit();
+				} else if (!column.fk && column.generator && column.generator.id === 'foreign-key') {
+					delete column.generator;
+					postEdit();
+				}
+				genCell.rebuild();
 			}),
 		);
 		row.appendChild(fkTd);
 		row.appendChild(refTableTd);
 		row.appendChild(refColumnTd);
+		row.appendChild(genCell.element);
 
 		const actionsTd = el('td', { className: 'col-actions col-actions-wide' });
 		const actions = el('div', { className: 'row-actions' });
@@ -495,6 +1143,353 @@
 		row.appendChild(el('td', { className: 'col-spacer' }));
 
 		return row;
+	}
+
+	// ---------------------------------------------------------------------
+	// Generator-Zelle: Auswahl + Stift (Parameter-Dialog) + Warnungs-Anzeige
+	// ---------------------------------------------------------------------
+
+	/**
+	 * Baut die Generator-Zelle einer Spalte: ein Select über alle passenden
+	 * Generatoren (die gewählte Option zeigt den Anzeige-Text der
+	 * Konfiguration statt nur des Namens) plus ein Stift-Knopf, der den
+	 * Parameter-Dialog öffnet. Bei Warnungen (siehe generatorWarning) wird
+	 * die Zelle markiert; die ausführliche Meldung steht in der
+	 * Problems-Ansicht und als Tooltip an der Zelle.
+	 * @param {Column} column
+	 */
+	function renderGeneratorCell(column) {
+		const td = el('td', { className: 'col-generator' });
+		const wrap = el('span', { className: 'generator-cell-row' });
+		td.appendChild(wrap);
+
+		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		const pencil = /** @type {HTMLButtonElement} */ (el('button', { className: 'icon-button generator-edit-btn' }));
+		pencil.type = 'button';
+		pencil.title = strings.generatorEditParamsLabel;
+		pencil.setAttribute('aria-label', strings.generatorEditParamsLabel);
+		pencil.appendChild(el('i', { className: 'codicon codicon-edit' }));
+
+		/** Befüllt das Select passend zum aktuellen FK-Zustand der Spalte neu. */
+		function rebuildSelect() {
+			select.innerHTML = '';
+			const emptyOption = /** @type {HTMLOptionElement} */ (el('option', { text: strings.generatorEmptyOption }));
+			emptyOption.value = '';
+			select.appendChild(emptyOption);
+
+			const available = generatorOptions.filter((o) => !o.fkOnly || column.fk);
+			const builtins = available.filter((o) => !o.custom);
+			const customs = available.filter((o) => o.custom);
+
+			const appendGroup = (label, options) => {
+				if (options.length === 0) {
+					return;
+				}
+				const group = /** @type {HTMLOptGroupElement} */ (el('optgroup'));
+				group.label = label;
+				for (const option of options) {
+					const opt = /** @type {HTMLOptionElement} */ (el('option', { text: option.label }));
+					opt.value = option.id;
+					opt.title = option.description;
+					group.appendChild(opt);
+				}
+				select.appendChild(group);
+			};
+			appendGroup(strings.generatorBuiltinGroupLabel, builtins);
+			appendGroup(strings.generatorCustomGroupLabel, customs);
+
+			// Einen gesetzten, aber nicht (mehr) vorhandenen Generator trotzdem
+			// anzeigen (z. B. .tdgen gelöscht/umbenannt), statt ihn zu verwerfen.
+			const currentId = column.generator ? column.generator.id : '';
+			if (currentId && !available.some((o) => o.id === currentId)) {
+				const opt = /** @type {HTMLOptionElement} */ (
+					el('option', { text: currentId + strings.generatorNotFoundSuffix })
+				);
+				opt.value = currentId;
+				select.appendChild(opt);
+			}
+			select.value = currentId;
+		}
+
+		/** Frischt Anzeige-Text, Stift-Zustand und Warnungs-Markierung auf. */
+		function refresh() {
+			const config = column.generator;
+			const option = config ? findGeneratorOption(config.id) : null;
+			// Die gewählte Option zeigt den Anzeige-Text der Konfiguration
+			// (displayString) statt nur des Generator-Namens.
+			for (const opt of select.options) {
+				if (opt.value === '') {
+					continue;
+				}
+				const optOption = findGeneratorOption(opt.value);
+				if (config && opt.value === config.id) {
+					opt.textContent = generatorDisplayString(column) || (optOption ? optOption.label : opt.value);
+				} else if (optOption) {
+					opt.textContent = optOption.label;
+				}
+			}
+			pencil.disabled = !option || option.parameters.length === 0;
+			const warning = generatorWarning(column);
+			wrap.classList.toggle('has-warning-cell', !!warning);
+			select.classList.toggle('has-warning', !!warning);
+			if (warning) {
+				select.title = warning;
+			} else {
+				select.title = config ? generatorDisplayString(column) : '';
+			}
+		}
+
+		function rebuild() {
+			rebuildSelect();
+			refresh();
+		}
+
+		select.addEventListener('change', () => {
+			const id = select.value;
+			if (!id) {
+				delete column.generator;
+			} else {
+				const previous = column.generator;
+				column.generator = { id, params: previous && previous.id === id ? previous.params : {} };
+			}
+			postEdit();
+			refresh();
+			// Direkt den Parameter-Dialog anbieten, wenn der neue Generator
+			// Parameter hat — spart den zweiten Klick auf den Stift.
+			const option = id ? findGeneratorOption(id) : null;
+			if (option && option.parameters.length > 0) {
+				openParamDialog(column, option, refresh);
+			}
+		});
+
+		pencil.addEventListener('click', () => {
+			const config = column.generator;
+			const option = config ? findGeneratorOption(config.id) : null;
+			if (option) {
+				openParamDialog(column, option, refresh);
+			}
+		});
+
+		wrap.appendChild(wrapSelectWithChevron(select));
+		wrap.appendChild(pencil);
+
+		rebuild();
+		return { element: td, refresh, rebuild };
+	}
+
+	/** Räumt einen evtl. offenen Parameter-Dialog ab (höchstens einer gleichzeitig). @type {(() => void) | null} */
+	let closeParamDialog = null;
+
+	function dismissParamDialog() {
+		if (closeParamDialog) {
+			closeParamDialog();
+		}
+	}
+
+	/**
+	 * Parameter-Dialog eines Generators (VS-Code-artiges Modal in der
+	 * Webview): je Parameter ein zum Datentyp passendes Eingabefeld —
+	 * Auswahl bei vordefinierten Wertelisten und Referenz-Typen
+	 * (table/lookup/column), Datums-/Zeit-Felder, Zahlenfelder, sonst freie
+	 * Eingabe. Werte werden direkt in die Spalten-Konfiguration geschrieben.
+	 * @param {Column} column
+	 * @param {GeneratorOption} option
+	 * @param {() => void} onChanged Frischt die Generator-Zelle auf (Anzeige-Text + Warnung).
+	 */
+	function openParamDialog(column, option, onChanged) {
+		dismissParamDialog();
+		if (!column.generator) {
+			return;
+		}
+		const params = column.generator.params;
+
+		const overlay = el('div', { className: 'dialog-overlay' });
+		const dialog = el('div', { className: 'param-dialog card' });
+		dialog.setAttribute('role', 'dialog');
+		dialog.setAttribute('aria-label', option.label);
+
+		const titleRow = el('div', { className: 'param-dialog-title' });
+		const heading = el('h3');
+		heading.appendChild(el('i', { className: 'codicon codicon-settings-gear param-dialog-icon' }));
+		heading.appendChild(document.createTextNode(option.label));
+		titleRow.appendChild(heading);
+		const closeBtn = el('button', { className: 'icon-button param-dialog-close' });
+		closeBtn.type = 'button';
+		closeBtn.title = strings.generatorCloseLabel;
+		closeBtn.setAttribute('aria-label', strings.generatorCloseLabel);
+		closeBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
+		closeBtn.addEventListener('click', dismissParamDialog);
+		titleRow.appendChild(closeBtn);
+		dialog.appendChild(titleRow);
+
+		if (option.description) {
+			dialog.appendChild(el('p', { className: 'hint param-dialog-desc', text: option.description }));
+		}
+
+		/** Nachschlage-Selects für `column`-Parameter, um sie bei Änderung ihres Bezugs-Parameters neu zu befüllen. @type {(() => void)[]} */
+		const dependentRefreshers = [];
+		const refreshDependents = () => {
+			for (const refresh of dependentRefreshers) {
+				refresh();
+			}
+		};
+
+		if (option.parameters.length === 0) {
+			dialog.appendChild(el('p', { className: 'hint', text: strings.generatorDialogNoParams }));
+		}
+
+		for (const parameter of option.parameters) {
+			const field = el('div', { className: 'field param-field' });
+			const label = el('label', {
+				text: parameter.name + (parameter.required ? strings.generatorRequiredSuffix : ''),
+			});
+			field.appendChild(label);
+			field.appendChild(renderParamControl(parameter));
+			if (parameter.description) {
+				field.appendChild(el('p', { className: 'hint param-hint', text: parameter.description }));
+			}
+			dialog.appendChild(field);
+		}
+
+		/**
+		 * Zum Datentyp passendes Eingabefeld eines Parameters.
+		 * @param {GeneratorParameter} parameter
+		 */
+		function renderParamControl(parameter) {
+			const commit = (value, immediate) => {
+				if (value.trim() === '') {
+					delete params[parameter.name];
+				} else {
+					params[parameter.name] = value;
+				}
+				if (immediate) {
+					postEdit();
+				} else {
+					postEditDebounced();
+				}
+				onChanged();
+			};
+
+			/** @param {string[]} values @param {boolean} notFoundSuffix */
+			const buildSelect = (values, notFoundSuffix) => {
+				const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+				populateSelectOptions(
+					select,
+					values,
+					(params[parameter.name] || '').trim(),
+					strings.generatorParamEmptyOption,
+					notFoundSuffix ? strings.generatorNotFoundSuffix : '',
+				);
+				select.addEventListener('change', () => {
+					commit(select.value, true);
+					refreshDependents();
+				});
+				return wrapSelectWithChevron(select);
+			};
+
+			switch (parameter.type) {
+				case 'lookup':
+					return buildSelect(lookupOptions.map((l) => l.name), true);
+				case 'table':
+					return buildSelect(tableOptions.map((t) => t.label), true);
+				case 'column': {
+					const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+					const populate = () => {
+						const target = boundReference(option, parameter, params);
+						const columns = !target
+							? []
+							: target.kind === 'table'
+								? (tableOptions.find((t) => t.label === target.value) || { columns: [] }).columns
+								: (lookupOptions.find((l) => l.name === target.value) || { columns: [] }).columns;
+						populateSelectOptions(
+							select,
+							columns,
+							(params[parameter.name] || '').trim(),
+							strings.generatorParamEmptyOption,
+							strings.generatorNotFoundSuffix,
+						);
+					};
+					populate();
+					dependentRefreshers.push(populate);
+					select.addEventListener('change', () => commit(select.value, true));
+					return wrapSelectWithChevron(select);
+				}
+				case 'boolean': {
+					const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+					for (const { value, label: optLabel } of [
+						{ value: '', label: strings.generatorParamEmptyOption },
+						{ value: 'true', label: strings.generatorTrueLabel },
+						{ value: 'false', label: strings.generatorFalseLabel },
+					]) {
+						const opt = /** @type {HTMLOptionElement} */ (el('option', { text: optLabel }));
+						opt.value = value;
+						select.appendChild(opt);
+					}
+					select.value = ['true', 'false'].includes((params[parameter.name] || '').trim())
+						? (params[parameter.name] || '').trim()
+						: '';
+					select.addEventListener('change', () => commit(select.value, true));
+					return wrapSelectWithChevron(select);
+				}
+				default: {
+					if (parameter.choices && parameter.choices.length > 0) {
+						return buildSelect(parameter.choices, false);
+					}
+					const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+					if (parameter.type === 'date') {
+						input.type = 'date';
+					} else if (parameter.type === 'datetime') {
+						input.type = 'datetime-local';
+					} else if (parameter.type === 'time') {
+						input.type = 'time';
+					} else {
+						input.type = 'text';
+						if (parameter.type === 'integer') {
+							input.inputMode = 'numeric';
+						} else if (parameter.type === 'float' || parameter.type === 'decimal') {
+							input.inputMode = 'decimal';
+						}
+					}
+					input.placeholder = parameter.placeholder || '';
+					input.value = params[parameter.name] || '';
+					input.addEventListener('input', () => commit(input.value, false));
+					input.addEventListener('blur', () => commit(input.value, true));
+					return input;
+				}
+			}
+		}
+
+		overlay.appendChild(dialog);
+		document.body.appendChild(overlay);
+
+		overlay.addEventListener('mousedown', (event) => {
+			if (event.target === overlay) {
+				dismissParamDialog();
+			}
+		});
+		/** @param {KeyboardEvent} event */
+		const onKeyDown = (event) => {
+			if (event.key === 'Escape') {
+				event.stopPropagation();
+				dismissParamDialog();
+			}
+		};
+		document.addEventListener('keydown', onKeyDown, true);
+
+		closeParamDialog = () => {
+			closeParamDialog = null;
+			document.removeEventListener('keydown', onKeyDown, true);
+			overlay.remove();
+			postEdit();
+			onChanged();
+		};
+
+		// Erstes Eingabefeld fokussieren, damit sich der Dialog sofort per
+		// Tastatur ausfüllen lässt.
+		const firstControl = dialog.querySelector('input, select');
+		if (firstControl instanceof HTMLElement) {
+			firstControl.focus();
+		}
 	}
 
 	/**
@@ -692,6 +1687,8 @@
 			case 'init':
 				strings = message.strings;
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
+				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
+				lookupOptions = Array.isArray(message.lookupOptions) ? message.lookupOptions : [];
 				columnWidths = message.columnWidths && typeof message.columnWidths === 'object' ? message.columnWidths : {};
 				parseError = 'parseError' in message ? message.parseError : null;
 				if ('table' in message) {
@@ -708,8 +1705,12 @@
 				parseError = message.message;
 				render();
 				break;
-			case 'tableOptions':
+			case 'options':
+				// Aktualisierte Auswahllisten (Tabellen/Generatoren/Nachschlage-
+				// listen) nach Datei-Änderungen im Workspace.
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
+				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
+				lookupOptions = Array.isArray(message.lookupOptions) ? message.lookupOptions : [];
 				if (!parseError) {
 					render();
 				}

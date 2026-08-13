@@ -21,6 +21,17 @@ export interface ProjectWebviewStrings {
 	pythonChangeButton: string;
 	pythonLinkButton: string;
 
+	runButtonLabel: string;
+	outputFilesTitle: string;
+	outputFilesHint: string;
+	outputFilesColTable: string;
+	outputFilesColFile: string;
+	outputFilesColFileName: string;
+	outputFilesColRecords: string;
+	/** Zusatz hinter der Datensatzanzahl einer referenzierten Tabelle; `{0}` = referenzierte Tabelle. */
+	outputFilesPerRecordSuffix: string;
+	outputFilesEmptyText: string;
+
 	tablesSearchPlaceholder: string;
 	tablesColHeaderTable: string;
 	tablesColHeaderPath: string;
@@ -77,6 +88,17 @@ const en: ProjectWebviewStrings = {
 	pythonChangeButton: 'Change…',
 	pythonLinkButton: 'Select Interpreter…',
 
+	runButtonLabel: 'Generate Test Data',
+	outputFilesTitle: 'Generated files',
+	outputFilesHint:
+		'One file per selected table. File name and format are configured in the table editor, the number of records in the Tables tab.',
+	outputFilesColTable: 'Table',
+	outputFilesColFile: 'Definition',
+	outputFilesColFileName: 'File name',
+	outputFilesColRecords: 'Records',
+	outputFilesPerRecordSuffix: 'per record of {0}',
+	outputFilesEmptyText: 'No tables selected yet — pick tables in the Tables tab.',
+
 	tablesSearchPlaceholder: 'Search tables…',
 	tablesColHeaderTable: 'Table',
 	tablesColHeaderPath: 'File',
@@ -123,6 +145,17 @@ const de: ProjectWebviewStrings = {
 	pythonBelowMinVersionText: 'Dieser Interpreter ist älter als Python 3.10.',
 	pythonChangeButton: 'Ändern…',
 	pythonLinkButton: 'Interpreter auswählen…',
+
+	runButtonLabel: 'Testdaten generieren',
+	outputFilesTitle: 'Generierte Dateien',
+	outputFilesHint:
+		'Eine Datei je ausgewählter Tabelle. Dateiname und Format werden im Table Editor konfiguriert, die Datensatzanzahl im Tabellen-Tab.',
+	outputFilesColTable: 'Tabelle',
+	outputFilesColFile: 'Definition',
+	outputFilesColFileName: 'Dateiname',
+	outputFilesColRecords: 'Datensätze',
+	outputFilesPerRecordSuffix: 'je Datensatz von {0}',
+	outputFilesEmptyText: 'Noch keine Tabellen ausgewählt — Auswahl im Tabellen-Tab.',
 
 	tablesSearchPlaceholder: 'Tabellen durchsuchen…',
 	tablesColHeaderTable: 'Tabelle',

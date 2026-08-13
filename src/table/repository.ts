@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Table, logicalTableName } from './model';
 import { parseTableText } from './toml';
+import { GeneratorBase } from '../generator/base';
 
 /**
  * Eine `.td`-Datei im Workspace, roh eingelesen und geparst — gemeinsame
@@ -88,21 +89,29 @@ export function tableLabel(table: Table, fallbackPath: string): string {
 }
 
 /**
- * Löst die transitive Hülle der über Fremdschlüssel referenzierten Tabellen
- * auf: ausgehend von `selected` (workspace-relative Pfade) wird für jede
- * Tabelle jede gültige `fk_table`-Referenz aufgelöst und rekursiv
- * weiterverfolgt. Leere und Selbst-Referenzen (siehe validation.ts) werden
- * übersprungen, ebenso Referenzen auf nicht (mehr) vorhandene Tabellen.
+ * Löst die transitive Hülle der referenzierten Tabellen auf: ausgehend von
+ * `selected` (workspace-relative Pfade) wird für jede Tabelle jede gültige
+ * `fk_table`-Referenz aufgelöst und rekursiv weiterverfolgt — plus jede
+ * Tabelle, die ein konfigurierter Spalten-Generator benötigt (Parameter vom
+ * Typ `table`, siehe GeneratorBase.requiredRefs). Leere und Selbst-Referenzen
+ * (siehe validation.ts) werden übersprungen, ebenso Referenzen auf nicht
+ * (mehr) vorhandene Tabellen.
  *
- * Grundlage für den Projekt-Tabellenbaum (project/tree.ts): Tabellen in der
- * zurückgegebenen Menge müssen ausgewählt bleiben, damit jede ausgewählte
- * Fremdschlüssel-Spalte ein gültiges Ziel hat.
+ * Grundlage für den Projekt-Tabellenbaum: Tabellen in der zurückgegebenen
+ * Menge müssen ausgewählt bleiben, damit jede ausgewählte Fremdschlüssel-
+ * Spalte und jeder Generator ein gültiges Ziel hat.
  *
+ * @param generators Alle verfügbaren Generatoren (eingebaute + benutzerdefinierte),
+ * um Generator-Referenzen aufzulösen; ohne Angabe zählen nur FK-Referenzen.
  * @returns Die Pfade der (rekursiv) benötigten Tabellen — schließt `selected`
  * selbst nicht mit ein, auch wenn eine Tabelle sich selbst über einen Umweg
  * referenziert (durch die Selbst-Referenz-Prüfung ohnehin ausgeschlossen).
  */
-export function computeRequiredClosure(selected: ReadonlySet<string>, entries: TableEntry[]): Set<string> {
+export function computeRequiredClosure(
+	selected: ReadonlySet<string>,
+	entries: TableEntry[],
+	generators: GeneratorBase[] = [],
+): Set<string> {
 	const byLabel = new Map<string, TableEntry>();
 	const byPath = new Map<string, TableEntry>();
 	for (const entry of entries) {
@@ -116,6 +125,21 @@ export function computeRequiredClosure(selected: ReadonlySet<string>, entries: T
 	const visited = new Set<string>(selected);
 	const queue = [...selected];
 
+	const requireLabel = (label: string, ownLabel: string) => {
+		if (!label || label === ownLabel) {
+			return;
+		}
+		const target = byLabel.get(label);
+		if (!target) {
+			return;
+		}
+		required.add(target.relativePath);
+		if (!visited.has(target.relativePath)) {
+			visited.add(target.relativePath);
+			queue.push(target.relativePath);
+		}
+	};
+
 	while (queue.length > 0) {
 		const path = queue.shift();
 		const entry = path ? byPath.get(path) : undefined;
@@ -123,22 +147,26 @@ export function computeRequiredClosure(selected: ReadonlySet<string>, entries: T
 			continue;
 		}
 		const ownLabel = tableLabel(entry.table, entry.relativePath);
+		const ownColumns = entry.table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
 		for (const column of entry.table.columns) {
-			if (!column.fk) {
-				continue;
+			if (column.fk) {
+				requireLabel(column.fkTable.trim(), ownLabel);
 			}
-			const fkTable = column.fkTable.trim();
-			if (!fkTable || fkTable === ownLabel) {
-				continue;
-			}
-			const target = byLabel.get(fkTable);
-			if (!target) {
-				continue;
-			}
-			required.add(target.relativePath);
-			if (!visited.has(target.relativePath)) {
-				visited.add(target.relativePath);
-				queue.push(target.relativePath);
+			if (column.generator?.id.trim()) {
+				const generator = generators.find((g) => g.id === column.generator?.id);
+				if (generator) {
+					const refs = generator.requiredRefs(column.generator, {
+						ownColumnName: column.name.trim(),
+						ownColumns,
+						fkTable: column.fkTable,
+						fkColumn: column.fkColumn,
+						tables: [],
+						lookups: [],
+					});
+					for (const label of refs.tables) {
+						requireLabel(label.trim(), ownLabel);
+					}
+				}
 			}
 		}
 	}

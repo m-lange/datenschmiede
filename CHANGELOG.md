@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.6.0
+
+- **Testdaten-Generierung — der eigentliche Generator-Lauf ist da**: Der
+  Befehl **„Datenschmiede: Testdaten generieren“** (Run-Knopf in der
+  Editor-Titelleiste des Projekt-Editors, Start-Knopf im Übersicht-Tab oder
+  Command Palette) erzeugt für alle ausgewählten Tabellen eines
+  Testdatenprojekts synthetische Datensätze — mit dem verknüpften
+  Python-Interpreter, hochgradig vektorisiert über **pandas/numpy**
+  (`python/generate.py`), auch für große Datenmengen. Der Lauf bestimmt
+  zuerst die Generier-Reihenfolge (Tabellen topologisch nach
+  Fremdschlüssel-/Generator-Referenzen, darin Spalte für Spalte), meldet
+  seinen Fortschritt VS-Code-typisch als Benachrichtigung mit
+  Fortschrittsbalken (abbrechbar) und schreibt je Tabelle eine CSV-Datei in
+  den Ordner `output/` neben der Projektdatei. Fehlende Python-Pakete
+  werden mit Ein-Klick-Installation (Terminal, `pip install`) gemeldet.
+- **Spaltengeneratoren im Table Editor**: neue Grid-Spalte
+  **„Spaltengenerator“** mit Auswahl aller verfügbaren Generatoren —
+  eingebaut (`src/generator/builtins/`, je einer pro Datei) sind
+  **Random Int**, **Random Float**, **Faker** (realistische Namen,
+  Adressen, … via Python-Paket `faker`), **Nachschlageliste** (gewichtete
+  Werte aus `.lkp`), **Kombinieren** (`{spalten}`-Vorlage über die Werte
+  anderer Spalten) sowie der Standard-Generator **Fremdschlüssel**, der
+  beim Anhaken der FK-Checkbox automatisch zugewiesen wird und die
+  FK-Beziehung beim Lauf auflöst. Ohne Generator greift ein sinnvoller
+  Standard je Datentyp. Der Stift neben der Auswahl öffnet einen
+  Parameter-Dialog mit je Parametertyp passendem Eingabefeld (Zahl, Datum,
+  Auswahl aus vordefinierter Liste, Tabelle/Spalte/Nachschlageliste des
+  Workspace, …); die Zelle zeigt danach den Anzeige-Text der Konfiguration
+  (z. B. `Random Int: 1 … 100`, `FK → shop.customers.id`) statt nur des
+  Namens. Warnungen zur Konfiguration (fehlender Pflichtparameter,
+  Referenz auf inzwischen umbenannte/gelöschte Tabellen, Spalten,
+  Nachschlagelisten oder Generatoren) markieren die Zelle orange und
+  erscheinen als Warning-Diagnostics in der Problems-Ansicht.
+- **Neuer Dateityp `.tdgen` („Generator“)**: benutzerdefinierte Generatoren
+  im Workspace, mit eigenem Custom Editor (`GeneratorEditorProvider`,
+  `src/generator/editorProvider.ts`) im Stil eines **Jupyter-Notebooks**:
+  Name/Beschreibung als Markdown-Zelle oben, darunter die dynamische
+  **Parameter-Tabelle** (Name, Datentyp — Spaltentypen erweitert um
+  Nachschlageliste/Tabelle/Spalte —, Beschreibung, optionale vordefinierte
+  Werteliste, Pflicht-Flag) und drei Python-**Code-Zellen** mit fest
+  vorgegebener, nicht änderbarer Signatur und editierbarem Rumpf:
+  `generate` (Pflicht), `parse_params` und `display_value` (optional, je
+  mit erklärender Beschreibung davor). Datei-Icon: `GenerateMethod`-Symbol
+  in Magenta (`#D743EB`; für helle Themes eine dunklere Variante
+  `#A21FB8`, `icons/tdgen-*.svg`). Befehl **„Datenschmiede: Neuen
+  Generator erstellen…“**; Beispiel unter `samples/order_number.tdgen`.
+- **Ausgabe-Einstellungen je Tabelle (Übersicht-Tab des Table Editors)**:
+  der **Dateiname** der generierten Datei als Tag-Feld im Stil von Power
+  Automate — konstanter Text frei editierbar, dynamische Teile (aktuelles
+  Datum/Uhrzeit, Zeitstempel, Schema, Tabellenname, Datensatzanzahl oder
+  der Wert einer Spalte aus dem ersten Datensatz) als klickbare Tags über
+  das Menü **„Dynamischen Wert einfügen“**. Dazu die
+  **Dateityp-Konfiguration** (vorerst CSV) mit Spaltentrenner,
+  Anführungszeichen-Verhalten, Dezimaltrenner, Datums-/Zeitstempelformat,
+  Kopfzeile und Encoding (`[output]`-Block der `.td`-Datei).
+- **Projekt-Editor**: der Übersicht-Tab zeigt neu die **generierten
+  Dateien** (Tabelle, `.td`-Datei, Dateiname-Vorlage mit Tags,
+  Datensatzanzahl — rein lesend) samt Start-Knopf. Die automatische
+  Tabellen-Mitnahme im Tabellen-Tab berücksichtigt neben Fremdschlüsseln
+  jetzt auch die von Spaltengeneratoren **benötigten Tabellen**.
+
 ## 0.5.0
 
 - **Neuer Dateityp `.lkp` ("Nachschlageliste")**: gewichtete Wertelisten für
