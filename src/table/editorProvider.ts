@@ -166,12 +166,19 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		// gefunden" aufblitzt, bevor der erste Broadcast durchgelaufen ist.
 		void this.refreshOptionsCache().then(() => this.updateDiagnostics(document));
 
-		// Wird gesetzt, bevor wir selbst einen WorkspaceEdit auf das Dokument
-		// anwenden, damit das dadurch ausgelöste onDidChangeTextDocument nicht
-		// erneut an die Webview zurückgesendet wird (sie kennt den Stand ja
-		// schon -> sonst würde bei jeder Eingabe das Formular neu aufgebaut
-		// und der Cursor/Fokus verloren gehen).
-		let ignoreNextChange = false;
+		// Zähler statt einfachem Flag: wie viele selbst angestoßene
+		// WorkspaceEdits noch "unterwegs" sind, damit deren
+		// onDidChangeTextDocument nicht an die Webview zurückgesendet wird
+		// (sie kennt den Stand ja schon -> sonst würde das Formular neu
+		// aufgebaut und Cursor/Fokus verloren gehen). Ein Flag reichte nicht:
+		// überlappen sich zwei Edits (z. B. Sofort-Commit eines Selects
+		// während ein debounce-Commit noch läuft), schluckte es nur das erste
+		// Ereignis — das zweite ersetzte den Webview-Zustand mitten in der
+		// Bearbeitung, und Folge-Eingaben (etwa im Parameter-Dialog)
+		// schrieben in ein verwaistes Objekt und gingen verloren.
+		let selfEditsPending = 0;
+		/** Zuletzt selbst angestoßener Dokumenttext — Vergleichsbasis, solange Edits unterwegs sind. */
+		let lastQueuedText: string | null = null;
 
 		const postState = () => {
 			const state = this.readState(document);
@@ -188,8 +195,11 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			}
 			this.updateDiagnostics(document);
 			this.scheduleOptionsBroadcast();
-			if (ignoreNextChange) {
-				ignoreNextChange = false;
+			if (selfEditsPending > 0) {
+				selfEditsPending--;
+				if (selfEditsPending === 0) {
+					lastQueuedText = null;
+				}
 				return;
 			}
 			postState();
@@ -220,13 +230,17 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				}
 				case 'edit': {
 					const newText = serializeTable(message.table);
-					if (newText === document.getText()) {
+					// Gegen den zuletzt selbst angestoßenen Text vergleichen, solange
+					// noch Edits unterwegs sind — document.getText() hinkt dann hinterher.
+					if (newText === (lastQueuedText ?? document.getText())) {
 						break;
 					}
-					ignoreNextChange = true;
+					lastQueuedText = newText;
+					selfEditsPending++;
 					const applied = await this.applyText(document, newText);
 					if (!applied) {
-						ignoreNextChange = false;
+						selfEditsPending = Math.max(0, selfEditsPending - 1);
+						lastQueuedText = null;
 					}
 					break;
 				}

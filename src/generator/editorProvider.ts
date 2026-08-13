@@ -69,10 +69,13 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 
 		this.updateDiagnostics(document);
 
-		// Wird gesetzt, bevor wir selbst einen WorkspaceEdit auf das Dokument
-		// anwenden — siehe table/editorProvider.ts für die ausführliche Begründung
-		// (verhindert Formular-Neuaufbau samt Fokusverlust bei jeder Eingabe).
-		let ignoreNextChange = false;
+		// Zähler statt einfachem Flag für selbst angestoßene WorkspaceEdits —
+		// siehe table/editorProvider.ts für die ausführliche Begründung
+		// (überlappende Edits würden sonst den Webview-Zustand mitten in der
+		// Bearbeitung ersetzen und Folge-Eingaben verlieren).
+		let selfEditsPending = 0;
+		/** Zuletzt selbst angestoßener Dokumenttext — Vergleichsbasis, solange Edits unterwegs sind. */
+		let lastQueuedText: string | null = null;
 
 		const postState = () => {
 			const state = this.readState(document);
@@ -88,8 +91,11 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 				return;
 			}
 			this.updateDiagnostics(document);
-			if (ignoreNextChange) {
-				ignoreNextChange = false;
+			if (selfEditsPending > 0) {
+				selfEditsPending--;
+				if (selfEditsPending === 0) {
+					lastQueuedText = null;
+				}
 				return;
 			}
 			postState();
@@ -115,13 +121,17 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 				}
 				case 'edit': {
 					const newText = serializeGenerator(message.generator);
-					if (newText === document.getText()) {
+					// Gegen den zuletzt selbst angestoßenen Text vergleichen, solange
+					// noch Edits unterwegs sind — document.getText() hinkt dann hinterher.
+					if (newText === (lastQueuedText ?? document.getText())) {
 						break;
 					}
-					ignoreNextChange = true;
+					lastQueuedText = newText;
+					selfEditsPending++;
 					const applied = await this.applyText(document, newText);
 					if (!applied) {
-						ignoreNextChange = false;
+						selfEditsPending = Math.max(0, selfEditsPending - 1);
+						lastQueuedText = null;
 					}
 					break;
 				}

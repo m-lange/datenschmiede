@@ -6,6 +6,7 @@ import { fullDocumentRange, getNonce } from '../util';
 import { getProjectWebviewStrings } from './webviewStrings';
 import { listTables, tableLabel, computeRequiredClosure, TableEntry } from '../table/repository';
 import { parseCardinality } from '../table/cardinality';
+import { ProjectIssue, validateProjectRecords } from './validation';
 import { ensurePythonLinked, pickPythonInterpreter, resolveLinkedInterpreter } from './python';
 import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
@@ -311,9 +312,26 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 
 		this.panelDocuments.set(webviewPanel, document);
 
-		// Wird gesetzt, bevor wir selbst einen WorkspaceEdit auf das Dokument
-		// anwenden — siehe table/editorProvider.ts für die ausführliche Begründung.
-		let ignoreNextChange = false;
+		// Zähler statt einfachem Flag für selbst angestoßene WorkspaceEdits —
+		// siehe table/editorProvider.ts für die ausführliche Begründung
+		// (überlappende Edits würden sonst den Webview-Zustand mitten in der
+		// Bearbeitung ersetzen).
+		let selfEditsPending = 0;
+		/** Zuletzt selbst angestoßener Dokumenttext — Vergleichsbasis, solange Edits unterwegs sind. */
+		let lastQueuedText: string | null = null;
+		const queueSelfEdit = async (newText: string): Promise<boolean> => {
+			if (newText === (lastQueuedText ?? document.getText())) {
+				return true;
+			}
+			lastQueuedText = newText;
+			selfEditsPending++;
+			const applied = await this.applyText(document, newText);
+			if (!applied) {
+				selfEditsPending = Math.max(0, selfEditsPending - 1);
+				lastQueuedText = null;
+			}
+			return applied;
+		};
 
 		const postState = async () => {
 			const state = this.readState(document);
@@ -338,8 +356,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if (e.document.uri.toString() !== document.uri.toString()) {
 				return;
 			}
-			if (ignoreNextChange) {
-				ignoreNextChange = false;
+			if (selfEditsPending > 0) {
+				selfEditsPending--;
+				if (selfEditsPending === 0) {
+					lastQueuedText = null;
+				}
 				this.updateDiagnostics(document);
 				return;
 			}
@@ -379,15 +400,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					break;
 				}
 				case 'edit': {
-					const newText = serializeProject(message.project);
-					if (newText === document.getText()) {
-						break;
-					}
-					ignoreNextChange = true;
-					const applied = await this.applyText(document, newText);
-					if (!applied) {
-						ignoreNextChange = false;
-					}
+					await queueSelfEdit(serializeProject(message.project));
 					break;
 				}
 				case 'changePython': {
@@ -640,45 +653,57 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	/**
-	 * Jede ausgewählte (gefundene) Tabelle braucht eine Datensatzanzahl:
-	 * primäre Tabellen eine feste Zahl, referenzierte (sekundäre) eine Zahl
-	 * oder einen Bereich ("1..3") je Datensatz der referenzierten Tabelle —
-	 * fehlt die Angabe oder ist sie ungültig, landet sie hier als Problem.
+	 * Jede ausgewählte Tabelle braucht eine gültige Datensatzanzahl (primäre
+	 * eine feste Zahl, referenzierte eine Zahl oder einen Bereich "1..3");
+	 * ihre `.td`-Datei muss existieren. Die Regeln liegen vscode-frei in
+	 * project/validation.ts — ein Bereich mit falschem Trenner (z. B. "1-3"
+	 * oder "1.3" statt "1..3") bekommt eine eigene, gezielte Meldung.
 	 */
 	private buildRecordsDiagnostics(document: vscode.TextDocument, project: Project): vscode.Diagnostic[] {
 		const rows = buildTableRows(project, this.cachedEntries);
+		const issues = validateProjectRecords(rows);
 		const lineInfoByPath = findTableLineInfo(document.getText());
-		const diagnostics: vscode.Diagnostic[] = [];
 
-		for (const row of rows) {
-			if (!row.found) {
-				continue;
-			}
-			const raw = row.records?.trim() ?? '';
-			let message: string;
-			let code: string;
-			if (raw === '') {
-				message = vscode.l10n.t('Table "{0}" has no number of records to generate.', row.label);
-				code = 'missing-records';
-			} else if (row.secondary ? !parseCardinality(raw) : !/^\d+$/.test(raw)) {
-				message = row.secondary
-					? vscode.l10n.t('Table "{0}": invalid number of related records (use e.g. "5" or "1..3").', row.label)
-					: vscode.l10n.t('Table "{0}": invalid number of records (use e.g. "100").', row.label);
-				code = 'invalid-records';
-			} else {
-				continue;
-			}
-			const info = lineInfoByPath.get(row.path);
+		return issues.map((issue) => {
+			const info = lineInfoByPath.get(issue.path);
 			const line = info ? info.pathLine : 0;
 			const lineIndex = Math.min(line, Math.max(0, document.lineCount - 1));
 			const range = document.lineAt(lineIndex).range;
-			const diagnostic = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
+			const diagnostic = new vscode.Diagnostic(
+				range,
+				this.formatProjectIssueMessage(issue),
+				issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
+			);
 			diagnostic.source = 'Datenschmiede';
-			diagnostic.code = code;
-			diagnostics.push(diagnostic);
-		}
+			diagnostic.code = issue.kind;
+			return diagnostic;
+		});
+	}
 
-		return diagnostics;
+	private formatProjectIssueMessage(issue: ProjectIssue): string {
+		switch (issue.kind) {
+			case 'missing-records':
+				return vscode.l10n.t('Table "{0}" has no number of records to generate.', issue.label);
+			case 'invalid-records-range-separator':
+				return vscode.l10n.t(
+					'Table "{0}": invalid range "{1}" — write ranges with two dots, e.g. "1..3".',
+					issue.label,
+					issue.detail ?? '',
+				);
+			case 'invalid-records':
+				return vscode.l10n.t(
+					'Table "{0}": invalid number of records "{1}" (use e.g. "100", or "5"/"1..3" for referenced tables).',
+					issue.label,
+					issue.detail ?? '',
+				);
+			case 'table-missing':
+				return vscode.l10n.t(
+					'Table file "{0}" was not found. It may have been deleted, renamed, or moved.',
+					issue.path,
+				);
+			default:
+				return issue.kind;
+		}
 	}
 
 	private formatParseError(err: ParseError): string {
@@ -716,6 +741,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
 				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles });
 			}
+			// Auch die Problems-Ansicht neu bewerten: Datei-Änderungen im
+			// Workspace können z. B. eine Tabelle verschwinden lassen oder ihre
+			// Art (primär/referenziert) ändern, ohne dass sich das Projekt-
+			// Dokument selbst ändert.
+			this.updateDiagnostics(document);
 		}
 	}
 

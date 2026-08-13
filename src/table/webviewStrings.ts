@@ -151,7 +151,7 @@ const en: WebviewStrings = {
 	fkColumnNotFoundError: 'This column was not found in the referenced table.',
 
 	generatorColumnHeader: 'Column generator',
-	generatorEmptyOption: '— default by data type —',
+	generatorEmptyOption: '— none —',
 	generatorNotFoundSuffix: ' (not found)',
 	generatorCustomGroupLabel: 'Custom generators',
 	generatorBuiltinGroupLabel: 'Built-in generators',
@@ -251,7 +251,7 @@ const de: WebviewStrings = {
 	fkColumnNotFoundError: 'Diese Spalte wurde in der referenzierten Tabelle nicht gefunden.',
 
 	generatorColumnHeader: 'Spaltengenerator',
-	generatorEmptyOption: '— Standard je Datentyp —',
+	generatorEmptyOption: '— keiner —',
 	generatorNotFoundSuffix: ' (nicht gefunden)',
 	generatorCustomGroupLabel: 'Eigene Generatoren',
 	generatorBuiltinGroupLabel: 'Eingebaute Generatoren',

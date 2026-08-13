@@ -1181,6 +1181,13 @@
 
 	/** Räumt einen evtl. offenen Parameter-Dialog ab (höchstens einen gleichzeitig); `true` übernimmt die Änderungen, sonst werden sie verworfen. @type {((keepChanges?: boolean) => void) | null} */
 	let closeParamDialog = null;
+	/**
+	 * Schließt den Dialog, ohne etwas zurückzuschreiben — für den Fall, dass
+	 * das Dokument von außen ersetzt wurde (z. B. Undo/Git): der Dialog
+	 * bearbeitet dann einen veralteten Spalten-Stand, weitere Eingaben würden
+	 * ins Leere laufen. @type {(() => void) | null}
+	 */
+	let abandonParamDialog = null;
 
 	/** Schließt den Dialog wie „Abbrechen“ (Änderungen verwerfen). */
 	function dismissParamDialog() {
@@ -1400,10 +1407,15 @@
 		};
 		document.addEventListener('keydown', onKeyDown, true);
 
-		closeParamDialog = (keepChanges) => {
+		const cleanup = () => {
 			closeParamDialog = null;
+			abandonParamDialog = null;
 			document.removeEventListener('keydown', onKeyDown, true);
 			overlay.remove();
+		};
+		abandonParamDialog = cleanup;
+		closeParamDialog = (keepChanges) => {
+			cleanup();
 			if (!keepChanges) {
 				// Abbrechen: alle Änderungen dieses Dialogs verwerfen.
 				for (const key of Object.keys(params)) {
@@ -1753,11 +1765,20 @@
 				render();
 				break;
 			case 'update':
+				// Externer Dokumentwechsel (Undo, Git, Texteditor): ein offener
+				// Parameter-Dialog bearbeitet danach einen veralteten Stand ->
+				// schließen, ohne etwas zurückzuschreiben.
+				if (abandonParamDialog) {
+					abandonParamDialog();
+				}
 				parseError = null;
 				state = message.table;
 				render();
 				break;
 			case 'parseError':
+				if (abandonParamDialog) {
+					abandonParamDialog();
+				}
 				parseError = message.message;
 				render();
 				break;
