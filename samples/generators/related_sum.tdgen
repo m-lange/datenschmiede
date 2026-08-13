@@ -14,7 +14,9 @@ GROUP BY order_id`).
 - `match_column` *(Pflicht)*: Schlüsselspalte der referenzierten Tabelle,
   nach der gruppiert wird (z. B. deren FK-Spalte)
 - `key_column` *(Pflicht)*: Spalte **dieser** Tabelle, deren Werte mit
-  `match_column` verglichen werden (freie Eingabe, z. B. `order_id`)
+  `match_column` verglichen werden — Parametertyp `own_column`: die
+  Auswahl bietet die Spalten der eigenen Tabelle an, gelesen werden ihre
+  Werte für **dieselben Datensätze**
 
 **Was dieses Beispiel zeigt:**
 
@@ -49,8 +51,8 @@ required = true
 
 [[parameters]]
 name = "key_column"
-type = "string"
-description = "Spalte dieser Tabelle, deren Werte mit match_column verglichen werden (z. B. \"order_id\")."
+type = "own_column"
+description = "Spalte dieser Tabelle, deren Werte mit match_column verglichen werden (z. B. die eigene FK-Spalte)."
 required = true
 
 [code]

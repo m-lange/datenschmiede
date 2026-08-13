@@ -324,8 +324,9 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				);
 			case 'gen-own-column-not-found':
 				return vscode.l10n.t(
-					'Column "{0}": the combine template references column "{1}", which does not exist in this table (or is the column itself).',
+					'Column "{0}": parameter "{1}" references column "{2}" of this table, which does not exist (or is the column itself).',
 					label,
+					issue.paramName ?? '',
 					issue.detail ?? '',
 				);
 			default:

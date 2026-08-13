@@ -1,10 +1,10 @@
 # Datenschmiede Nachschlageliste
 # name: countries
-# description: **Länderverteilung** des Webshop-Beispiels mit zwei Wertespalten (`code` und `name`) — Generatoren wählen beim Konfigurieren, *welche* Spalte sie ziehen.\n\nDie **Gewichte** steuern die Häufigkeit: Deutschland dominiert mit 55 %, die Nachbarländer teilen sich den Rest. Die Summe darf beliebig von 100 % abweichen — gezogen wird immer proportional.\n\nVerwendet von `shop.core.customers.country` (Lookup-Generator) und von `tracking_code.tdgen` als Quelle der Länderkürzel.
-"code";"name";"weight"
-"DE";"Deutschland";"55"
-"AT";"Österreich";"15"
-"CH";"Schweiz";"10"
-"NL";"Niederlande";"8"
-"FR";"Frankreich";"7"
-"PL";"Polen";"5"
+# description: **Länderverteilung** des Webshop-Beispiels mit drei Wertespalten (`code`, `name`, `currency`) — Generatoren wählen beim Konfigurieren, *welche* Spalte sie ziehen.\n\nDie **Gewichte** steuern die Häufigkeit: Deutschland dominiert mit 55 %, die Nachbarländer teilen sich den Rest. Die Summe darf beliebig von 100 % abweichen — gezogen wird immer proportional.\n\nWichtig: Je Datensatz wird **eine Zeile** gezogen — alle Spalten aus dieser Liste lesen dieselbe Zeile, auch über FK-verbundene Tabellen hinweg: zieht der Kunde `code` „CH“, bekommt seine Bestellung aus `currency` derselben Zeile „CHF“ (siehe `shop.sales.orders.currency`).\n\nVerwendet von `shop.core.customers.country`, `shop.sales.orders.currency` und von `tracking_code.tdgen` als Quelle der Länderkürzel.
+"code";"name";"currency";"weight"
+"DE";"Deutschland";"EUR";"55"
+"AT";"Österreich";"EUR";"15"
+"CH";"Schweiz";"CHF";"10"
+"NL";"Niederlande";"EUR";"8"
+"FR";"Frankreich";"EUR";"7"
+"PL";"Polen";"PLN";"5"

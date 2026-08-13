@@ -89,6 +89,18 @@ match_column = "order_id"
 key_column = "order_id"
 
 [[columns]]
+name = "size_category"
+type = "string"
+pk = false
+fk = false
+description = "Sendungsgröße `small`/`medium`/`large` — kategorisiert `total_quantity` über den Generator `value_category` (Parametertyp `own_column`)"
+generator = "custom:value_category"
+[columns.generator_params]
+source_column = "total_quantity"
+limits = "5,12"
+labels = "small,medium,large"
+
+[[columns]]
 name = "shipped_at"
 type = "datetime"
 pk = false

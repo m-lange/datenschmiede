@@ -185,6 +185,13 @@ export class GeneratorBase {
 					return [{ kind: 'gen-lookup-not-found', paramName: parameter.name, detail: value }];
 				}
 				return [];
+			case 'own_column':
+				// Eine Spalte der eigenen Tabelle: muss existieren und darf nicht
+				// die generierte Spalte selbst sein.
+				if (value === ctx.ownColumnName || !ctx.ownColumns.includes(value)) {
+					return [{ kind: 'gen-own-column-not-found', paramName: parameter.name, detail: value }];
+				}
+				return [];
 			default:
 				if (parameter.choices && parameter.choices.length > 0 && !parameter.choices.includes(value)) {
 					return [{ kind: 'gen-param-invalid', paramName: parameter.name, detail: value }];
@@ -197,9 +204,10 @@ export class GeneratorBase {
 	 * Benötigte Referenzen der aktuellen Konfiguration. Standard: jeder
 	 * gesetzte `table`-Parameter benötigt seine Tabelle, jedes
 	 * `table`+`column`-Paar die konkrete Spalte, jeder `lookup`-Parameter
-	 * seine Nachschlageliste.
+	 * seine Nachschlageliste, jeder `own_column`-Parameter die Spalte der
+	 * eigenen Tabelle (sie wird dadurch garantiert *vor* dieser generiert).
 	 */
-	public requiredRefs(config: GeneratorConfig, _ctx: GeneratorContext): RequiredRefs {
+	public requiredRefs(config: GeneratorConfig, ctx: GeneratorContext): RequiredRefs {
 		const refs = emptyRequiredRefs();
 		for (const parameter of this.parameters) {
 			const value = (config.params[parameter.name] ?? '').trim();
@@ -214,6 +222,10 @@ export class GeneratorBase {
 				const target = this.boundReferenceValue(parameter, config);
 				if (target?.kind === 'table') {
 					refs.columns.push({ table: target.value, column: value });
+				}
+			} else if (parameter.type === 'own_column') {
+				if (value !== ctx.ownColumnName && ctx.ownColumns.includes(value)) {
+					refs.ownColumns.push(value);
 				}
 			}
 		}

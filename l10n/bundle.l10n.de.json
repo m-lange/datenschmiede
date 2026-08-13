@@ -53,7 +53,7 @@
 	"Column \"{0}\": generator parameter \"{1}\" references column \"{2}\", which was not found in the referenced table.": "Spalte „{0}“: Generator-Parameter „{1}“ referenziert die Spalte „{2}“, die in der referenzierten Tabelle nicht gefunden wurde.",
 	"Column \"{0}\": generator parameter \"{1}\" references lookup list \"{2}\", which was not found. It may have been deleted or renamed.": "Spalte „{0}“: Generator-Parameter „{1}“ referenziert die Nachschlageliste „{2}“, die nicht gefunden wurde. Sie wurde möglicherweise gelöscht oder umbenannt.",
 	"Column \"{0}\": generator parameter \"{1}\" references column \"{2}\", which was not found in the lookup list.": "Spalte „{0}“: Generator-Parameter „{1}“ referenziert die Spalte „{2}“, die in der Nachschlageliste nicht gefunden wurde.",
-	"Column \"{0}\": the combine template references column \"{1}\", which does not exist in this table (or is the column itself).": "Spalte „{0}“: Die Kombinations-Vorlage referenziert die Spalte „{1}“, die in dieser Tabelle nicht existiert (oder die Spalte selbst ist).",
+	"Column \"{0}\": parameter \"{1}\" references column \"{2}\" of this table, which does not exist (or is the column itself).": "Spalte „{0}“: Parameter „{1}“ referenziert die Spalte „{2}“ dieser Tabelle, die nicht existiert (oder die Spalte selbst ist).",
 	"This project has no tables selected yet.": "In diesem Projekt sind noch keine Tabellen ausgewählt.",
 	"The linked Python interpreter is not usable (missing or older than 3.10): {0}": "Der verknüpfte Python-Interpreter ist nicht nutzbar (fehlt oder ist älter als 3.10): {0}",
 	"Cannot generate test data: {0}": "Testdaten können nicht generiert werden: {0}",

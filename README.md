@@ -261,7 +261,13 @@ melden betroffene Tabellen das als Warnung. Beispiele:
 via `ctx.table`) und
 [`samples/generators/related_sum.tdgen`](samples/generators/related_sum.tdgen)
 (Aggregation: Summe einer Spalte einer anderen Tabelle, gruppiert nach
-einem Schlüssel — `SUM(order_items.quantity) GROUP BY order_id`).
+einem Schlüssel — `SUM(order_items.quantity) GROUP BY order_id`),
+[`samples/generators/value_category.tdgen`](samples/generators/value_category.tdgen)
+(kategorisiert eine Spalte derselben Tabelle über den Parametertyp
+`own_column` — die Quellspalte wird garantiert vorher generiert) und
+[`samples/generators/parent_value.tdgen`](samples/generators/parent_value.tdgen)
+(übernimmt zeilengenau einen Wert der führenden Tabelle via
+`ctx.related`, z. B. das Land des bestellenden Kunden).
 
 ## Ausgabe je Tabelle (Dateiname + CSV)
 

@@ -1,0 +1,50 @@
+# Datenschmiede Generator
+name = "parent_value"
+description = """
+**Übernimmt einen Wert aus der führenden (referenzierten) Tabelle** —
+zeilengenau je Datensatz: für jede Zeile dieser Tabelle wird über eine
+FK-Spalte *genau der* zugehörige Datensatz der referenzierten Tabelle
+bestimmt und dessen Spaltenwert übernommen (ein Join, keine
+Zufallsstichprobe). Beispiel: jede Bestellung bekommt das **Land ihres
+Kunden**.
+
+**Parameter:**
+
+- `fk_column` *(Pflicht)*: FK-Spalte **dieser** Tabelle (Parametertyp
+  `own_column`), über die der zugehörige Datensatz bestimmt wird —
+  z. B. `customer_id`
+- `source_column` *(Pflicht)*: Spaltenname in der referenzierten Tabelle,
+  dessen Wert übernommen wird — z. B. `country`
+
+**Was dieses Beispiel zeigt:**
+
+- `ctx.related("fk_spalte", "spalte")`: zeilengenau zugeordnete Werte der
+  referenzierten Tabelle (Join über `fk_table`/`fk_column` der FK-Spalte)
+  — im Gegensatz zu `ctx.table(...)`, das *alle* Werte liefert und für
+  Zufallsstichproben gedacht ist
+- die führende Tabelle ist über die FK-Spalte ohnehin Teil des Projekts
+  und wird vor dieser Tabelle generiert
+"""
+
+[[parameters]]
+name = "fk_column"
+type = "own_column"
+description = "FK-Spalte dieser Tabelle, über die der zugehörige Datensatz der referenzierten Tabelle bestimmt wird."
+required = true
+
+[[parameters]]
+name = "source_column"
+type = "string"
+description = "Spaltenname in der referenzierten Tabelle, dessen Wert übernommen wird (z. B. \"country\")."
+required = true
+
+[code]
+generate = """
+return ctx.related(params["fk_column"], params["source_column"])
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"{params.get('fk_column', '?')} → {params.get('source_column', '?')}"
+"""

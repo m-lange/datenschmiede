@@ -15,11 +15,15 @@ import { COLUMN_TYPES } from '../table/model';
 /**
  * Datentypen eines Generator-Parameters: dieselben wie für Spalten im Table
  * Editor, erweitert um Nachschlageliste (`lookup`), referenzierte Tabelle
- * (`table`) und referenzierte Spalte (`column`). Ein `column`-Parameter
- * bezieht seine Auswahl aus dem nächsten davorstehenden `table`- bzw.
- * `lookup`-Parameter (analog zum Paar fk_table/fk_column der Tabellenspalten).
+ * (`table`), referenzierte Spalte (`column`) und eine Spalte der *eigenen*
+ * Tabelle (`own_column`). Ein `column`-Parameter bezieht seine Auswahl aus
+ * dem nächsten davorstehenden `table`- bzw. `lookup`-Parameter (analog zum
+ * Paar fk_table/fk_column der Tabellenspalten); ein `own_column`-Parameter
+ * bietet die Spalten der Tabelle an, zu der die generierte Spalte gehört —
+ * `ctx.column(...)` liefert dann deren Werte für **dieselben Datensätze**,
+ * und die referenzierte Spalte wird garantiert *vor* dieser generiert.
  */
-export const PARAMETER_TYPES = [...COLUMN_TYPES, 'lookup', 'table', 'column'] as const;
+export const PARAMETER_TYPES = [...COLUMN_TYPES, 'lookup', 'table', 'column', 'own_column'] as const;
 
 export type ParameterType = (typeof PARAMETER_TYPES)[number];
 

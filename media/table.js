@@ -744,6 +744,15 @@
 					}
 					break;
 				}
+				case 'own_column': {
+					// Spalte der eigenen Tabelle: muss existieren und darf nicht
+					// die generierte Spalte selbst sein.
+					const ownColumns = state.columns.map((c) => (c.name || '').trim());
+					if (value === (column.name || '').trim() || !ownColumns.includes(value)) {
+						return strings.genWarnRefNotFound.replace('{0}', parameter.name).replace('{1}', value);
+					}
+					break;
+				}
 				default:
 					if (parameter.choices && parameter.choices.length > 0 && !parameter.choices.includes(value)) {
 						return strings.genWarnParamInvalid.replace('{0}', parameter.name);
@@ -1319,6 +1328,14 @@
 					return buildSelect(lookupOptions.map((l) => l.name), true);
 				case 'table':
 					return buildSelect(tableOptions.map((t) => t.label), true);
+				case 'own_column': {
+					// Spalten der eigenen Tabelle — ohne die gerade konfigurierte
+					// Spalte selbst; ihre Werte gelten für dieselben Datensätze.
+					const ownColumns = state.columns
+						.map((c) => (c.name || '').trim())
+						.filter((name) => name && name !== (column.name || '').trim());
+					return buildSelect(ownColumns, true);
+				}
 				case 'column': {
 					const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
 					const populate = () => {

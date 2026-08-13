@@ -109,6 +109,31 @@ class Context:
             raise RuntimeError(f'ctx.table("{label}", "{column}"): values are not available (yet)')
         return data[column]
 
+    def related(self, fk_column, column):
+        """
+        Zeilen-genau zugeordnete Werte der referenzierten (fuehrenden)
+        Tabelle: fuer jeden Datensatz dieser Tabelle der Wert von `column`
+        aus GENAU dem Datensatz, auf den die FK-Spalte `fk_column` zeigt —
+        ein Join ueber fk_table/fk_column statt einer Zufallsstichprobe
+        (ctx.table). Beispiel: in `orders` liefert
+        ctx.related("customer_id", "country") das Land des jeweils
+        bestellenden Kunden.
+        """
+        col_def = next((c for c in self._table["columns"] if c["name"] == fk_column), None)
+        if col_def is None or not col_def.get("fk") or not col_def.get("fk_table"):
+            raise RuntimeError(f'ctx.related("{fk_column}", ...): "{fk_column}" is not a foreign key column of this table')
+        own_values = self._runner.data.get(self._table["label"], {}).get(fk_column)
+        if own_values is None:
+            raise RuntimeError(f'ctx.related("{fk_column}", ...): column "{fk_column}" is not generated yet')
+        parent_label, parent_key = col_def["fk_table"], col_def["fk_column"]
+        parent = self._runner.data.get(parent_label)
+        if parent is None or parent_key not in parent or column not in parent:
+            raise RuntimeError(
+                f'ctx.related("{fk_column}", "{column}"): values of {parent_label}.{column} are not available (yet)'
+            )
+        mapping = pd.Series(parent[column].values, index=parent[parent_key].values)
+        return pd.Series(own_values).map(mapping)
+
     def lookup(self, name, column):
         """Alle Werte einer Spalte einer Nachschlageliste (.lkp)."""
         values, _weights = self._runner.lookup_column(name, column)
@@ -157,6 +182,11 @@ class Runner:
         self.data = {}
         # label -> Zeilenanzahl
         self.row_counts = {}
+        # (tabellen_label, listen_name) -> gezogene Zeilen-Indizes der
+        # Nachschlageliste je Datensatz: alle Spalten, die aus derselben
+        # Liste ziehen, lesen so dieselbe Zeile — auch ueber FK-verbundene
+        # Tabellen hinweg (siehe lookup_indices).
+        self.lookup_row_indices = {}
 
     # ------------------------------------------------------------------
     # Reihenfolge
@@ -246,6 +276,58 @@ class Runner:
                 weights.append(0.0)
         return values, weights
 
+    def lookup_indices(self, table, name, n):
+        """
+        Gezogene Zeilen-Indizes einer Nachschlageliste fuer eine Tabelle —
+        je Datensatz EINE Zeile, die alle Spalten derselben Liste gemeinsam
+        lesen (z. B. code "DE" und currency "EUR" aus derselben Zeile):
+
+        1. Hat diese Tabelle bereits Indizes fuer die Liste (eine andere
+           Spalte zog zuerst), werden sie wiederverwendet.
+        2. Sonst: Hat eine per FK referenzierte Tabelle Indizes fuer die
+           Liste, werden sie zeilengenau uebernommen (Join ueber die
+           FK-Spalte) — zusammengehoerige Datensaetze lesen so ueber
+           Tabellengrenzen hinweg dieselbe Listen-Zeile.
+        3. Sonst wird frisch gewichtet gezogen.
+        """
+        key = (table["label"], name)
+        if key in self.lookup_row_indices:
+            return self.lookup_row_indices[key]
+
+        for column in table["columns"]:
+            if not column.get("fk") or not column.get("fk_table"):
+                continue
+            parent_indices = self.lookup_row_indices.get((column["fk_table"], name))
+            own_fk = self.data.get(table["label"], {}).get(column["name"])
+            parent = self.data.get(column["fk_table"])
+            if parent_indices is None or own_fk is None or parent is None:
+                continue
+            mapping = pd.Series(np.asarray(parent_indices), index=parent[column["fk_column"]].values)
+            mapping = mapping[~mapping.index.duplicated(keep="first")]
+            mapped = pd.Series(own_fk).map(mapping)
+            if mapped.isna().any():
+                # FK-Werte ohne Treffer (sollte nicht vorkommen) -> nicht raten,
+                # sondern unten frisch ziehen.
+                break
+            indices = mapped.to_numpy(dtype=np.int64)
+            self.lookup_row_indices[key] = indices
+            return indices
+
+        lookup = self.lookups.get(name)
+        if lookup is None:
+            raise RuntimeError(f'Lookup list "{name}" was not found')
+        count = len(lookup["rows"])
+        if count == 0:
+            indices = np.zeros(0, dtype=np.int64) if n == 0 else np.full(n, -1, dtype=np.int64)
+            self.lookup_row_indices[key] = indices
+            return indices
+        _values, weights = self.lookup_column(name, lookup["columns"][0]) if lookup["columns"] else ([], [])
+        total = sum(weights)
+        p = [w / total for w in weights] if total > 0 else None
+        indices = RNG.choice(count, size=n, p=p)
+        self.lookup_row_indices[key] = indices
+        return indices
+
     # ------------------------------------------------------------------
     # Generatoren
     # ------------------------------------------------------------------
@@ -292,12 +374,16 @@ class Runner:
             return pd.Series([method() for _ in range(n)], dtype=object)
 
         if gen_id == "lookup":
-            values, weights = self.lookup_column(params.get("list", ""), params.get("column", ""))
+            # Je Datensatz wird EINE Listen-Zeile gezogen (siehe
+            # lookup_indices) — alle Spalten derselben Liste, auch in
+            # FK-verbundenen Tabellen, lesen dieselbe Zeile.
+            list_name = params.get("list", "")
+            values, _weights = self.lookup_column(list_name, params.get("column", ""))
             if not values:
                 return pd.Series([""] * n, dtype=object)
-            total = sum(weights)
-            p = [w / total for w in weights] if total > 0 else None
-            return pd.Series(RNG.choice(np.array(values, dtype=object), size=n, p=p))
+            indices = self.lookup_indices(table, list_name, n)
+            arr = np.array(values, dtype=object)
+            return pd.Series(arr[np.clip(indices, 0, len(arr) - 1)])
 
         if gen_id == "combine":
             template = params.get("template", "")

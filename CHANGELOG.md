@@ -2,6 +2,20 @@
 
 ## 0.6.0
 
+- **Neuer Parametertyp `own_column`** für (benutzerdefinierte)
+  Generatoren: bietet die Spalten der *eigenen* Tabelle an; die gewählte
+  Spalte liefert ihre Werte für **dieselben Datensätze** (`ctx.column`)
+  und wird garantiert *vor* der konfigurierten Spalte generiert — auch
+  über Ketten benutzerdefinierter Generatoren hinweg. Umbenannte oder
+  gelöschte Spalten erscheinen als Warnung. Dazu der neue Laufzeit-Helfer
+  **`ctx.related("fk_spalte", "spalte")`**: zeilengenau zugeordnete Werte
+  der referenzierten (führenden) Tabelle als Join über eine FK-Spalte —
+  im Gegensatz zur Zufallsstichprobe von `ctx.table`.
+- **Zeilen-Konsistenz des Nachschagelisten-Generators**: je Datensatz wird
+  EINE Listen-Zeile gezogen — alle Spalten, die aus derselben Liste
+  ziehen, lesen dieselbe Zeile, auch über FK-verbundene Tabellen hinweg
+  (der Kunde zieht `code` „CH“, seine Bestellung liest `currency` „CHF“
+  aus derselben Zeile).
 - **Output-Channel „Datenschmiede“** (Ansicht *Output*): öffnet sich beim
   Start eines Generator-Laufs automatisch (ohne den Fokus zu stehlen) und
   protokolliert den Fortschritt live — Plan-Zusammenfassung (Tabellen samt
@@ -33,10 +47,12 @@
 - **Neue Beispiel-Suite „Webshop Demo“** (`samples/`, komplett erneuert):
   fünf Tabellen in zwei Namensräumen (`shop.core.customers`/`products`,
   `shop.sales.orders`/`order_items`/`shipments`) mit FK-Ketten über drei
-  Ebenen, zwei Nachschlagelisten (`countries`, `order_status`), drei
+  Ebenen, zwei Nachschlagelisten (`countries`, `order_status`), fünf
   benutzerdefinierte Generatoren (`sequential_id`, `tracking_code` mit
   Tabellen-Referenz via `ctx.table`, `related_sum` — Summe über eine
-  andere Tabelle als vektorisiertes `groupby`) und ein fertiges Projekt
+  andere Tabelle als vektorisiertes `groupby`, `value_category` mit dem
+  Parametertyp `own_column`, `parent_value` mit zeilengenauem Join über
+  `ctx.related`) und ein fertiges Projekt
   `webshop-demo.tdproject` mit Ausgabeordner-Vorlage — jede Datei mit
   ausführlicher Markdown-Beschreibung der demonstrierten Funktionen.
   Faker um die Provider `boolean`, `date_this_year` und

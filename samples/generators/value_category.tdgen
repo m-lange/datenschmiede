@@ -1,0 +1,61 @@
+# Datenschmiede Generator
+name = "value_category"
+description = """
+**Kategorisiert numerische Werte** einer anderen Spalte *derselben*
+Tabelle in benannte Klassen — z. B. eine Sendungsgröße `small` / `medium`
+/ `large` aus der Gesamtstückzahl.
+
+**Parameter:**
+
+- `source_column` *(Pflicht)*: die numerische Quellspalte — Parametertyp
+  **`own_column`**: die Auswahl bietet die Spalten der eigenen Tabelle an,
+  `ctx.column(...)` liefert deren Werte für **dieselben Datensätze**
+- `limits` *(Pflicht)*: aufsteigende Grenzwerte, kommagetrennt (z. B.
+  `5,12` → drei Klassen: ≤ 5, 6–12, > 12)
+- `labels` *(Pflicht)*: Klassennamen, kommagetrennt — genau **einer mehr**
+  als Grenzwerte (z. B. `small,medium,large`)
+
+**Was dieses Beispiel zeigt:**
+
+- der neue Parametertyp `own_column`: die Quellspalte wird garantiert
+  *vor* dieser Spalte generiert (auch wenn sie selbst aus einem
+  benutzerdefinierten Generator stammt — hier `related_sum`), und ein
+  Umbenennen/Löschen der Spalte erscheint als **Warnung** in der
+  Problems-Ansicht
+- vektorisierte Klassifizierung über `pd.cut` statt Schleifen-Code
+"""
+
+[[parameters]]
+name = "source_column"
+type = "own_column"
+description = "Numerische Spalte dieser Tabelle, deren Werte kategorisiert werden."
+required = true
+
+[[parameters]]
+name = "limits"
+type = "string"
+description = "Aufsteigende Grenzwerte, kommagetrennt (z. B. \"5,12\")."
+required = true
+
+[[parameters]]
+name = "labels"
+type = "string"
+description = "Klassennamen, kommagetrennt — genau einer mehr als Grenzwerte (z. B. \"small,medium,large\")."
+required = true
+
+[code]
+generate = """
+values = ctx.pd.to_numeric(ctx.pd.Series(ctx.column(params["source_column"])), errors="coerce")
+limits = [float(x) for x in str(params.get("limits", "")).split(",") if str(x).strip()]
+labels = [x.strip() for x in str(params.get("labels", "")).split(",") if x.strip()]
+if len(labels) != len(limits) + 1:
+    raise RuntimeError("value_category: labels must contain exactly one more entry than limits")
+bins = [float("-inf")] + limits + [float("inf")]
+return ctx.pd.cut(values, bins=bins, labels=labels).astype(str)
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"{params.get('source_column', '?')} → {params.get('labels', '?')}"
+"""
