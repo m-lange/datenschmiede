@@ -45,7 +45,8 @@ class GeneratorNotebookSerializer implements vscode.NotebookSerializer {
 		// genaue Position steht zusätzlich in der Problems-Ansicht.
 		const file = parseGeneratorText(text);
 
-		const cells = fileToCells(file).map((cell) => {
+		const locale = vscode.env.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+		const cells = fileToCells(file, locale).map((cell) => {
 			const data = new vscode.NotebookCellData(
 				cell.kind === 'markdown' ? vscode.NotebookCellKind.Markup : vscode.NotebookCellKind.Code,
 				cell.value,

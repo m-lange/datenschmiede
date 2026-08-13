@@ -31,7 +31,16 @@ import {
 import { GeneratorParameter, PARAMETER_TYPES } from './types';
 import { parseReturnLiteral } from './pyliteral';
 
-export type CellRole = 'header' | 'parameters' | 'scratch' | 'generate' | 'parse_params' | 'display_value' | 'validate' | 'extra';
+export type CellRole =
+	| 'header'
+	| 'doc'
+	| 'parameters'
+	| 'scratch'
+	| 'generate'
+	| 'parse_params'
+	| 'display_value'
+	| 'validate'
+	| 'extra';
 
 export interface CellSpec {
 	kind: 'markdown' | 'code';
@@ -39,6 +48,39 @@ export interface CellSpec {
 	value: string;
 	role: CellRole;
 }
+
+/**
+ * Kurzbeschreibungen, die als Markdown-Zellen vor den jeweiligen
+ * Code-Zellen stehen (Rolle `doc`). Sie werden beim Öffnen erzeugt und
+ * beim Speichern ignoriert (nicht persistiert) — Änderungen daran gehen
+ * also bewusst nicht in die Datei ein.
+ */
+const CELL_DOCS: Record<string, { en: string; de: string }> = {
+	parameters: {
+		de: '*__parameters() — Pflicht.__ Definiert die Parameter dieses Generators als Literal-Liste von dicts (`name`, `type` — Spaltentypen plus `lookup`/`table`/`column`/`own_column` —, optional `description`, `choices`, `required`). Beim Speichern wird daraus die Parameterliste der Datei abgeleitet; die Werte je Spalte setzt später der Table Editor.*',
+		en: '*__parameters() — required.__ Defines this generator’s parameters as a literal list of dicts (`name`, `type` — column types plus `lookup`/`table`/`column`/`own_column` —, optional `description`, `choices`, `required`). Saving derives the file’s parameter list from it; the per-column values are set later in the table editor.*',
+	},
+	scratch: {
+		de: '*__Testwerte.__ Diese freie Zelle setzt `params` und `n` für die Testläufe der Methoden-Zellen unten — anpassen und ausführen. Der Generator-Lauf ignoriert sie; zusätzliche eigene Zellen wandern beim Speichern hierher.*',
+		en: '*__Test values.__ This free cell sets `params` and `n` for test-running the method cells below — adjust and execute. The generation run ignores it; additional custom cells are moved here on save.*',
+	},
+	generate: {
+		de: '*__generate — Pflicht.__ Erzeugt die Spaltenwerte: eine pandas Series der Länge `n` zurückgeben. Verfügbar: `ctx.rng`, `ctx.pd`/`ctx.np`, `ctx.faker(locale)`, `ctx.column("spalte")`, `ctx.related("fk", "spalte")`, `ctx.table(...)`, `ctx.lookup(...)`/`ctx.lookup_value(...)`, `ctx.log(...)`. Ausführen ruft die Methode mit den Testwerten auf.*',
+		en: '*__generate — required.__ Produces the column values: return a pandas Series of length `n`. Available: `ctx.rng`, `ctx.pd`/`ctx.np`, `ctx.faker(locale)`, `ctx.column("name")`, `ctx.related("fk", "column")`, `ctx.table(...)`, `ctx.lookup(...)`/`ctx.lookup_value(...)`, `ctx.log(...)`. Executing calls the method with the test values.*',
+	},
+	parse_params: {
+		de: '*__parse_params — optional.__ Wandelt die rohen String-Parameterwerte in typisierte Werte um, bevor `generate` läuft.*',
+		en: '*__parse_params — optional.__ Converts the raw string parameter values into typed values before `generate` runs.*',
+	},
+	display_value: {
+		de: '*__display_value — optional.__ Kompakte einzeilige Zusammenfassung einer Konfiguration für Lauf-Protokoll und Vorschau.*',
+		en: '*__display_value — optional.__ Compact one-line summary of a configuration for the run log and preview.*',
+	},
+	validate: {
+		de: '*__validate — optional.__ Liefert Warnungs-Texte zu den (rohen) Parameterwerten — sie erscheinen an den konfigurierten Spalten in der Problems-Ansicht.*',
+		en: '*__validate — optional.__ Returns warning texts for the (raw) parameter values — they appear at the configured columns in the Problems view.*',
+	},
+};
 
 const METHOD_SIGNATURES: Record<string, string> = {
 	parameters: PARAMETERS_SIGNATURE,
@@ -173,36 +215,44 @@ export function defaultScratch(parameters: GeneratorParameter[]): string {
 	].join('\n');
 }
 
-/** Baut die Notebook-Zellen aus dem Datei-Modell. */
-export function fileToCells(file: GeneratorFile): CellSpec[] {
+/** Baut die Notebook-Zellen aus dem Datei-Modell (`locale` wählt die Sprache der Beschreibungs-Zellen). */
+export function fileToCells(file: GeneratorFile, locale: 'de' | 'en' = 'en'): CellSpec[] {
 	const cells: CellSpec[] = [];
+	const doc = (key: string) =>
+		cells.push({ kind: 'markdown', language: 'markdown', value: CELL_DOCS[key][locale], role: 'doc' });
 
 	const header = file.description.trim()
 		? `# ${file.name.trim()}\n\n${file.description.trim()}`
 		: `# ${file.name.trim()}`;
 	cells.push({ kind: 'markdown', language: 'markdown', value: header, role: 'header' });
 
+	doc('parameters');
 	const parametersBody = file.code.parameters.trim()
 		? file.code.parameters
 		: parametersBodyFromList(file.parameters);
 	cells.push({ kind: 'code', language: 'python', value: methodCellText('parameters', parametersBody), role: 'parameters' });
 
+	doc('scratch');
 	const scratch = file.code.scratch.trim() ? file.code.scratch : defaultScratch(file.parameters);
 	cells.push({ kind: 'code', language: 'python', value: scratch, role: 'scratch' });
 
+	doc('generate');
 	cells.push({ kind: 'code', language: 'python', value: methodCellText('generate', file.code.generate), role: 'generate' });
+	doc('parse_params');
 	cells.push({
 		kind: 'code',
 		language: 'python',
 		value: methodCellText('parse_params', file.code.parseParams),
 		role: 'parse_params',
 	});
+	doc('display_value');
 	cells.push({
 		kind: 'code',
 		language: 'python',
 		value: methodCellText('display_value', file.code.displayValue),
 		role: 'display_value',
 	});
+	doc('validate');
 	cells.push({ kind: 'code', language: 'python', value: methodCellText('validate', file.code.validate), role: 'validate' });
 
 	return cells;
@@ -224,9 +274,14 @@ export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): Generat
 
 	const extras: string[] = [];
 	let scratch = '';
+	let sawScratch = false;
 
 	for (const cell of cells) {
 		switch (cell.role) {
+			case 'doc':
+				// Beschreibungs-Zellen werden beim Öffnen erzeugt und nicht
+				// persistiert (Änderungen daran gehen bewusst nicht in die Datei).
+				break;
 			case 'header': {
 				const lines = cell.value.split('\n');
 				const headingIndex = lines.findIndex((line) => line.trim().startsWith('# '));
@@ -253,6 +308,7 @@ export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): Generat
 			}
 			case 'scratch':
 				scratch = cell.value.replace(/\s+$/, '');
+				sawScratch = true;
 				break;
 			case 'generate':
 			case 'parse_params':
@@ -278,7 +334,10 @@ export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): Generat
 		}
 	}
 
-	file.code.scratch = [scratch, ...extras.map((extra) => `# --- zusätzliche Zelle ---\n${extra}`)]
+	// Wurde die Scratch-Zelle gelöscht, bleibt ihr bisheriger Inhalt erhalten
+	// (wie bei den Methoden-Zellen: Löschen wirkt nicht dauerhaft).
+	const scratchBase = sawScratch ? scratch : previous.code.scratch;
+	file.code.scratch = [scratchBase, ...extras.map((extra) => `# --- zusätzliche Zelle ---\n${extra}`)]
 		.filter((part) => part.trim())
 		.join('\n\n');
 
