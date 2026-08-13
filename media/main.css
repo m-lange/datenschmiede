@@ -1675,3 +1675,157 @@ body.vscode-high-contrast-light .chart-bar {
 	gap: 8px;
 	margin-top: 4px;
 }
+
+/* ---------- Generator-Editor: Python-Hervorhebung + Zellen-Testlauf ---------- */
+
+/* Kopfzeile einer Code-Zelle: Titel links, Run-Knopf rechts (immer sichtbar). */
+.cell-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.cell-run-btn {
+	opacity: 1;
+	color: var(--vscode-testing-runAction, var(--vscode-icon-foreground));
+}
+
+/* Hervorhebungs-Overlay: ein <pre> mit exakt derselben Metrik (Font,
+   Padding, Zeilenhöhe, Tab-Breite) liegt HINTER der Textarea; deren Text
+   ist transparent, nur der Cursor bleibt sichtbar — der Klassiker für
+   Syntax-Highlighting ohne echten Editor. Beide scrollen synchron
+   (siehe refreshHighlight in generator.js). */
+.code-editor-wrap {
+	position: relative;
+}
+
+.code-highlight {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+	padding: 8px 12px 8px 28px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: var(--vscode-editor-font-size);
+	line-height: 1.5;
+	white-space: pre;
+	overflow: hidden;
+	tab-size: 4;
+	color: var(--vscode-editor-foreground);
+	pointer-events: none;
+}
+
+.code-editor-wrap .code-body {
+	position: relative;
+	color: transparent;
+	caret-color: var(--vscode-editor-foreground);
+	background-color: transparent;
+}
+
+/* Platzhaltertext und Auswahl bleiben sichtbar, obwohl der Text transparent ist. */
+.code-editor-wrap .code-body::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.code-editor-wrap .code-body::selection {
+	background-color: var(--vscode-editor-selectionBackground, rgba(38, 79, 120, 0.5));
+	color: transparent;
+}
+
+/* Auch die feste Signatur-Zeile wird hervorgehoben (siehe renderCodeCell). */
+.code-signature .py-kw,
+.code-signature .py-fn {
+	font-weight: 600;
+}
+
+/* Token-Farben, angelehnt an VS Codes Dark+-/Light+-Standardthemes —
+   Webviews haben keinen Zugriff auf die echten TextMate-Token-Farben,
+   daher feste Werte je Theme-Helligkeit (wie .chart-bar in lookup.css). */
+.py-kw {
+	color: #c586c0;
+}
+.py-str {
+	color: #ce9178;
+}
+.py-com {
+	color: #6a9955;
+}
+.py-num {
+	color: #b5cea8;
+}
+.py-fn {
+	color: #dcdcaa;
+}
+.py-blt {
+	color: #4ec9b0;
+}
+.py-dec {
+	color: #dcdcaa;
+}
+
+body.vscode-light .py-kw,
+body.vscode-high-contrast-light .py-kw {
+	color: #af00db;
+}
+body.vscode-light .py-str,
+body.vscode-high-contrast-light .py-str {
+	color: #a31515;
+}
+body.vscode-light .py-com,
+body.vscode-high-contrast-light .py-com {
+	color: #008000;
+}
+body.vscode-light .py-num,
+body.vscode-high-contrast-light .py-num {
+	color: #098658;
+}
+body.vscode-light .py-fn,
+body.vscode-high-contrast-light .py-fn {
+	color: #795e26;
+}
+body.vscode-light .py-blt,
+body.vscode-high-contrast-light .py-blt {
+	color: #267f99;
+}
+body.vscode-light .py-dec,
+body.vscode-high-contrast-light .py-dec {
+	color: #795e26;
+}
+
+/* Ergebnis-Ausgabe eines Zellen-Testlaufs unter der Code-Zelle —
+   Notebook-artig: monospaced, dezent abgesetzt, bei Fehlern rot. */
+.cell-output {
+	margin-top: 6px;
+	border: 1px solid var(--card-border);
+	border-left: 3px solid var(--vscode-descriptionForeground);
+	border-radius: var(--radius-md);
+	padding: 8px 12px;
+	max-height: 260px;
+	overflow: auto;
+	font-family: var(--vscode-editor-font-family);
+	font-size: var(--vscode-editor-font-size);
+	line-height: 1.5;
+	background-color: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+}
+
+.cell-output-error {
+	border-left-color: var(--vscode-errorForeground);
+	color: var(--vscode-errorForeground);
+}
+
+.cell-output-line {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.cell-output-empty {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+.cell-output-traceback {
+	margin: 6px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--vscode-descriptionForeground);
+}

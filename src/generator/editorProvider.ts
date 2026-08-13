@@ -1,15 +1,28 @@
 import * as vscode from 'vscode';
+import { spawn } from 'child_process';
 import { GeneratorFile } from './model';
 import { parseGeneratorText, serializeGenerator } from './toml';
 import { PARAMETER_TYPES } from './types';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getGeneratorWebviewStrings } from './webviewStrings';
+import { resolveAnyInterpreter } from '../project/python';
+import { toPlanLookups } from '../project/run';
+import { listLookups } from '../lookup/repository';
 
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
 	| { type: 'edit'; generator: GeneratorFile }
+	| { type: 'runCell'; cell: string; params: Record<string, string>; n?: number }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
+
+/** Ergebnis eines Zellen-Testlaufs (Run-Knopf einer Code-Zelle, siehe python/run_cell.py). */
+interface CellRunResult {
+	ok: boolean;
+	lines?: string[];
+	error?: string;
+	traceback?: string;
+}
 type ParsedDocument = { generator: GeneratorFile } | { error: unknown };
 
 /** Schlüssel für die geräteweit (über alle .tdgen-Dateien hinweg) gemerkten Grid-Spaltenbreiten. */
@@ -121,6 +134,15 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 					}
 					break;
 				}
+				case 'runCell': {
+					// Run-Knopf einer Code-Zelle: führt genau diese Zelle mit den
+					// im Dialog eingegebenen Parameterwerten aus (python/run_cell.py)
+					// und schickt das Ergebnis zurück in den Ausgabe-Bereich unter
+					// der Zelle.
+					const result = await this.runCell(document, message.cell, message.params, message.n);
+					void webviewPanel.webview.postMessage({ type: 'cellResult', cell: message.cell, ...result });
+					break;
+				}
 				case 'columnWidths': {
 					// Geräteweit über alle .tdgen-Dateien hinweg gemerkt (persönliche
 					// Anzeige-Präferenz, kein Teil des Generators selbst).
@@ -128,6 +150,70 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 					break;
 				}
 			}
+		});
+	}
+
+	/** Führt eine einzelne Code-Zelle mit dem besten verfügbaren Interpreter aus (siehe python/run_cell.py). */
+	private async runCell(
+		document: vscode.TextDocument,
+		cell: string,
+		params: Record<string, string>,
+		n: number | undefined,
+	): Promise<CellRunResult> {
+		const state = this.readState(document);
+		if (!('generator' in state)) {
+			return { ok: false, error: state.parseError };
+		}
+		const interpreter = await resolveAnyInterpreter();
+		if (!interpreter) {
+			return {
+				ok: false,
+				error: vscode.l10n.t('No Python 3.10+ interpreter available. Install one, then try again.'),
+			};
+		}
+		const payload = {
+			cell,
+			params,
+			n: n ?? 10,
+			code: {
+				generate: state.generator.code.generate,
+				parse_params: state.generator.code.parseParams,
+				display_value: state.generator.code.displayValue,
+				validate: state.generator.code.validate,
+			},
+			// Nachschlagelisten mitgeben, damit ctx.lookup(...) im Test funktioniert.
+			lookups: toPlanLookups(await listLookups()),
+		};
+		const scriptPath = vscode.Uri.joinPath(this.context.extensionUri, 'python', 'run_cell.py').fsPath;
+
+		return new Promise<CellRunResult>((resolve) => {
+			const child = spawn(interpreter.path, [scriptPath]);
+			let stdout = '';
+			let stderr = '';
+			child.stdout.on('data', (chunk: Buffer) => {
+				stdout += chunk.toString('utf8');
+			});
+			child.stderr.on('data', (chunk: Buffer) => {
+				stderr += chunk.toString('utf8');
+			});
+			child.on('error', (err) => {
+				resolve({ ok: false, error: vscode.l10n.t('Unable to start Python: {0}', String(err.message)) });
+			});
+			child.on('close', (code) => {
+				try {
+					const result = JSON.parse(stdout.trim());
+					resolve({
+						ok: result.ok === true,
+						lines: Array.isArray(result.lines) ? result.lines.map(String) : undefined,
+						error: typeof result.error === 'string' ? result.error : undefined,
+						traceback: typeof result.traceback === 'string' ? result.traceback : undefined,
+					});
+				} catch {
+					resolve({ ok: false, error: `exit ${String(code)}: ${stderr.slice(-400)}` });
+				}
+			});
+			child.stdin.write(JSON.stringify(payload));
+			child.stdin.end();
 		});
 	}
 

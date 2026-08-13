@@ -72,6 +72,7 @@
 	"Circular reference between columns ({0}) — the generation order cannot be resolved.": "Zirkuläre Referenz zwischen Spalten ({0}) — die Generier-Reihenfolge kann nicht aufgelöst werden.",
 	"This .td file contains invalid TOML — fix it before generating a preview.": "Diese .td-Datei enthält kein gültiges TOML — vor der Vorschau zuerst korrigieren.",
 	"No Python 3.10+ interpreter available for the preview. Install one, then try again.": "Kein Python-3.10+-Interpreter für die Vorschau verfügbar. Einen installieren und erneut versuchen.",
+	"No Python 3.10+ interpreter available. Install one, then try again.": "Kein Python-3.10+-Interpreter verfügbar. Einen installieren und erneut versuchen.",
 	"Generating preview…": "Vorschau wird generiert…",
 	"Preview failed: {0}": "Vorschau fehlgeschlagen: {0}",
 	"Preview failed (exit code {0}). {1}": "Vorschau fehlgeschlagen (Exit-Code {0}). {1}",

@@ -39,6 +39,14 @@ export interface GeneratorWebviewStrings {
 	validateCellHint: string;
 	codePlaceholder: string;
 
+	runCellLabel: string;
+	/** Titel des Testlauf-Dialogs; `{0}` = Zellenname (generate, …). */
+	runDialogTitle: string;
+	runDialogNLabel: string;
+	runDialogRunButton: string;
+	runDialogCancelButton: string;
+	cellOutputEmpty: string;
+
 	errorTitle: string;
 	errorBody: string;
 	errorHint: string;
@@ -84,6 +92,13 @@ const en: GeneratorWebviewStrings = {
 		'Custom validation of the (raw string) parameter values: return a list of warning texts, an empty list means everything is fine. The background check runs it for every column using this generator and shows the warnings at that column in the Problems view.',
 	codePlaceholder: '# Python code…',
 
+	runCellLabel: 'Run this cell…',
+	runDialogTitle: 'Run {0}',
+	runDialogNLabel: 'Number of records (n)',
+	runDialogRunButton: 'Run',
+	runDialogCancelButton: 'Cancel',
+	cellOutputEmpty: '(empty result)',
+
 	errorTitle: 'Unable to display file',
 	errorBody: 'This .tdgen file contains invalid TOML and cannot be shown in the visual editor.',
 	errorHint: 'Use "Reopen Editor With…" (right-click the tab) to open it as text and fix the error.',
@@ -128,6 +143,13 @@ const de: GeneratorWebviewStrings = {
 	validateCellHint:
 		'Eigene Prüfung der (rohen String-)Parameterwerte: eine Liste von Warnungs-Texten zurückgeben, eine leere Liste heißt „alles in Ordnung“. Die Hintergrund-Prüfung führt sie für jede Spalte aus, die diesen Generator verwendet, und zeigt die Warnungen an der Spalte in der Problems-Ansicht.',
 	codePlaceholder: '# Python-Code…',
+
+	runCellLabel: 'Diese Zelle ausführen…',
+	runDialogTitle: '{0} ausführen',
+	runDialogNLabel: 'Datensatzanzahl (n)',
+	runDialogRunButton: 'Ausführen',
+	runDialogCancelButton: 'Abbrechen',
+	cellOutputEmpty: '(leeres Ergebnis)',
 
 	errorTitle: 'Datei kann nicht angezeigt werden',
 	errorBody: 'Diese .tdgen-Datei enthält kein gültiges TOML und kann im visuellen Editor nicht dargestellt werden.',

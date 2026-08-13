@@ -87,6 +87,7 @@
 	function render() {
 		app.innerHTML = '';
 		pendingColumnSizing = null;
+		cellViews = {};
 		if (!strings) {
 			return;
 		}
@@ -441,8 +442,63 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Code-Zellen: Beschreibung + feste Signatur + editierbarer Rumpf
+	// Code-Zellen: Beschreibung + feste Signatur + editierbarer Rumpf mit
+	// Python-Syntaxhervorhebung + Run-Knopf mit Ergebnis-Ausgabe darunter
 	// ---------------------------------------------------------------------
+
+	/**
+	 * Sehr kleine, bewusst eingeschränkte Python-Hervorhebung für die
+	 * Code-Zellen — gleiche Philosophie wie der Mini-Markdown-Renderer in
+	 * common.js: erst konsequent HTML escapen, dann eine sichere Teilmenge
+	 * an Tokens einfärben (Kommentare, Strings, Zahlen, Schlüsselwörter,
+	 * bekannte Builtins, def/class-Namen, Dekoratoren). Die Farbklassen
+	 * (.py-*) sind in main.css je Theme-Helligkeit definiert — Webviews
+	 * haben keinen Zugriff auf die TextMate-Token-Farben des Editors.
+	 * @param {string} code
+	 */
+	function highlightPython(code) {
+		const escaped = (code || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		const pattern =
+			/(?<com>#[^\n]*)|(?<tri>'''[\s\S]*?'''|"""[\s\S]*?"""|'''[\s\S]*$|"""[\s\S]*$)|(?<str>[rbfRBF]{0,2}(?:'(?:\\.|[^'\\\n])*'?|"(?:\\.|[^"\\\n])*"?))|(?<num>\b(?:\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?j?|0[xXoObB][0-9a-fA-F_]+)\b)|(?<dec>@\w+)|(?<defkw>\b(?:def|class)\b)(?<ws>\s+)(?<fname>\w+)|(?<kw>\b(?:return|if|elif|else|for|while|in|not|and|or|is|None|True|False|import|from|as|with|try|except|finally|raise|lambda|pass|break|continue|global|nonlocal|yield|assert|del|async|await)\b)|(?<blt>\b(?:len|range|str|int|float|bool|list|dict|set|tuple|print|enumerate|zip|sum|min|max|abs|round|sorted|isinstance|type|repr|format|next|iter|any|all)\b)/g;
+		return escaped.replace(pattern, (...args) => {
+			const groups = args[args.length - 1];
+			if (groups.com !== undefined) {
+				return `<span class="py-com">${groups.com}</span>`;
+			}
+			if (groups.tri !== undefined) {
+				return `<span class="py-str">${groups.tri}</span>`;
+			}
+			if (groups.str !== undefined) {
+				return `<span class="py-str">${groups.str}</span>`;
+			}
+			if (groups.num !== undefined) {
+				return `<span class="py-num">${groups.num}</span>`;
+			}
+			if (groups.dec !== undefined) {
+				return `<span class="py-dec">${groups.dec}</span>`;
+			}
+			if (groups.defkw !== undefined) {
+				return `<span class="py-kw">${groups.defkw}</span>${groups.ws}<span class="py-fn">${groups.fname}</span>`;
+			}
+			if (groups.kw !== undefined) {
+				return `<span class="py-kw">${groups.kw}</span>`;
+			}
+			return `<span class="py-blt">${groups.blt}</span>`;
+		});
+	}
+
+	/** Webview-Zellen-Schlüssel -> Python-Zellenname (Protokoll mit dem Extension-Host / run_cell.py). */
+	const CELL_NAMES = { generate: 'generate', parseParams: 'parse_params', displayValue: 'display_value', validate: 'validate' };
+
+	/** Zuletzt im Run-Dialog eingegebene Test-Parameterwerte (rein Sitzungs-lokal). @type {Record<string, string>} */
+	const lastTestParams = {};
+	let lastTestN = '10';
+	/** Gerade laufende Zelle (Webview-Schlüssel), oder null. @type {string | null} */
+	let runningCell = null;
+	/** Letzte Ergebnisse je Zelle. @type {Record<string, {ok:boolean, lines?:string[], error?:string, traceback?:string}>} */
+	const cellResults = {};
+	/** Ausgabe-Container + Run-Knopf des aktuellen Renderings je Zelle (für gezielte Updates ohne Voll-Neuaufbau). @type {Record<string, {output: HTMLElement, runBtn: HTMLButtonElement}>} */
+	let cellViews = {};
 
 	/**
 	 * @param {'generate'|'parseParams'|'displayValue'|'validate'} key
@@ -455,10 +511,26 @@
 		const cell = el('section', { className: 'notebook-cell notebook-code-cell' });
 
 		const header = el('div', { className: 'cell-header' });
+		const headerRow = el('div', { className: 'cell-header-row' });
 		const titleRow = el('h3');
 		titleRow.appendChild(el('i', { className: 'codicon codicon-symbol-method cell-method-icon' }));
 		titleRow.appendChild(document.createTextNode(title));
-		header.appendChild(titleRow);
+		headerRow.appendChild(titleRow);
+
+		// Run-Knopf: führt genau diese Zelle mit im Dialog eingegebenen
+		// Parameterwerten aus (siehe openRunDialog / python/run_cell.py).
+		const runBtn = /** @type {HTMLButtonElement} */ (el('button', { className: 'icon-button cell-run-btn' }));
+		runBtn.type = 'button';
+		runBtn.title = strings.runCellLabel;
+		runBtn.setAttribute('aria-label', strings.runCellLabel);
+		runBtn.appendChild(el('i', { className: 'codicon codicon-play' }));
+		runBtn.addEventListener('click', () => {
+			if (!runningCell) {
+				openRunDialog(key);
+			}
+		});
+		headerRow.appendChild(runBtn);
+		header.appendChild(headerRow);
 		header.appendChild(el('p', { className: 'hint', text: hint }));
 		cell.appendChild(header);
 
@@ -466,19 +538,37 @@
 
 		// Die Signatur ist fest vorgegeben und nicht editierbar — wie die
 		// vorbelegten Zellen eines Notebooks.
-		const signatureEl = el('div', { className: 'code-signature', text: signature });
+		const signatureEl = el('div', { className: 'code-signature' });
+		signatureEl.innerHTML = highlightPython(signature);
 		signatureEl.title = strings.signatureFixedTooltip;
 		editor.appendChild(signatureEl);
+
+		// Hervorhebungs-Overlay: ein <pre> mit identischer Metrik liegt hinter
+		// der Textarea (deren Text transparent ist, nur der Cursor bleibt
+		// sichtbar) — der Klassiker für Highlighting ohne echten Editor.
+		const editorWrap = el('div', { className: 'code-editor-wrap' });
+		const highlightEl = el('pre', { className: 'code-highlight' });
+		highlightEl.setAttribute('aria-hidden', 'true');
 
 		const body = /** @type {HTMLTextAreaElement} */ (el('textarea', { className: 'code-body' }));
 		body.value = state.code[key] || '';
 		body.placeholder = strings.codePlaceholder;
 		body.spellcheck = false;
 		body.setAttribute('aria-label', title);
+		const refreshHighlight = () => {
+			// Abschließender Zeilenumbruch, damit das <pre> auch bei einer
+			// leeren letzten Zeile dieselbe Höhe hat wie die Textarea.
+			highlightEl.innerHTML = `${highlightPython(body.value)}\n`;
+			highlightEl.scrollLeft = body.scrollLeft;
+		};
 		body.addEventListener('input', () => {
 			state.code[key] = body.value;
 			postEditDebounced();
 			autoGrowCellTextarea(body);
+			refreshHighlight();
+		});
+		body.addEventListener('scroll', () => {
+			highlightEl.scrollLeft = body.scrollLeft;
 		});
 		body.addEventListener('blur', () => {
 			state.code[key] = body.value;
@@ -495,16 +585,182 @@
 				body.selectionStart = body.selectionEnd = start + 4;
 				state.code[key] = body.value;
 				postEditDebounced();
+				refreshHighlight();
 			}
 		});
-		editor.appendChild(body);
+		editorWrap.appendChild(highlightEl);
+		editorWrap.appendChild(body);
+		editor.appendChild(editorWrap);
 
 		cell.appendChild(editor);
 
+		// Ergebnis-Ausgabe des letzten Testlaufs unter der Zelle.
+		const output = el('div', { className: 'cell-output-host' });
+		cell.appendChild(output);
+		cellViews[key] = { output, runBtn };
+		refreshCellView(key);
+
 		// Höhe an den Inhalt anpassen, sobald die Zelle im DOM hängt.
-		window.requestAnimationFrame(() => autoGrowCellTextarea(body));
+		window.requestAnimationFrame(() => {
+			autoGrowCellTextarea(body);
+			refreshHighlight();
+		});
+		refreshHighlight();
 
 		return cell;
+	}
+
+	/** Frischt Run-Knopf (Spinner) und Ausgabe-Bereich einer Zelle gezielt auf — ohne Voll-Neuaufbau (Fokus bleibt erhalten). @param {string} key */
+	function refreshCellView(key) {
+		const view = cellViews[key];
+		if (!view) {
+			return;
+		}
+		const running = runningCell === key;
+		view.runBtn.disabled = !!runningCell;
+		const icon = view.runBtn.querySelector('.codicon');
+		if (icon) {
+			icon.className = running ? 'codicon codicon-loading codicon-modifier-spin' : 'codicon codicon-play';
+		}
+
+		view.output.innerHTML = '';
+		const result = cellResults[key];
+		if (!result) {
+			return;
+		}
+		const box = el('div', { className: 'cell-output' + (result.ok ? '' : ' cell-output-error') });
+		if (result.ok) {
+			const lines = result.lines || [];
+			if (lines.length === 0) {
+				box.appendChild(el('div', { className: 'cell-output-line cell-output-empty', text: strings.cellOutputEmpty }));
+			}
+			for (const line of lines) {
+				box.appendChild(el('div', { className: 'cell-output-line', text: line }));
+			}
+		} else {
+			box.appendChild(el('div', { className: 'cell-output-line', text: result.error || 'error' }));
+			if (result.traceback) {
+				box.appendChild(el('pre', { className: 'cell-output-traceback', text: result.traceback }));
+			}
+		}
+		view.output.appendChild(box);
+	}
+
+	/**
+	 * Dialog vor dem Zellen-Testlauf: je deklariertem Parameter ein
+	 * Eingabefeld (vorbelegt mit den zuletzt verwendeten Test-Werten), für
+	 * `generate` zusätzlich die Datensatzanzahl n.
+	 * @param {'generate'|'parseParams'|'displayValue'|'validate'} key
+	 */
+	function openRunDialog(key) {
+		const overlay = el('div', { className: 'dialog-overlay' });
+		const dialog = el('div', { className: 'param-dialog card' });
+		dialog.setAttribute('role', 'dialog');
+
+		const close = () => {
+			document.removeEventListener('keydown', onKeyDown, true);
+			overlay.remove();
+		};
+		/** @param {KeyboardEvent} event */
+		const onKeyDown = (event) => {
+			if (event.key === 'Escape') {
+				event.stopPropagation();
+				close();
+			}
+		};
+		document.addEventListener('keydown', onKeyDown, true);
+		overlay.addEventListener('mousedown', (event) => {
+			if (event.target === overlay) {
+				close();
+			}
+		});
+
+		const titleRow = el('div', { className: 'param-dialog-title' });
+		const heading = el('h3');
+		heading.appendChild(el('i', { className: 'codicon codicon-play param-dialog-icon' }));
+		heading.appendChild(document.createTextNode(strings.runDialogTitle.replace('{0}', CELL_NAMES[key])));
+		titleRow.appendChild(heading);
+		const closeBtn = el('button', { className: 'icon-button param-dialog-close' });
+		closeBtn.type = 'button';
+		closeBtn.title = strings.runDialogCancelButton;
+		closeBtn.setAttribute('aria-label', strings.runDialogCancelButton);
+		closeBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
+		closeBtn.addEventListener('click', close);
+		titleRow.appendChild(closeBtn);
+		dialog.appendChild(titleRow);
+
+		/** @type {{name: string, input: HTMLInputElement}[]} */
+		const paramInputs = [];
+		for (const parameter of state.parameters) {
+			const name = (parameter.name || '').trim();
+			if (!name) {
+				continue;
+			}
+			const field = el('div', { className: 'field param-field' });
+			field.appendChild(el('label', { text: `${name} (${parameter.type})` }));
+			const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+			input.type = 'text';
+			input.value = lastTestParams[name] !== undefined ? lastTestParams[name] : '';
+			if (parameter.description) {
+				input.placeholder = parameter.description;
+			}
+			field.appendChild(input);
+			dialog.appendChild(field);
+			paramInputs.push({ name, input });
+		}
+
+		/** @type {HTMLInputElement | null} */
+		let nInput = null;
+		if (key === 'generate') {
+			const field = el('div', { className: 'field param-field' });
+			field.appendChild(el('label', { text: strings.runDialogNLabel }));
+			nInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+			nInput.type = 'text';
+			nInput.inputMode = 'numeric';
+			nInput.value = lastTestN;
+			field.appendChild(nInput);
+			dialog.appendChild(field);
+		}
+
+		const footer = el('div', { className: 'param-dialog-footer' });
+		const cancelBtn = el('button', { className: 'toolbar-btn', text: strings.runDialogCancelButton });
+		cancelBtn.type = 'button';
+		cancelBtn.addEventListener('click', close);
+		const runBtn = el('button', { className: 'button-primary', text: strings.runDialogRunButton });
+		runBtn.type = 'button';
+		runBtn.addEventListener('click', () => {
+			/** @type {Record<string, string>} */
+			const params = {};
+			for (const { name, input } of paramInputs) {
+				lastTestParams[name] = input.value;
+				if (input.value.trim() !== '') {
+					params[name] = input.value;
+				}
+			}
+			let n = 10;
+			if (nInput) {
+				lastTestN = nInput.value;
+				const parsed = parseInt(nInput.value, 10);
+				n = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 1000) : 10;
+			}
+			close();
+			runningCell = key;
+			delete cellResults[key];
+			for (const cellKey of Object.keys(cellViews)) {
+				refreshCellView(cellKey);
+			}
+			vscode.postMessage({ type: 'runCell', cell: CELL_NAMES[key], params, n });
+		});
+		footer.appendChild(cancelBtn);
+		footer.appendChild(runBtn);
+		dialog.appendChild(footer);
+
+		overlay.appendChild(dialog);
+		document.body.appendChild(overlay);
+		const firstControl = dialog.querySelector('input');
+		if (firstControl instanceof HTMLElement) {
+			firstControl.focus();
+		}
 	}
 
 	// ---------------------------------------------------------------------
@@ -548,6 +804,25 @@
 				parseError = message.message;
 				render();
 				break;
+			case 'cellResult': {
+				// Ergebnis eines Zellen-Testlaufs: gezielt nur Run-Knopf und
+				// Ausgabe-Bereich auffrischen (kein Voll-Neuaufbau — der Fokus
+				// bleibt z. B. in einer gerade bearbeiteten Code-Zelle).
+				runningCell = null;
+				const key = Object.keys(CELL_NAMES).find((k) => CELL_NAMES[k] === message.cell);
+				if (key) {
+					cellResults[key] = {
+						ok: message.ok === true,
+						lines: Array.isArray(message.lines) ? message.lines : undefined,
+						error: typeof message.error === 'string' ? message.error : undefined,
+						traceback: typeof message.traceback === 'string' ? message.traceback : undefined,
+					};
+				}
+				for (const cellKey of Object.keys(cellViews)) {
+					refreshCellView(cellKey);
+				}
+				break;
+			}
 		}
 	});
 

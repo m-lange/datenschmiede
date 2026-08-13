@@ -14,6 +14,19 @@
   **mehrstufig** sein (`ctx.related("order_id.customer_id", "country")`:
   Sendung → Bestellung → Kunde); der Beispiel-Generator `parent_value`
   bietet dafür den optionalen `via`-Parameter.
+- **Generator-Editor: Python-Hervorhebung + Zellen-Testlauf**: die
+  Code-Zellen zeigen Python-Syntaxhervorhebung (eigener kleiner
+  Tokenizer als Overlay hinter der Textarea, Farben je Theme-Helligkeit an
+  Dark+/Light+ angelehnt — Webviews haben keinen Zugriff auf die
+  TextMate-Token-Farben des Editors), auch für die feste Signatur-Zeile.
+  Jede Zelle hat einen **Run-Knopf**: ein Dialog fragt die Parameterwerte
+  ab (vorbelegt mit den zuletzt verwendeten Testwerten; bei `generate`
+  zusätzlich die Datensatzanzahl n), dann läuft genau diese Zelle über
+  `python/run_cell.py` und das Ergebnis erscheint Notebook-artig **unter
+  der Zelle** — Werte, `ctx.log`-Ausgaben, Warnungslisten oder der Fehler
+  samt Traceback. `ctx.rng/np/pd/faker/lookup` funktionieren im Testlauf;
+  `ctx.column/related/table` verweisen mit einer klaren Meldung auf die
+  Tabellen-Vorschau.
 - **Eigene Validierung und Protokoll-Ausgaben für benutzerdefinierte
   Generatoren**: die neue Code-Zelle **`validate`** prüft die (rohen
   String-)Parameterwerte und liefert Warnungs-Texte zurück — die
