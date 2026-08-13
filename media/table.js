@@ -544,20 +544,24 @@
 
 		/** Liest den Feldinhalt zurück in die Vorlagen-Syntax. */
 		function serialize() {
+			// Zeilenumbrüche und geschweifte Klammern haben im *Text* nichts
+			// verloren (Klammern würden mit der Vorlagen-Syntax kollidieren) —
+			// nur je Textteil bereinigen, NICHT das Gesamtergebnis: dort würden
+			// sonst auch die Klammern der {…}-Tags selbst entfernt und die Tags
+			// beim nächsten Neuaufbau des Felds zu blankem Text zerfallen.
+			const cleanText = (text) => (text || '').replace(/[\r\n{}]/g, '');
 			let result = '';
 			field.childNodes.forEach((node) => {
 				if (node.nodeType === Node.TEXT_NODE) {
-					result += node.textContent || '';
+					result += cleanText(node.textContent);
 				} else if (node instanceof HTMLElement && node.dataset.var) {
 					result += `{${node.dataset.var}}`;
 				} else if (node instanceof HTMLElement) {
 					// z. B. aus einem Paste stammende Elemente: nur der Text zählt.
-					result += node.textContent || '';
+					result += cleanText(node.textContent);
 				}
 			});
-			// Zeilenumbrüche und geschweifte Klammern haben im Dateinamen nichts
-			// verloren (Klammern würden mit der Vorlagen-Syntax kollidieren).
-			return result.replace(/[\r\n{}]/g, '');
+			return result;
 		}
 
 		function refreshEmptyState() {

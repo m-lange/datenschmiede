@@ -6,9 +6,12 @@ python_id = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313\\
 
 [[tables]]
 path = "tables/fin_cost_centers.td"
+records = 100
 
 [[tables]]
 path = "tables/fin_invoices.td"
+records = "1.33"
 
 [[tables]]
 path = "tables/sapbp_business_partners.td"
+records = 5000

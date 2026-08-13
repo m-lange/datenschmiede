@@ -344,16 +344,18 @@
 					}),
 				);
 				// Berechnete Anzahl aus der Konfiguration (bei referenzierten
-				// Tabellen die Kardinalität entlang der FK-Kette multipliziert,
-				// bei Bereichen als Von–Bis) statt nur des konfigurierten
-				// Bereichs; die Konfiguration selbst steht im Tooltip. Ist die
-				// Kette nicht berechenbar, bleibt der konfigurierte Wert stehen.
+				// Tabellen die Kardinalität entlang der FK-Kette multipliziert)
+				// statt nur des konfigurierten Bereichs; Bereiche in derselben
+				// „min..max“-Schreibweise wie die Kardinalitäts-Eingabe (100
+				// Datensätze × 1..3 → „100..300“). Die Konfiguration selbst
+				// steht im Tooltip. Ist die Kette nicht berechenbar, bleibt der
+				// konfigurierte Wert stehen.
 				let text;
 				if (row.estimatedMin !== undefined && row.estimatedMax !== undefined) {
 					text =
 						row.estimatedMin === row.estimatedMax
 							? formatRecordsNumber(row.estimatedMin)
-							: `${formatRecordsNumber(row.estimatedMin)} – ${formatRecordsNumber(row.estimatedMax)}`;
+							: `${formatRecordsNumber(row.estimatedMin)}..${formatRecordsNumber(row.estimatedMax)}`;
 				} else if (row.secondary) {
 					text = `${row.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', row.referencedTable || '')}`;
 				} else {
