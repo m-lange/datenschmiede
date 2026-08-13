@@ -174,9 +174,29 @@ class Context:
         return pd.Series(keys).map(mapping)
 
     def lookup(self, name, column):
-        """Alle Werte einer Spalte einer Nachschlageliste (.lkp)."""
+        """Alle (rohen) Werte einer Spalte einer Nachschlageliste (.lkp) — ohne Ziehung/Gewichtung."""
         values, _weights = self._runner.lookup_column(name, column)
         return values
+
+    def lookup_value(self, name, column):
+        """
+        EIN Wert je Datensatz aus der konsistent gezogenen Listen-Zeile —
+        exakt derselbe Mechanismus wie der eingebaute Lookup-Generator
+        (siehe Runner.lookup_indices): alle Spalten derselben Liste (auch
+        Lookup-Generator-Spalten und ueber FK verbundene Tabellen) lesen
+        dieselbe Zeile. Beispiel: zieht der Kunde code "CH", liefert
+        ctx.lookup_value("countries", "currency") in seiner Bestellung
+        "CHF" aus derselben Zeile.
+        """
+        n = self._runner.row_counts.get(self._table["label"])
+        if n is None:
+            raise RuntimeError('ctx.lookup_value(...): row count of this table is not known yet')
+        values, _weights = self._runner.lookup_column(name, column)
+        if not values:
+            return pd.Series([""] * n, dtype=object)
+        indices = self._runner.lookup_indices(self._table, name, n)
+        arr = np.array(values, dtype=object)
+        return pd.Series(arr[np.clip(indices, 0, len(arr) - 1)])
 
 
 def indent_body(body):

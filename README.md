@@ -259,7 +259,11 @@ bleiben zwischen Zell-Ausführungen erhalten, wie in Jupyter. Aufbau:
     Werte; `ctx` bietet `rng` (numpy), `pd`/`np`, `faker(locale)`,
     `column("name")` (Werte anderer Spalten), `related("fk", "spalte")`
     (zeilengenauer Join, auch mehrstufig), `table(...)`,
-    `lookup("liste", "spalte")` und `log(...)`
+    `lookup("liste", "spalte")` (rohe Listenwerte),
+    `lookup_value("liste", "spalte")` (ein Wert je Datensatz aus der
+    **konsistent gezogenen** Listen-Zeile — dieselbe Zeile wie
+    Lookup-Generator-Spalten, auch über FK-verbundene Tabellen) und
+    `log(...)`
   - `def parse_params(params)` (optional): wandelt die String-Parameter in
     typisierte Werte
   - `def display_value(params)` (optional): kompakte Zusammenfassung für

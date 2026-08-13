@@ -65,6 +65,33 @@ class Ctx:
         index = lookup["columns"].index(column)
         return [row["values"][index] if index < len(row["values"]) else "" for row in lookup["rows"]]
 
+    def lookup_value(self, name, column):
+        """
+        Im Zellen-Testlauf: gewichtete Ziehung EINES Werts je Datensatz
+        (n aus dem Namespace). Die Zeilen-Konsistenz mit anderen Spalten/
+        Tabellen entsteht erst im echten Lauf bzw. der Tabellen-Vorschau.
+        """
+        if np is None or pd is None:
+            raise RuntimeError("Missing Python packages: numpy, pandas")
+        lookup = LOOKUPS.get(name)
+        if lookup is None:
+            raise RuntimeError(f'Lookup list "{name}" was not found')
+        values = self.lookup(name, column)
+        if not values:
+            return pd.Series([], dtype=object)
+        weights = []
+        for row in lookup["rows"]:
+            raw = str(row.get("weight", "")).strip().replace(",", ".")
+            try:
+                weights.append(max(0.0, float(raw)))
+            except ValueError:
+                weights.append(0.0)
+        total = sum(weights)
+        p = [w / total for w in weights] if total > 0 else None
+        n = int(NAMESPACE.get("n") or 10)
+        indices = self.rng.choice(len(values), size=n, p=p)
+        return pd.Series(np.array(values, dtype=object)[indices])
+
     def column(self, name):
         raise RuntimeError(
             f'ctx.column("{name}") needs generated table data — use the table editor preview to test this'

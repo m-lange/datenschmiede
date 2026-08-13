@@ -51,7 +51,10 @@
   EINE Listen-Zeile gezogen — alle Spalten, die aus derselben Liste
   ziehen, lesen dieselbe Zeile, auch über FK-verbundene Tabellen hinweg
   (der Kunde zieht `code` „CH“, seine Bestellung liest `currency` „CHF“
-  aus derselben Zeile).
+  aus derselben Zeile). Benutzerdefinierte Generatoren nehmen über
+  **`ctx.lookup_value("liste", "spalte")`** am selben Mechanismus teil
+  (ein Wert je Datensatz aus der konsistent gezogenen Zeile);
+  `ctx.lookup(...)` liefert weiterhin die rohen Listenwerte ohne Ziehung.
 - **Output-Channel „Datenschmiede“** (Ansicht *Output*): öffnet sich beim
   Start eines Generator-Laufs automatisch (ohne den Fokus zu stehlen) und
   protokolliert den Fortschritt live — Plan-Zusammenfassung (Tabellen samt
