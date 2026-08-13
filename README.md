@@ -68,11 +68,14 @@ Papierkorb-Symbol pro Zeile wieder entfernt werden.
 Rechtsklick im Explorer) lässt sich eine neue `.td`-Datei mit leerem
 Grundgerüst anlegen.
 
-Über 20 Beispieltabellen mit unterschiedlich tiefen Fremdschlüssel-Ketten
-und Namensräumen (ein bis drei Schema-Ebenen, u. a. `ag.cor.sapbp`) liegen
-unter [`samples/`](samples/) (nach Dateityp in `tables/`, `lookups/` und
-`generators/` gegliedert), angefangen bei
-[`samples/tables/example.td`](samples/tables/example.td).
+Unter [`samples/`](samples/) liegt das durchgängige Beispielprojekt
+**„Webshop Demo“** (nach Dateityp in `tables/`, `lookups/` und `generators/`
+gegliedert): fünf Tabellen in zwei Namensräumen (`shop.core` und
+`shop.sales`) mit FK-Ketten über drei Ebenen, zwei Nachschlagelisten, zwei
+benutzerdefinierte Generatoren und ein fertig konfiguriertes
+`.tdproject` — jede Datei mit ausführlicher Markdown-Beschreibung, welche
+Funktion sie demonstriert. Einstieg:
+[`samples/webshop-demo.tdproject`](samples/webshop-demo.tdproject).
 
 ## Dateiformat
 
@@ -251,9 +254,11 @@ editierbarem Rumpf:
 Referenziert wird ein Generator über seinen **Namen** (`custom:<name>`),
 nicht den Dateinamen; wird die Datei gelöscht oder der Name geändert,
 melden betroffene Tabellen das als Warnung. Beispiele:
-[`samples/generators/order_number.tdgen`](samples/generators/order_number.tdgen)
-und [`samples/generators/random_string.tdgen`](samples/generators/random_string.tdgen)
-(zufällige Strings mit konfigurierbarer Länge).
+[`samples/generators/sequential_id.tdgen`](samples/generators/sequential_id.tdgen)
+(fortlaufende Kennungen wie `ORD-001000`, vektorisiert) und
+[`samples/generators/tracking_code.tdgen`](samples/generators/tracking_code.tdgen)
+(Sendungsnummern mit Tabellen-/Spalten-Referenz auf eine andere Tabelle
+via `ctx.table`).
 
 ## Ausgabe je Tabelle (Dateiname + CSV)
 

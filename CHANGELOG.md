@@ -2,6 +2,36 @@
 
 ## 0.6.0
 
+- **Workspace-weite Hintergrund-Prüfung**: alle `.td`-, `.tdproject`-,
+  `.lkp`- und `.tdgen`-Dateien des Workspace werden fortlaufend geprüft und
+  ihre Probleme in der Problems-Ansicht gemeldet — **auch wenn keine der
+  Dateien geöffnet ist** (`src/diagnostics.ts`; die früher je Editor
+  verstreute Diagnostics-Logik lebt jetzt ausschließlich dort, offene
+  Editoren werden über ihren ungespeicherten Buffer-Stand geprüft). Neu
+  dabei: der **Python-Code der Code-Zellen** jeder `.tdgen`-Datei wird per
+  `compile()` auf **Syntaxfehler** geprüft (gebündelt in einem
+  Python-Aufruf) und Fehler als Warnung an der betroffenen Zeile gemeldet.
+  Außerdem meldet die Projekt-Prüfung eine als Bereich gemeinte
+  Datensatzanzahl mit falschem Trenner (z. B. „1-3“ oder „1.3“ statt
+  „1..3“) mit einer gezielten Korrektur-Meldung sowie ausgewählte
+  Tabellen, deren `.td`-Datei nicht mehr existiert.
+- **Ausgabeordner mit Ordner-Auswahldialog**: neben dem Tag-Feld im
+  Projekt-Editor öffnet ein Knopf den nativen VS-Code-Ordnerdialog;
+  Ordner innerhalb des Projektordners werden relativ (portabel)
+  übernommen, andere absolut. FK-Spalten zeigen im Spaltengenerator
+  schlicht **„Foreign Key“** (das Ziel steht bereits in den FK-Spalten
+  daneben).
+- **Neue Beispiel-Suite „Webshop Demo“** (`samples/`, komplett erneuert):
+  fünf Tabellen in zwei Namensräumen (`shop.core.customers`/`products`,
+  `shop.sales.orders`/`order_items`/`shipments`) mit FK-Ketten über drei
+  Ebenen, zwei Nachschlagelisten (`countries`, `order_status`), zwei
+  benutzerdefinierte Generatoren (`sequential_id`, `tracking_code` mit
+  Tabellen-Referenz via `ctx.table`) und ein fertiges Projekt
+  `webshop-demo.tdproject` mit Ausgabeordner-Vorlage — jede Datei mit
+  ausführlicher Markdown-Beschreibung der demonstrierten Funktionen.
+  Faker um die Provider `boolean`, `date_this_year` und
+  `date_time_this_year` ergänzt.
+
 - **Testdaten-Generierung — der eigentliche Generator-Lauf ist da**: Der
   Befehl **„Datenschmiede: Testdaten generieren“** (Run-Knopf in der
   Editor-Titelleiste des Projekt-Editors, Start-Knopf im Übersicht-Tab oder
@@ -46,7 +76,7 @@
   in Magenta (`#D743EB`; für helle Themes eine dunklere Variante
   `#A21FB8`, `icons/tdgen-*.svg`). Befehl **„Datenschmiede: Neuen
   Generator erstellen…“**; Beispiele unter `samples/generators/`
-  (`order_number.tdgen`, `random_string.tdgen`).
+  (`sequential_id.tdgen`, `tracking_code.tdgen`).
 - **Ausgabe-Einstellungen je Tabelle (Übersicht-Tab des Table Editors)**:
   der **Dateiname** der generierten Datei als Tag-Feld im Stil von Power
   Automate — konstanter Text frei editierbar, dynamische Teile (aktuelles
@@ -91,7 +121,7 @@
   Felds. Variablen-Tags heißen im Projekt-Editor jetzt genauso wie im
   Table Editor (gemeinsame Beschriftungen), das Tag-Feld und das
   Variablen-Menü liegen als gemeinsame Bausteine in `media/common.js`.
-  Neues Beispiel `samples/generators/table_sample.tdgen`: zieht Werte aus
+  Neues Beispiel `samples/generators/tracking_code.tdgen`: zieht Werte aus
   einer Spalte einer anderen Tabelle (Tabellen-/Spalten-Referenz mit
   automatischer Mitnahme und Reihenfolge).
 - **Bedienungs-Feinschliff**: FK-Spalten haben ihren Generator fest (die
@@ -104,8 +134,7 @@
   Generator-Editors; dort haben die Code-Zellen mehr Abstand zueinander,
   und ohne Parameter zeigt der Parameter-Abschnitt nur Überschrift,
   Hinweis und Hinzufügen-Knopf. Die Beispiele unter `samples/` sind nach
-  Dateityp in `tables/`, `lookups/` und `generators/` gegliedert (neu:
-  `random_string.tdgen` — zufällige Strings mit konfigurierbarer Länge).
+  Dateityp in `tables/`, `lookups/` und `generators/` gegliedert.
 
 ## 0.5.0
 

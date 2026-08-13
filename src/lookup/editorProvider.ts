@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { LookupList, parseWeight } from './model';
-import { parseLookupText, serializeLookup, findLookupLineInfo } from './csv';
+import { LookupList } from './model';
+import { parseLookupText, serializeLookup } from './csv';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getLookupWebviewStrings } from './webviewStrings';
@@ -20,8 +20,9 @@ const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.lookupColumnWidths';
  * Die Datei auf der Festplatte bleibt normaler CSV-Text (siehe lookup/csv.ts);
  * wie in table/editorProvider.ts hält diese Klasse Webview und
  * VS-Code-Textdokument synchron. Inhaltliche Probleme (fehlende/ungültige
- * Gewichte, Gewichtssumme ungleich 100 %) landen zusätzlich als Diagnostics
- * in VS Codes Problems-Ansicht.
+ * Gewichte) meldet die Workspace-weite Hintergrund-Prüfung in der
+ * Problems-Ansicht (siehe src/diagnostics.ts) — auch für nicht geöffnete
+ * Dateien.
  */
 export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.lookupEditor';
@@ -35,22 +36,9 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 		return vscode.Disposable.from(providerRegistration, provider);
 	}
 
-	private readonly diagnostics: vscode.DiagnosticCollection;
-	private readonly closeDocSub: vscode.Disposable;
+	constructor(private readonly context: vscode.ExtensionContext) {}
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		this.diagnostics = vscode.languages.createDiagnosticCollection('lkp');
-		this.closeDocSub = vscode.workspace.onDidCloseTextDocument((doc) => {
-			if (doc.fileName.endsWith('.lkp')) {
-				this.diagnostics.delete(doc.uri);
-			}
-		});
-	}
-
-	public dispose(): void {
-		this.diagnostics.dispose();
-		this.closeDocSub.dispose();
-	}
+	public dispose(): void {}
 
 	public async resolveCustomTextEditor(
 		document: vscode.TextDocument,
@@ -64,8 +52,6 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
 		};
 		webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
-
-		this.updateDiagnostics(document);
 
 		// Zähler statt einfachem Flag für selbst angestoßene WorkspaceEdits —
 		// siehe table/editorProvider.ts für die ausführliche Begründung
@@ -88,7 +74,6 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 			if (e.document.uri.toString() !== document.uri.toString()) {
 				return;
 			}
-			this.updateDiagnostics(document);
 			if (selfEditsPending > 0) {
 				selfEditsPending--;
 				if (selfEditsPending === 0) {
@@ -156,68 +141,6 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 			return { parseError: this.formatParseError(err) };
 		}
 		return { parseError: String(err) };
-	}
-
-	/**
-	 * Aktualisiert die Problems-Ansicht für dieses Dokument: bei kaputtem CSV
-	 * der Syntaxfehler an seiner Position, sonst die Gewichts-Prüfungen —
-	 * dieselben Regeln, die in der Webview das Gewichtsfeld bzw. die
-	 * Summenzeile rot markieren.
-	 */
-	private updateDiagnostics(document: vscode.TextDocument): void {
-		const result = this.parseDocument(document);
-
-		if ('lookup' in result) {
-			this.diagnostics.set(document.uri, this.buildWeightDiagnostics(document, result.lookup));
-			return;
-		}
-
-		const err = result.error;
-		if (err instanceof ParseError && err.line !== undefined && err.column !== undefined) {
-			const lineIndex = Math.min(Math.max(0, err.line - 1), Math.max(0, document.lineCount - 1));
-			const lineText = document.lineAt(lineIndex).text;
-			const startCol = Math.min(Math.max(0, err.column - 1), lineText.length);
-			const range = new vscode.Range(lineIndex, startCol, lineIndex, lineText.length);
-			const diagnostic = new vscode.Diagnostic(range, err.rawMessage, vscode.DiagnosticSeverity.Error);
-			diagnostic.source = 'Datenschmiede';
-			this.diagnostics.set(document.uri, [diagnostic]);
-		} else {
-			this.diagnostics.set(document.uri, []);
-		}
-	}
-
-	/**
-	 * Jede Wertezeile braucht ein lesbares Gewicht in Prozent; fehlende oder
-	 * ungültige Gewichte werden einzeln an ihrer Zeile gemeldet. Die
-	 * Gewichtssumme wird bewusst nicht geprüft: was eingegeben wurde, gilt —
-	 * auch deutlich über 100 % in Summe; die Summenzeile der Webview zeigt
-	 * den Gesamtwert rein informativ.
-	 */
-	private buildWeightDiagnostics(document: vscode.TextDocument, lookup: LookupList): vscode.Diagnostic[] {
-		const info = findLookupLineInfo(document.getText());
-		const diagnostics: vscode.Diagnostic[] = [];
-
-		const lineRange = (line: number) => document.lineAt(Math.min(line, Math.max(0, document.lineCount - 1))).range;
-
-		lookup.rows.forEach((row, index) => {
-			if (parseWeight(row.weight) !== null) {
-				return;
-			}
-			const missing = row.weight.trim() === '';
-			const message = missing
-				? vscode.l10n.t('Row {0} has no weight.', index + 1)
-				: vscode.l10n.t('Row {0}: invalid weight (use e.g. "25" or "12.5").', index + 1);
-			const diagnostic = new vscode.Diagnostic(
-				lineRange(info.rowLines[index] ?? 0),
-				message,
-				vscode.DiagnosticSeverity.Error,
-			);
-			diagnostic.source = 'Datenschmiede';
-			diagnostic.code = missing ? 'missing-weight' : 'invalid-weight';
-			diagnostics.push(diagnostic);
-		});
-
-		return diagnostics;
 	}
 
 	private formatParseError(err: ParseError): string {

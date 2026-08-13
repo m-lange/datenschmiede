@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GeneratorFile } from './model';
-import { parseGeneratorText, serializeGenerator, findParameterLineInfo, isKnownParameterType } from './toml';
+import { parseGeneratorText, serializeGenerator } from './toml';
 import { PARAMETER_TYPES } from './types';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
@@ -20,7 +20,9 @@ const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.generatorColumnWidths';
  *
  * Die Datei auf der Festplatte bleibt normaler TOML-Text (siehe
  * generator/toml.ts); wie in table/editorProvider.ts hält diese Klasse
- * Webview und VS-Code-Textdokument synchron. Die Oberfläche ist einem
+ * Webview und VS-Code-Textdokument synchron. Inhaltliche Probleme meldet
+ * die Workspace-weite Hintergrund-Prüfung in der Problems-Ansicht (siehe
+ * src/diagnostics.ts) — auch für nicht geöffnete Dateien. Die Oberfläche ist einem
  * Jupyter-Notebook nachempfunden: Name/Beschreibung als Markdown oben,
  * darunter die Parameter-Tabelle und die Python-Code-Zellen mit fest
  * vorgegebener (nicht änderbarer) Signatur und editierbarem Rumpf.
@@ -37,22 +39,9 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 		return vscode.Disposable.from(providerRegistration, provider);
 	}
 
-	private readonly diagnostics: vscode.DiagnosticCollection;
-	private readonly closeDocSub: vscode.Disposable;
+	constructor(private readonly context: vscode.ExtensionContext) {}
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		this.diagnostics = vscode.languages.createDiagnosticCollection('tdgen');
-		this.closeDocSub = vscode.workspace.onDidCloseTextDocument((doc) => {
-			if (doc.fileName.endsWith('.tdgen')) {
-				this.diagnostics.delete(doc.uri);
-			}
-		});
-	}
-
-	public dispose(): void {
-		this.diagnostics.dispose();
-		this.closeDocSub.dispose();
-	}
+	public dispose(): void {}
 
 	public async resolveCustomTextEditor(
 		document: vscode.TextDocument,
@@ -66,8 +55,6 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
 		};
 		webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
-
-		this.updateDiagnostics(document);
 
 		// Zähler statt einfachem Flag für selbst angestoßene WorkspaceEdits —
 		// siehe table/editorProvider.ts für die ausführliche Begründung
@@ -90,7 +77,6 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 			if (e.document.uri.toString() !== document.uri.toString()) {
 				return;
 			}
-			this.updateDiagnostics(document);
 			if (selfEditsPending > 0) {
 				selfEditsPending--;
 				if (selfEditsPending === 0) {
@@ -164,94 +150,6 @@ export class GeneratorEditorProvider implements vscode.CustomTextEditorProvider,
 			return { parseError: this.formatParseError(err) };
 		}
 		return { parseError: String(err) };
-	}
-
-	/**
-	 * Aktualisiert die Problems-Ansicht für dieses Dokument: bei kaputtem TOML
-	 * der Syntaxfehler an seiner Position, sonst die inhaltlichen Prüfungen
-	 * (fehlender Name, leere/doppelte Parameternamen, unbekannte
-	 * Parametertypen, leerer generate-Rumpf).
-	 */
-	private updateDiagnostics(document: vscode.TextDocument): void {
-		const result = this.parseDocument(document);
-
-		if ('generator' in result) {
-			this.diagnostics.set(document.uri, this.buildValidationDiagnostics(document, result.generator));
-			return;
-		}
-
-		const err = result.error;
-		if (err instanceof ParseError && err.line !== undefined && err.column !== undefined) {
-			const lineIndex = Math.min(Math.max(0, err.line - 1), Math.max(0, document.lineCount - 1));
-			const lineText = document.lineAt(lineIndex).text;
-			const startCol = Math.min(Math.max(0, err.column - 1), lineText.length);
-			const range = new vscode.Range(lineIndex, startCol, lineIndex, lineText.length);
-			const diagnostic = new vscode.Diagnostic(range, err.rawMessage, vscode.DiagnosticSeverity.Error);
-			diagnostic.source = 'Datenschmiede';
-			this.diagnostics.set(document.uri, [diagnostic]);
-		} else {
-			this.diagnostics.set(document.uri, []);
-		}
-	}
-
-	private buildValidationDiagnostics(document: vscode.TextDocument, generator: GeneratorFile): vscode.Diagnostic[] {
-		const diagnostics: vscode.Diagnostic[] = [];
-		const lineRange = (line: number) => document.lineAt(Math.min(line, Math.max(0, document.lineCount - 1))).range;
-		const push = (range: vscode.Range, message: string, code: string, severity: vscode.DiagnosticSeverity) => {
-			const diagnostic = new vscode.Diagnostic(range, message, severity);
-			diagnostic.source = 'Datenschmiede';
-			diagnostic.code = code;
-			diagnostics.push(diagnostic);
-		};
-
-		if (!generator.name.trim()) {
-			// Ohne Name ist der Generator nicht referenzierbar (siehe generator/custom.ts).
-			push(
-				lineRange(0),
-				vscode.l10n.t('This generator has no name — it cannot be selected in the table editor without one.'),
-				'gen-file-missing-name',
-				vscode.DiagnosticSeverity.Error,
-			);
-		}
-
-		const parameterLines = findParameterLineInfo(document.getText());
-		const seen = new Set<string>();
-		generator.parameters.forEach((parameter, index) => {
-			const info = parameterLines[index];
-			const range = lineRange(info ? info.nameLine ?? info.parametersLine : 0);
-			const name = parameter.name.trim();
-			const label = name || vscode.l10n.t('parameter {0}', index + 1);
-			if (!name) {
-				push(range, vscode.l10n.t('Parameter {0} has no name.', index + 1), 'gen-file-param-unnamed', vscode.DiagnosticSeverity.Warning);
-			} else if (seen.has(name)) {
-				push(
-					range,
-					vscode.l10n.t('Parameter name "{0}" is used more than once.', name),
-					'gen-file-param-duplicate',
-					vscode.DiagnosticSeverity.Warning,
-				);
-			}
-			seen.add(name);
-			if (!isKnownParameterType(parameter.type)) {
-				push(
-					range,
-					vscode.l10n.t('Parameter "{0}" has an unknown data type "{1}".', label, parameter.type),
-					'gen-file-param-type',
-					vscode.DiagnosticSeverity.Warning,
-				);
-			}
-		});
-
-		if (!generator.code.generate.trim()) {
-			push(
-				lineRange(0),
-				vscode.l10n.t('The generate method has no code — this generator will not produce any values.'),
-				'gen-file-empty-generate',
-				vscode.DiagnosticSeverity.Warning,
-			);
-		}
-
-		return diagnostics;
 	}
 
 	private formatParseError(err: ParseError): string {

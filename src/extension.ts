@@ -3,6 +3,7 @@ import { TableEditorProvider } from './table/editorProvider';
 import { ProjectEditorProvider } from './project/editorProvider';
 import { LookupEditorProvider } from './lookup/editorProvider';
 import { GeneratorEditorProvider } from './generator/editorProvider';
+import { WorkspaceDiagnostics } from './diagnostics';
 import { newTableCommand } from './table/commands/newTable';
 import { newProjectCommand } from './project/commands/newProject';
 import { newLookupCommand } from './lookup/commands/newLookup';
@@ -16,6 +17,8 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(ProjectEditorProvider.register(context));
 	context.subscriptions.push(LookupEditorProvider.register(context));
 	context.subscriptions.push(GeneratorEditorProvider.register(context));
+	// Workspace-weite Hintergrund-Prüfung aller Dateien (auch nicht geöffneter).
+	context.subscriptions.push(WorkspaceDiagnostics.register(context));
 
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newTable', newTableCommand));
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newProject', newProjectCommand));

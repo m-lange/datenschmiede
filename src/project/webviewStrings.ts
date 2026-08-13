@@ -35,6 +35,7 @@ export interface ProjectWebviewStrings {
 	outputPathLabel: string;
 	outputPathPlaceholder: string;
 	outputPathHint: string;
+	outputPathBrowseLabel: string;
 	outputAddVariableButton: string;
 	outputVariableGroupLabel: string;
 	/** Anzeigenamen der `{…}`-Variablen — dieselben Beschriftungen wie im Table Editor (siehe table/webviewStrings.ts). */
@@ -118,6 +119,7 @@ const en: ProjectWebviewStrings = {
 	outputPathPlaceholder: 'output',
 	outputPathHint:
 		'Relative to the project file (absolute paths allowed). Combine fixed text with dynamic values — click a tag to remove it. Empty uses "output".',
+	outputPathBrowseLabel: 'Choose folder…',
 	outputAddVariableButton: 'Add dynamic value',
 	outputVariableGroupLabel: 'Variables',
 	outputVarDate: 'Current date',
@@ -191,6 +193,7 @@ const de: ProjectWebviewStrings = {
 	outputPathPlaceholder: 'output',
 	outputPathHint:
 		'Relativ zur Projektdatei (absolute Pfade erlaubt). Fester Text kombiniert mit dynamischen Werten — Klick auf ein Tag entfernt es. Leer verwendet „output“.',
+	outputPathBrowseLabel: 'Ordner auswählen…',
 	outputAddVariableButton: 'Dynamischen Wert einfügen',
 	outputVariableGroupLabel: 'Variablen',
 	outputVarDate: 'Aktuelles Datum',

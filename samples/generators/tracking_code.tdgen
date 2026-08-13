@@ -1,0 +1,59 @@
+# Datenschmiede Generator
+name = "tracking_code"
+description = """
+Erzeugt **Sendungsnummern** im Muster `CARRIER-LAND-XXXXXXXX`, z. B.
+`DHL-DE-48291736`. Der Versanddienstleister kommt aus einer festen
+Auswahl, das Länderkürzel wird zufällig aus einer **Spalte einer anderen
+Tabelle** gezogen (`ctx.table`), die achtstellige Nummer aus `ctx.rng`.
+
+**Parameter:**
+
+- `carrier` *(Pflicht)*: Versanddienstleister — vordefinierte Auswahl
+- `origin_table` *(Pflicht)*: referenzierte Tabelle (Parametertyp `table`)
+- `origin_column` *(Pflicht)*: Spalte dieser Tabelle (Parametertyp
+  `column` — die Auswahl im Table Editor folgt automatisch der gewählten
+  Tabelle)
+
+**Was dieses Beispiel zeigt:**
+
+- Parameter vom Typ *Tabelle*/*Spalte*: die referenzierte Tabelle wird im
+  Testdatenprojekt **automatisch mit ausgewählt** und beim Lauf **vor**
+  dieser Tabelle generiert — `ctx.table(...)` liefert ihre bereits
+  erzeugten Werte
+- wird die referenzierte Tabelle oder Spalte später umbenannt oder
+  gelöscht, erscheint eine **Warnung in der Problems-Ansicht**
+"""
+
+[[parameters]]
+name = "carrier"
+type = "string"
+description = "Versanddienstleister im Code-Präfix."
+choices = ["DHL", "UPS", "DPD", "GLS"]
+required = true
+
+[[parameters]]
+name = "origin_table"
+type = "table"
+description = "Tabelle, aus deren Werten das Länderkürzel gezogen wird."
+required = true
+
+[[parameters]]
+name = "origin_column"
+type = "column"
+description = "Spalte der referenzierten Tabelle (z. B. ein Länderkürzel)."
+required = true
+
+[code]
+generate = """
+origins_source = ctx.table(params["origin_table"], params["origin_column"])
+origins = ctx.rng.choice(ctx.np.array(list(origins_source), dtype=object), size=n)
+numbers = ctx.rng.integers(10_000_000, 100_000_000, size=n)
+carrier = params.get("carrier", "DHL")
+return ctx.pd.Series([f"{carrier}-{origin}-{number}" for origin, number in zip(origins, numbers)])
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"{params.get('carrier', '?')}-…-…"
+"""

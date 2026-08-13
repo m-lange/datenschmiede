@@ -1,7 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: salutations
-# description: Anreden mit Geschlechts-Kürzel für Kontakte und Mitarbeiter — Beispiel für Dezimalgewichte.
-"salutation";"gender";"weight"
-"Herr";"m";"48.5"
-"Frau";"f";"48.5"
-"Divers";"d";"3"

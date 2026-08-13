@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { Project, ProjectTable } from './model';
-import { parseProjectText, serializeProject, findTableLineInfo } from './toml';
+import { parseProjectText, serializeProject } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getProjectWebviewStrings } from './webviewStrings';
 import { listTables, tableLabel, computeRequiredClosure, TableEntry } from '../table/repository';
 import { parseCardinality } from '../table/cardinality';
-import { ProjectIssue, validateProjectRecords } from './validation';
 import { ensurePythonLinked, pickPythonInterpreter, resolveLinkedInterpreter } from './python';
 import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
@@ -20,6 +20,7 @@ type WebviewToExtensionMessage =
 	| { type: 'selectTables'; paths: string[] }
 	| { type: 'deselectTables'; paths: string[] }
 	| { type: 'runGeneration' }
+	| { type: 'pickOutputFolder' }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { project: Project } | { error: unknown };
 
@@ -261,17 +262,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), für computeRequiredClosure. */
 	private cachedGenerators: GeneratorBase[] = [];
 	private entriesRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-	private readonly diagnostics: vscode.DiagnosticCollection;
-	private readonly closeDocSub: vscode.Disposable;
 
 	constructor(private readonly context: vscode.ExtensionContext) {
-		this.diagnostics = vscode.languages.createDiagnosticCollection('tdproject');
-		this.closeDocSub = vscode.workspace.onDidCloseTextDocument((doc) => {
-			if (doc.fileName.endsWith('.tdproject')) {
-				this.diagnostics.delete(doc.uri);
-			}
-		});
-
 		const refresh = () => this.scheduleEntriesRefresh();
 		for (const pattern of ['**/*.td', '**/*.tdgen']) {
 			const watcher = vscode.workspace.createFileSystemWatcher(pattern);
@@ -283,8 +275,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	public dispose(): void {
-		this.diagnostics.dispose();
-		this.closeDocSub.dispose();
 		for (const watcher of this.watchers) {
 			watcher.dispose();
 		}
@@ -335,7 +325,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 
 		const postState = async () => {
 			const state = this.readState(document);
-			this.updateDiagnostics(document);
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
@@ -361,7 +350,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				if (selfEditsPending === 0) {
 					lastQueuedText = null;
 				}
-				this.updateDiagnostics(document);
 				return;
 			}
 			void postState();
@@ -393,7 +381,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						columnWidths,
 						...state,
 					});
-					this.updateDiagnostics(document);
 					if ('project' in state) {
 						void this.maybePromptForPython(document, state.project);
 					}
@@ -442,6 +429,38 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					// Der eigentliche Lauf liegt im Befehl (siehe project/run.ts) —
 					// derselbe, den auch der Run-Knopf in der Editor-Titelleiste auslöst.
 					await vscode.commands.executeCommand('datenschmiede.runGeneration', document.uri);
+					break;
+				}
+				case 'pickOutputFolder': {
+					// Ordner-Auswahldialog für den Ausgabeordner; das Ergebnis wird
+					// als fester Text ins Tag-Feld übernommen (Variablen lassen sich
+					// danach weiterhin ergänzen).
+					const projectDir = vscode.Uri.joinPath(document.uri, '..');
+					const picked = await vscode.window.showOpenDialog({
+						canSelectFiles: false,
+						canSelectFolders: true,
+						canSelectMany: false,
+						defaultUri: projectDir,
+						title: vscode.l10n.t('Select Output Folder'),
+						openLabel: vscode.l10n.t('Select'),
+					});
+					if (!picked || picked.length === 0) {
+						break;
+					}
+					const current = this.readState(document);
+					if (!('project' in current)) {
+						break;
+					}
+					// Innerhalb des Projektordners relativ speichern (portabel,
+					// mit Vorwärts-Schrägstrichen), sonst absolut.
+					const relative = path.relative(projectDir.fsPath, picked[0].fsPath);
+					const outputPath =
+						relative && !relative.startsWith('..') && !path.isAbsolute(relative)
+							? relative.replace(/\\/g, '/')
+							: picked[0].fsPath;
+					// Löst über das normale onDidChangeTextDocument -> postState()
+					// eine aktualisierte Anzeige aus (wie changePython).
+					await this.applyText(document, serializeProject({ ...current.project, outputPath }));
 					break;
 				}
 				case 'selectTables': {
@@ -625,87 +644,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		return { parseError: String(err) };
 	}
 
-	/**
-	 * Aktualisiert die Problems-Ansicht für dieses Dokument: bei kaputtem TOML
-	 * der Syntaxfehler an seiner Position, sonst eine fehlende oder ungültige
-	 * Datensatzanzahl je ausgewählter Tabelle (siehe buildRecordsDiagnostics —
-	 * dieselben Regeln, die im Tabellen-Tab die Eingabe rot markieren).
-	 */
-	private updateDiagnostics(document: vscode.TextDocument): void {
-		const result = this.parseDocument(document);
-		if ('project' in result) {
-			this.diagnostics.set(document.uri, this.buildRecordsDiagnostics(document, result.project));
-			return;
-		}
-
-		const err = result.error;
-		if (err instanceof ParseError && err.line !== undefined && err.column !== undefined) {
-			const lineIndex = Math.min(Math.max(0, err.line - 1), Math.max(0, document.lineCount - 1));
-			const lineText = document.lineAt(lineIndex).text;
-			const startCol = Math.min(Math.max(0, err.column - 1), lineText.length);
-			const range = new vscode.Range(lineIndex, startCol, lineIndex, lineText.length);
-			const diagnostic = new vscode.Diagnostic(range, err.rawMessage, vscode.DiagnosticSeverity.Error);
-			diagnostic.source = 'Datenschmiede';
-			this.diagnostics.set(document.uri, [diagnostic]);
-		} else {
-			this.diagnostics.set(document.uri, []);
-		}
-	}
-
-	/**
-	 * Jede ausgewählte Tabelle braucht eine gültige Datensatzanzahl (primäre
-	 * eine feste Zahl, referenzierte eine Zahl oder einen Bereich "1..3");
-	 * ihre `.td`-Datei muss existieren. Die Regeln liegen vscode-frei in
-	 * project/validation.ts — ein Bereich mit falschem Trenner (z. B. "1-3"
-	 * oder "1.3" statt "1..3") bekommt eine eigene, gezielte Meldung.
-	 */
-	private buildRecordsDiagnostics(document: vscode.TextDocument, project: Project): vscode.Diagnostic[] {
-		const rows = buildTableRows(project, this.cachedEntries);
-		const issues = validateProjectRecords(rows);
-		const lineInfoByPath = findTableLineInfo(document.getText());
-
-		return issues.map((issue) => {
-			const info = lineInfoByPath.get(issue.path);
-			const line = info ? info.pathLine : 0;
-			const lineIndex = Math.min(line, Math.max(0, document.lineCount - 1));
-			const range = document.lineAt(lineIndex).range;
-			const diagnostic = new vscode.Diagnostic(
-				range,
-				this.formatProjectIssueMessage(issue),
-				issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
-			);
-			diagnostic.source = 'Datenschmiede';
-			diagnostic.code = issue.kind;
-			return diagnostic;
-		});
-	}
-
-	private formatProjectIssueMessage(issue: ProjectIssue): string {
-		switch (issue.kind) {
-			case 'missing-records':
-				return vscode.l10n.t('Table "{0}" has no number of records to generate.', issue.label);
-			case 'invalid-records-range-separator':
-				return vscode.l10n.t(
-					'Table "{0}": invalid range "{1}" — write ranges with two dots, e.g. "1..3".',
-					issue.label,
-					issue.detail ?? '',
-				);
-			case 'invalid-records':
-				return vscode.l10n.t(
-					'Table "{0}": invalid number of records "{1}" (use e.g. "100", or "5"/"1..3" for referenced tables).',
-					issue.label,
-					issue.detail ?? '',
-				);
-			case 'table-missing':
-				return vscode.l10n.t(
-					'Table file "{0}" was not found. It may have been deleted, renamed, or moved.',
-					issue.path,
-				);
-			default:
-				return issue.kind;
-		}
-	}
-
 	private formatParseError(err: ParseError): string {
 		if (err.line !== undefined && err.column !== undefined) {
 			return vscode.l10n.t('Line {0}, column {1}: {2}', err.line, err.column, err.rawMessage);
@@ -741,11 +679,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
 				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles });
 			}
-			// Auch die Problems-Ansicht neu bewerten: Datei-Änderungen im
-			// Workspace können z. B. eine Tabelle verschwinden lassen oder ihre
-			// Art (primär/referenziert) ändern, ohne dass sich das Projekt-
-			// Dokument selbst ändert.
-			this.updateDiagnostics(document);
 		}
 	}
 
@@ -801,7 +734,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
  * `fk_table`-Spalte, deren Datensatzanzahl je referenziertem Datensatz gilt
  * und auch ein Bereich sein darf.
  */
-function buildTableRows(project: Project, entries: TableEntry[]): ProjectTableRow[] {
+export function buildTableRows(project: Project, entries: TableEntry[]): ProjectTableRow[] {
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
 
 	return project.tables.map((table): ProjectTableRow => {

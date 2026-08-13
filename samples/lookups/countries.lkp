@@ -1,0 +1,10 @@
+# Datenschmiede Nachschlageliste
+# name: countries
+# description: **Länderverteilung** des Webshop-Beispiels mit zwei Wertespalten (`code` und `name`) — Generatoren wählen beim Konfigurieren, *welche* Spalte sie ziehen.\n\nDie **Gewichte** steuern die Häufigkeit: Deutschland dominiert mit 55 %, die Nachbarländer teilen sich den Rest. Die Summe darf beliebig von 100 % abweichen — gezogen wird immer proportional.\n\nVerwendet von `shop.core.customers.country` (Lookup-Generator) und von `tracking_code.tdgen` als Quelle der Länderkürzel.
+"code";"name";"weight"
+"DE";"Deutschland";"55"
+"AT";"Österreich";"15"
+"CH";"Schweiz";"10"
+"NL";"Niederlande";"8"
+"FR";"Frankreich";"7"
+"PL";"Polen";"5"

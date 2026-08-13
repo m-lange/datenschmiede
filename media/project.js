@@ -399,6 +399,18 @@
 		});
 		row.appendChild(addBtn);
 
+		// Ordner-Auswahldialog (VS-Code-nativ) — Ergebnis landet als fester
+		// Text im Tag-Feld, Variablen lassen sich danach weiter ergänzen.
+		const browseBtn = el('button', { className: 'icon-button' });
+		browseBtn.type = 'button';
+		browseBtn.title = strings.outputPathBrowseLabel;
+		browseBtn.setAttribute('aria-label', strings.outputPathBrowseLabel);
+		browseBtn.appendChild(el('i', { className: 'codicon codicon-folder-opened' }));
+		browseBtn.addEventListener('click', () => {
+			vscode.postMessage({ type: 'pickOutputFolder' });
+		});
+		row.appendChild(browseBtn);
+
 		field.appendChild(row);
 		field.appendChild(el('p', { className: 'hint', text: strings.outputPathHint }));
 		return field;

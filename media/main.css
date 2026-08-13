@@ -1652,3 +1652,10 @@ body.vscode-high-contrast-light .chart-bar {
 	font-family: var(--vscode-editor-font-family);
 	font-size: 0.92em;
 }
+
+/* Icon-Knöpfe außerhalb von Grid-Zeilen (z. B. Ordner-Auswahl neben dem
+   Ausgabeordner-Feld) sind immer sichtbar — die Basisregel blendet sie
+   sonst erst beim Zeilen-Hover ein. */
+.filename-row .icon-button {
+	opacity: 1;
+}

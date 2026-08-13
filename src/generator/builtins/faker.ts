@@ -31,6 +31,9 @@ export const FAKER_PROVIDERS = [
 	'color_name',
 	'currency_code',
 	'date_of_birth',
+	'date_this_year',
+	'date_time_this_year',
+	'boolean',
 	'uuid4',
 ] as const;
 

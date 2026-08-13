@@ -595,17 +595,16 @@
 	/** Anzeige-Text der Generator-Konfiguration einer Spalte (leer ohne Generator). @param {Column} column */
 	function generatorDisplayString(column) {
 		const config = column.generator;
-		if (!config || !config.id) {
-			// FK-Spalten ohne gespeicherten Generator (z. B. aus älteren
-			// Dateien) verwenden implizit den Fremdschlüssel-Generator — auch
-			// so anzeigen.
-			if (column.fk) {
-				return `FK → ${(column.fkTable || '').trim() || '?'}.${(column.fkColumn || '').trim() || '?'}`;
-			}
-			return '';
+		// FK-Spalten zeigen schlicht den Generator-Namen („Foreign Key“) —
+		// welche Tabelle/Spalte referenziert wird, steht bereits in den
+		// FK-Spalten daneben. Gilt auch ohne gespeicherten Generator (ältere
+		// Dateien): dann greift der Fremdschlüssel-Generator implizit.
+		if ((config && config.id === 'foreign-key') || (!config?.id && column.fk)) {
+			const fkOption = findGeneratorOption('foreign-key');
+			return fkOption ? fkOption.label : 'Foreign Key';
 		}
-		if (config.id === 'foreign-key') {
-			return `FK → ${(column.fkTable || '').trim() || '?'}.${(column.fkColumn || '').trim() || '?'}`;
+		if (!config || !config.id) {
+			return '';
 		}
 		const option = findGeneratorOption(config.id);
 		if (!option) {

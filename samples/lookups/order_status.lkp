@@ -1,0 +1,10 @@
+# Datenschmiede Nachschlageliste
+# name: order_status
+# description: **Statusverteilung** für Bestellungen (`shop.sales.orders.status`) — Beispiel für eine Nachschlageliste mit nur *einer* Wertespalte.\n\nDie Gewichte bilden einen realistischen Bestell-Lebenszyklus ab:\n\n- über die Hälfte der Bestellungen ist bereits **versendet**\n- ein Viertel ist **offen** oder **in Bearbeitung**\n- Stornos und Retouren bleiben selten
+"status";"weight"
+"shipped";"52"
+"open";"15"
+"processing";"12"
+"delivered";"12"
+"cancelled";"6"
+"returned";"3"

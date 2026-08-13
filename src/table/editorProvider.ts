@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
-import { Table, logicalTableName } from './model';
-import { parseTableText, serializeTable, findColumnLineInfo } from './toml';
+import { Table } from './model';
+import { parseTableText, serializeTable } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getWebviewStrings } from './webviewStrings';
-import { validateTable, findTableCycle, findColumnCycle, Issue } from './validation';
-import { TableEntry, TableOption, buildTableRefEdges, listTables, toTableOptions } from './repository';
+import { TableOption, listTables, toTableOptions } from './repository';
 import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
 import { listLookups, toLookupRefs } from '../lookup/repository';
@@ -63,9 +62,10 @@ function toGeneratorOptions(generators: GeneratorBase[]): GeneratorOption[] {
  * synchron: Änderungen im Formular werden als TOML zurückgeschrieben,
  * externe Änderungen am Text (z. B. Undo, Git, manuelles Bearbeiten) werden
  * neu geparst und an die Webview gesendet. Inhaltliche Probleme (z. B. eine
- * Fremdschlüssel-Spalte ohne referenzierte Tabelle, oder eine
- * Generator-Konfiguration, deren Referenzen nicht mehr existieren) landen
- * zusätzlich als Diagnostics in VS Codes Problems-Ansicht.
+ * Fremdschlüssel-Spalte ohne referenzierte Tabelle) meldet die
+ * Workspace-weite Hintergrund-Prüfung in der Problems-Ansicht (siehe
+ * src/diagnostics.ts) — auch für nicht geöffnete Dateien; die Webview zeigt
+ * dieselben Regeln direkt am Feld an.
  */
 export class TableEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.tableEditor';
@@ -81,13 +81,6 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 
 	/** Alle aktuell offenen .td-Webviews, um sie bei Datei-Änderungen im Workspace zu benachrichtigen. */
 	private readonly panels = new Set<vscode.WebviewPanel>();
-	/**
-	 * Alle aktuell offenen .td-Textdokumente, um bei Änderungen an der
-	 * Workspace-weiten Tabellenliste (z. B. eine referenzierte Datei wird
-	 * gelöscht) auch für Dokumente neu zu validieren, deren eigener Text
-	 * sich dabei gar nicht geändert hat.
-	 */
-	private readonly openDocuments = new Set<vscode.TextDocument>();
 	/**
 	 * Beobachtet .td-, .tdgen- und .lkp-Dateien im Workspace, um die
 	 * FK-„Referenzierte Tabelle“-Liste, die Generator-Auswahl und die
@@ -106,15 +99,10 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	 * teuer.
 	 */
 	private cachedTableOptions: TableOption[] = [];
-	/** Vollständige Tabellen-Einträge des letzten Scans (für die Zyklus-Erkennung, die die FK-/Generator-Kanten aller Tabellen braucht). */
-	private cachedEntries: TableEntry[] = [];
 	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), analog zu cachedTableOptions. */
 	private cachedGenerators: GeneratorBase[] = [];
 	/** Zuletzt ermittelte Nachschlagelisten (.lkp), analog zu cachedTableOptions. */
 	private cachedLookups: KnownLookupRef[] = [];
-	/** Inhaltliche Probleme (z. B. fehlende FK-Referenz) für die VS-Code-Problems-Ansicht. */
-	private readonly diagnostics: vscode.DiagnosticCollection;
-	private readonly closeDocSub: vscode.Disposable;
 	private optionsBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(private readonly context: vscode.ExtensionContext) {
@@ -126,21 +114,12 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			watcher.onDidChange(refresh);
 			this.watchers.push(watcher);
 		}
-
-		this.diagnostics = vscode.languages.createDiagnosticCollection('td');
-		this.closeDocSub = vscode.workspace.onDidCloseTextDocument((doc) => {
-			if (doc.fileName.endsWith('.td')) {
-				this.diagnostics.delete(doc.uri);
-			}
-		});
 	}
 
 	public dispose(): void {
 		for (const watcher of this.watchers) {
 			watcher.dispose();
 		}
-		this.diagnostics.dispose();
-		this.closeDocSub.dispose();
 		if (this.optionsBroadcastTimer) {
 			clearTimeout(this.optionsBroadcastTimer);
 		}
@@ -160,11 +139,10 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
 
 		this.panels.add(webviewPanel);
-		this.openDocuments.add(document);
 		// Frisch einlesen statt den (evtl. noch leeren oder veralteten) Cache zu
 		// nehmen, damit beim Öffnen nicht kurz fälschlich "Tabelle nicht
 		// gefunden" aufblitzt, bevor der erste Broadcast durchgelaufen ist.
-		void this.refreshOptionsCache().then(() => this.updateDiagnostics(document));
+		void this.refreshOptionsCache();
 
 		// Zähler statt einfachem Flag: wie viele selbst angestoßene
 		// WorkspaceEdits noch "unterwegs" sind, damit deren
@@ -193,7 +171,6 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			if (e.document.uri.toString() !== document.uri.toString()) {
 				return;
 			}
-			this.updateDiagnostics(document);
 			this.scheduleOptionsBroadcast();
 			if (selfEditsPending > 0) {
 				selfEditsPending--;
@@ -208,7 +185,6 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		webviewPanel.onDidDispose(() => {
 			changeDocSub.dispose();
 			this.panels.delete(webviewPanel);
-			this.openDocuments.delete(document);
 		});
 
 		webviewPanel.webview.onDidReceiveMessage(async (message: WebviewToExtensionMessage) => {
@@ -287,178 +263,9 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		return { parseError: String(err) };
 	}
 
-	/**
-	 * Aktualisiert die Problems-Ansicht für dieses Dokument: bei kaputtem
-	 * TOML der Syntaxfehler an seiner Position, sonst die inhaltlichen
-	 * Prüfungen aus validation.ts — FK-Probleme als Fehler,
-	 * Generator-Probleme als Warnungen.
-	 */
-	private updateDiagnostics(document: vscode.TextDocument): void {
-		const result = this.parseDocument(document);
-
-		if ('table' in result) {
-			this.diagnostics.set(document.uri, this.buildValidationDiagnostics(document, result.table));
-			return;
-		}
-
-		const err = result.error;
-		if (err instanceof ParseError && err.line !== undefined && err.column !== undefined) {
-			const lineIndex = Math.min(Math.max(0, err.line - 1), Math.max(0, document.lineCount - 1));
-			const lineText = document.lineAt(lineIndex).text;
-			const startCol = Math.min(Math.max(0, err.column - 1), lineText.length);
-			const range = new vscode.Range(lineIndex, startCol, lineIndex, lineText.length);
-			const diagnostic = new vscode.Diagnostic(range, err.rawMessage, vscode.DiagnosticSeverity.Error);
-			diagnostic.source = 'Datenschmiede';
-			this.diagnostics.set(document.uri, [diagnostic]);
-		} else {
-			this.diagnostics.set(document.uri, []);
-		}
-	}
-
-	private buildValidationDiagnostics(document: vscode.TextDocument, table: Table): vscode.Diagnostic[] {
-		const issues = validateTable(table, this.cachedTableOptions, this.cachedGenerators, this.cachedLookups);
-		const columnLines = findColumnLineInfo(document.getText());
-		const lineRange = (line: number) => document.lineAt(Math.min(line, Math.max(0, document.lineCount - 1))).range;
-
-		const diagnostics = issues.map((issue) => {
-			const info = columnLines[issue.columnIndex];
-			const line = info ? info.nameLine ?? info.columnsLine : 0;
-			const diagnostic = new vscode.Diagnostic(
-				lineRange(line),
-				this.formatIssueMessage(issue),
-				issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
-			);
-			diagnostic.source = 'Datenschmiede';
-			diagnostic.code = issue.kind;
-			return diagnostic;
-		});
-
-		// Zyklische Referenzen: über FK-/Generator-Ketten zwischen Tabellen
-		// bzw. zwischen den Spalten dieser Tabelle — dann lässt sich keine
-		// Generier-Reihenfolge auflösen.
-		const ownLabel = logicalTableName(table);
-		if (ownLabel) {
-			const edges = buildTableRefEdges(this.cachedEntries, this.cachedGenerators);
-			const cycle = findTableCycle(ownLabel, edges);
-			if (cycle) {
-				const diagnostic = new vscode.Diagnostic(
-					lineRange(0),
-					vscode.l10n.t(
-						'Circular reference between tables ({0}) — the generation order cannot be resolved.',
-						cycle.join(' → '),
-					),
-					vscode.DiagnosticSeverity.Warning,
-				);
-				diagnostic.source = 'Datenschmiede';
-				diagnostic.code = 'cycle-tables';
-				diagnostics.push(diagnostic);
-			}
-		}
-		const columnCycle = findColumnCycle(table, this.cachedGenerators);
-		if (columnCycle) {
-			const firstIndex = table.columns.findIndex((c) => c.name.trim() === columnCycle[0]);
-			const info = firstIndex >= 0 ? columnLines[firstIndex] : undefined;
-			const diagnostic = new vscode.Diagnostic(
-				lineRange(info ? info.nameLine ?? info.columnsLine : 0),
-				vscode.l10n.t(
-					'Circular reference between columns ({0}) — the generation order cannot be resolved.',
-					columnCycle.join(' → '),
-				),
-				vscode.DiagnosticSeverity.Warning,
-			);
-			diagnostic.source = 'Datenschmiede';
-			diagnostic.code = 'cycle-columns';
-			diagnostics.push(diagnostic);
-		}
-
-		return diagnostics;
-	}
-
-	private formatIssueMessage(issue: Issue): string {
-		const label = issue.columnName.trim() || vscode.l10n.t('column {0}', issue.columnIndex + 1);
-		switch (issue.kind) {
-			case 'fk-missing-table':
-				return vscode.l10n.t('Foreign key column "{0}" has no referenced table selected.', label);
-			case 'fk-table-not-found':
-				return vscode.l10n.t(
-					'Foreign key column "{0}" references table "{1}", which was not found. It may have been deleted, renamed, or moved.',
-					label,
-					issue.detail ?? '',
-				);
-			case 'fk-self-reference':
-				return vscode.l10n.t('Foreign key column "{0}" cannot reference its own table.', label);
-			case 'fk-missing-column':
-				return vscode.l10n.t('Foreign key column "{0}" has no referenced column selected.', label);
-			case 'fk-column-not-found':
-				return vscode.l10n.t(
-					'Foreign key column "{0}" references column "{1}", which was not found in the referenced table. It may have been renamed or removed.',
-					label,
-					issue.detail ?? '',
-				);
-			case 'gen-missing':
-				return vscode.l10n.t('Column "{0}" has no generator selected — select and configure one.', label);
-			case 'gen-not-found':
-				return vscode.l10n.t(
-					'Column "{0}": generator "{1}" was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
-					label,
-					issue.detail ?? '',
-				);
-			case 'gen-fk-only':
-				return vscode.l10n.t('Column "{0}": the Foreign Key generator can only be used on foreign key columns.', label);
-			case 'gen-fk-mismatch':
-				return vscode.l10n.t('Column "{0}": foreign key columns always use the Foreign Key generator.', label);
-			case 'gen-param-missing':
-				return vscode.l10n.t('Column "{0}": generator parameter "{1}" has no value.', label, issue.paramName ?? '');
-			case 'gen-param-invalid':
-				return vscode.l10n.t(
-					'Column "{0}": generator parameter "{1}" has an invalid value ("{2}").',
-					label,
-					issue.paramName ?? '',
-					issue.detail ?? '',
-				);
-			case 'gen-table-not-found':
-				return vscode.l10n.t(
-					'Column "{0}": generator parameter "{1}" references table "{2}", which was not found. It may have been deleted, renamed, or moved.',
-					label,
-					issue.paramName ?? '',
-					issue.detail ?? '',
-				);
-			case 'gen-column-not-found':
-				return vscode.l10n.t(
-					'Column "{0}": generator parameter "{1}" references column "{2}", which was not found in the referenced table.',
-					label,
-					issue.paramName ?? '',
-					issue.detail ?? '',
-				);
-			case 'gen-lookup-not-found':
-				return vscode.l10n.t(
-					'Column "{0}": generator parameter "{1}" references lookup list "{2}", which was not found. It may have been deleted or renamed.',
-					label,
-					issue.paramName ?? '',
-					issue.detail ?? '',
-				);
-			case 'gen-lookup-column-not-found':
-				return vscode.l10n.t(
-					'Column "{0}": generator parameter "{1}" references column "{2}", which was not found in the lookup list.',
-					label,
-					issue.paramName ?? '',
-					issue.detail ?? '',
-				);
-			case 'gen-own-column-not-found':
-				return vscode.l10n.t(
-					'Column "{0}": the combine template references column "{1}", which does not exist in this table (or is the column itself).',
-					label,
-					issue.detail ?? '',
-				);
-			default:
-				return issue.kind;
-		}
-	}
-
-	/** Liest Tabellen-, Generator- und Nachschlagelisten-Liste neu ein und hält sie für die (synchrone) Validierung vor. */
+	/** Liest Tabellen-, Generator- und Nachschlagelisten-Liste neu ein und hält sie für die Webview-Auswahllisten vor. */
 	private async refreshOptionsCache(): Promise<void> {
 		const [tables, generators, lookups] = await Promise.all([listTables(), listGenerators(), listLookups()]);
-		this.cachedEntries = tables;
 		this.cachedTableOptions = toTableOptions(tables);
 		this.cachedGenerators = toGeneratorList(generators);
 		this.cachedLookups = toLookupRefs(lookups);
@@ -467,10 +274,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	/**
 	 * Schickt allen offenen .td-Webviews die aktuellen Auswahllisten (z. B.
 	 * nach Anlegen/Löschen/Umbenennen einer Tabelle, eines Generators oder
-	 * einer Nachschlageliste) und validiert alle offenen Dokumente neu — so
-	 * erscheint z. B. ein referenzierter Generator, der inzwischen gelöscht
-	 * wurde, sofort als Problem, auch wenn das Dokument mit der Spalte selbst
-	 * gerade nicht bearbeitet wird.
+	 * einer Nachschlageliste); die Problems-Ansicht hält die Workspace-weite
+	 * Hintergrund-Prüfung aktuell (siehe src/diagnostics.ts).
 	 */
 	private async broadcastOptions(): Promise<void> {
 		await this.refreshOptionsCache();
@@ -482,9 +287,6 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				generatorOptions,
 				lookupOptions: this.cachedLookups,
 			});
-		}
-		for (const document of this.openDocuments) {
-			this.updateDiagnostics(document);
 		}
 	}
 
