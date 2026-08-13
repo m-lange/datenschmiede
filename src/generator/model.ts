@@ -63,23 +63,42 @@ export const PARSE_PARAMS_SIGNATURE = 'def parse_params(params: dict[str, str]) 
 export const DISPLAY_VALUE_SIGNATURE = 'def display_value(params: dict) -> str:';
 export const VALIDATE_SIGNATURE = 'def validate(params: dict[str, str]) -> "list[str]":';
 
-/** Standard-Rümpfe für eine frisch angelegte .tdgen-Datei. */
+/**
+ * Standard-Rümpfe für eine frisch angelegte .tdgen-Datei — bewusst mit
+ * Beispiel-Kommentaren, damit der Notebook-Editor die wichtigsten
+ * Möglichkeiten (ctx-API, typische Muster) direkt in den Code-Zellen zeigt.
+ */
 export const DEFAULT_GENERATE_BODY = [
 	'# params: parameter values (see parse_params), n: number of records to generate',
-	'# ctx.rng: numpy Generator, ctx.pd/ctx.np: pandas/numpy,',
-	'# ctx.column("name"): generated values of another column of this table',
+	'# ctx.rng: numpy Generator, ctx.pd/ctx.np: pandas/numpy, ctx.faker(locale): Faker',
+	'# Examples:',
+	'#   return ctx.pd.Series([f"X-{v:06d}" for v in ctx.rng.integers(0, 10**6, size=n)])',
+	'#   return ctx.pd.Series([ctx.faker("de_DE").first_name() for _ in range(n)])',
+	'#   prices = ctx.column("price")                    # own column, same records',
+	'#   cities = ctx.lookup_value("cities", "name")     # row-consistent lookup draw',
+	'#   skus = ctx.table("shop.products", "sku")        # values of another table',
 	'return ctx.pd.Series(ctx.rng.integers(0, 100, size=n))',
 ].join('\n');
 
 export const DEFAULT_PARSE_PARAMS_BODY = [
 	'# All parameter values arrive as strings — convert them here if needed.',
+	'# Example:',
+	'#   return {**params, "digits": int(params.get("digits", "") or 6)}',
 	'return params',
 ].join('\n');
 
-export const DEFAULT_DISPLAY_VALUE_BODY = ['return ", ".join(f"{k}: {v}" for k, v in params.items() if v)'].join('\n');
+export const DEFAULT_DISPLAY_VALUE_BODY = [
+	'# One-line summary of a configuration for the table editor, run log and preview.',
+	'# Example:',
+	'#   return f"{params.get(\'prefix\', \'?\')}-000001…"',
+	'return ", ".join(f"{k}: {v}" for k, v in params.items() if v)',
+].join('\n');
 
 export const DEFAULT_VALIDATE_BODY = [
 	'# Return a list of warning texts for the current parameter values (empty = ok).',
+	'# Example:',
+	'#   if not (params.get("prefix") or "").strip():',
+	'#       return ["prefix must not be empty"]',
 	'return []',
 ].join('\n');
 

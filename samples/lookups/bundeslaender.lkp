@@ -1,0 +1,20 @@
+# Datenschmiede Nachschlageliste
+# name: bundeslaender
+# description: **Deutsche Bundesländer** mit je einer großen Stadt und einer echten Postleitzahl dieser Stadt — drei Wertespalten (`bundesland`, `stadt`, `plz`), aus denen Generatoren beim Konfigurieren wählen.\n\nDie **Gewichte** entsprechen grob den Bevölkerungsanteilen der Länder (Summe 100) — Nordrhein-Westfalen ist am häufigsten, Bremen und das Saarland am seltensten.\n\nWichtig: Je Datensatz wird **eine Zeile** gezogen — `bundesland`, `stadt` und `plz` desselben Datensatzes passen dadurch immer zusammen (zieht ein Kunde „Bayern“, bekommt er „München“ und „80331“ aus derselben Zeile). Die PLZ bleibt ein **String**, damit führende Nullen wie „04109“ (Leipzig) erhalten bleiben.\n\nVerwendet von `shop.core.customers.bundesland`, `.stadt` und `.plz`.
+"bundesland";"stadt";"plz";"weight"
+"Nordrhein-Westfalen";"Köln";"50667";"21.5"
+"Bayern";"München";"80331";"16"
+"Baden-Württemberg";"Stuttgart";"70173";"13"
+"Niedersachsen";"Hannover";"30159";"10"
+"Hessen";"Frankfurt am Main";"60311";"7.5"
+"Rheinland-Pfalz";"Mainz";"55116";"5"
+"Sachsen";"Leipzig";"04109";"5"
+"Berlin";"Berlin";"10115";"4.5"
+"Schleswig-Holstein";"Kiel";"24103";"3.5"
+"Brandenburg";"Potsdam";"14467";"3"
+"Sachsen-Anhalt";"Magdeburg";"39104";"2.5"
+"Thüringen";"Erfurt";"99084";"2.5"
+"Hamburg";"Hamburg";"20095";"2"
+"Mecklenburg-Vorpommern";"Rostock";"18055";"2"
+"Saarland";"Saarbrücken";"66111";"1"
+"Bremen";"Bremen";"28195";"1"

@@ -3,14 +3,14 @@ name = "Webshop Demo"
 description = """
 **Durchgängiges Beispielprojekt** über alle Funktionen der Extension: ein
 kleiner Webshop mit fünf Tabellen in zwei Namensräumen (`shop.core` und
-`shop.sales`), zwei Nachschlagelisten und fünf benutzerdefinierten
+`shop.sales`), drei Nachschlagelisten und sieben benutzerdefinierten
 Generatoren (`sequential_id`, `tracking_code`, `related_sum`,
-`value_category`, `parent_value`).
+`value_category`, `parent_value`, `iban`, `lei`).
 
 **Datenmodell** (Pfeile = Fremdschlüssel):
 
-- `shop.core.customers` *(primär, 250 Datensätze)*
-- `shop.core.products` *(primär, 80 Datensätze)*
+- `shop.core.customers` *(primär, 25.000 Datensätze)*
+- `shop.core.products` *(primär, 80.000 Datensätze)*
 - `shop.sales.orders` → customers *(1..5 je Kunde)*
 - `shop.sales.order_items` → orders *(1..4 je Bestellung)*, → products
 - `shop.sales.shipments` → orders *(genau 1 je Bestellung)*
@@ -22,7 +22,7 @@ Generatoren (`sequential_id`, `tracking_code`, `related_sum`,
   `output/webshop_{date}` — mit Fortschrittsanzeige, abbrechbar
 - die Übersicht **Generierte Dateien** zeigt vorab Dateinamen (mit
   Variablen-Tags) und die **berechneten** Datensatzmengen (z. B.
-  `250..1250` für die Bestellungen)
+  `25000..125000` für die Bestellungen)
 - im Tabellen-Tab lassen sich Tabellen (ab)wählen — automatisch über
   FK-Ketten und Generator-Referenzen mitgenommene bleiben gesperrt
 - die **Vorschau** im Table Editor (20 Datensätze) funktioniert für jede

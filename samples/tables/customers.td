@@ -4,7 +4,7 @@ name = "customers"
 description = """
 **Kundenstamm** des Webshop-Beispiels — eine *primäre* Tabelle ohne
 ausgehende Fremdschlüssel: ihre Gesamtanzahl wird im Testdatenprojekt fest
-vorgegeben (hier 250), alle Bestell-Tabellen hängen über FK-Ketten an ihr.
+vorgegeben (hier 25.000), alle Bestell-Tabellen hängen über FK-Ketten an ihr.
 
 Die Spalten zeigen die wichtigsten **eingebauten Generatoren** im
 Zusammenspiel:
@@ -16,6 +16,12 @@ Zusammenspiel:
   über die Werte der beiden Namens-Spalten (die dadurch automatisch *vor*
   der E-Mail generiert werden)
 - `country`: **Nachschlageliste** `countries`, gewichtete Länderkürzel
+- `bundesland` / `stadt` / `plz`: **Nachschlageliste** `bundeslaender` —
+  drei Spalten aus *derselben* Liste lesen je Datensatz **dieselbe Zeile**:
+  Bundesland, Stadt und Postleitzahl passen immer zusammen (die Adresse
+  ist bewusst immer deutsch, unabhängig vom `country`-Kürzel)
+- `iban`: benutzerdefinierter Generator `iban` — zufällige deutsche IBANs
+  mit **gültigen Prüfziffern** (mod 97-10)
 - `newsletter` / `created_at`: Faker-Provider `boolean` bzw.
   `date_time_this_year`
 
@@ -91,6 +97,49 @@ generator = "lookup"
 [columns.generator_params]
 list = "countries"
 column = "code"
+
+[[columns]]
+name = "bundesland"
+type = "string"
+pk = false
+fk = false
+description = "Bundesland — **Nachschlageliste** `bundeslaender`, bevölkerungsgewichtet; liest je Datensatz dieselbe Listen-Zeile wie `stadt` und `plz`"
+generator = "lookup"
+[columns.generator_params]
+list = "bundeslaender"
+column = "bundesland"
+
+[[columns]]
+name = "stadt"
+type = "string"
+pk = false
+fk = false
+description = "Stadt — aus **derselben Listen-Zeile** wie `bundesland` (Zeilen-Konsistenz des Lookup-Generators)"
+generator = "lookup"
+[columns.generator_params]
+list = "bundeslaender"
+column = "stadt"
+
+[[columns]]
+name = "plz"
+type = "string"
+pk = false
+fk = false
+description = "Postleitzahl der Stadt — als **String**, damit führende Nullen (`04109` Leipzig) erhalten bleiben; ebenfalls aus derselben Listen-Zeile"
+generator = "lookup"
+[columns.generator_params]
+list = "bundeslaender"
+column = "plz"
+
+[[columns]]
+name = "iban"
+type = "string"
+pk = false
+fk = false
+description = "Bankverbindung — benutzerdefinierter Generator `iban`: zufällige deutsche IBANs mit **gültigen Prüfziffern** (ISO 7064, mod 97-10)"
+generator = "custom:iban"
+[columns.generator_params]
+country = "DE"
 
 [[columns]]
 name = "newsletter"

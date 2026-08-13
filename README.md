@@ -71,7 +71,7 @@ Grundgerüst anlegen.
 Unter [`samples/`](samples/) liegt das durchgängige Beispielprojekt
 **„Webshop Demo“** (nach Dateityp in `tables/`, `lookups/` und `generators/`
 gegliedert): fünf Tabellen in zwei Namensräumen (`shop.core` und
-`shop.sales`) mit FK-Ketten über drei Ebenen, zwei Nachschlagelisten, zwei
+`shop.sales`) mit FK-Ketten über drei Ebenen, drei Nachschlagelisten, sieben
 benutzerdefinierte Generatoren und ein fertig konfiguriertes
 `.tdproject` — jede Datei mit ausführlicher Markdown-Beschreibung, welche
 Funktion sie demonstriert. Einstieg:
@@ -287,7 +287,13 @@ einem Schlüssel — `SUM(order_items.quantity) GROUP BY order_id`),
 `own_column` — die Quellspalte wird garantiert vorher generiert) und
 [`samples/generators/parent_value.tdgen`](samples/generators/parent_value.tdgen)
 (übernimmt zeilengenau einen Wert der führenden Tabelle via
-`ctx.related`, z. B. das Land des bestellenden Kunden).
+`ctx.related`, z. B. das Land des bestellenden Kunden),
+[`samples/generators/iban.tdgen`](samples/generators/iban.tdgen)
+(zufällige IBANs `DE`/`AT`/`CH` mit gültigen Prüfziffern nach ISO 7064,
+inkl. eigener `validate`-Prüfung) und
+[`samples/generators/lei.tdgen`](samples/generators/lei.tdgen)
+(Legal Entity Identifier nach ISO 17442 — alphanumerische Zufallszeichen
+mit demselben Prüfziffern-Verfahren).
 
 ## Ausgabe je Tabelle (Dateiname + CSV)
 

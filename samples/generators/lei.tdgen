@@ -1,0 +1,63 @@
+# Datenschmiede Generator
+name = "lei"
+description = """
+Erzeugt **Legal Entity Identifier (LEI)** nach ISO 17442 mit gültigen
+Prüfziffern — z. B. `529900T8BM49AURSDO55`. Aufbau: 4 Stellen Kennung der
+vergebenden Stelle (LOU), 2 reservierte Nullen, 12 alphanumerische
+Stellen, 2 Prüfziffern (ISO 7064, mod 97-10 — dasselbe Verfahren wie bei
+der IBAN, siehe `iban.tdgen`). Die Kennungen sind frei erfunden, bestehen
+aber jede LEI-Prüfziffern-Validierung.
+
+**Parameter:**
+
+- `lou`: vierstellige Kennung der vergebenden Stelle am Anfang
+  (Standard `5299`) — leer lassen für den Standard
+
+**Was dieses Beispiel zeigt:**
+
+- **alphanumerische Zufallszeichen** über `ctx.rng.choice` auf einem
+  Zeichen-Array (statt nur Ziffern via `integers`)
+- das Prüfziffern-Verfahren mod 97-10 als kleine Hilfsfunktion —
+  `int(zeichen, 36)` übersetzt `A…Z` in `10…35`
+- die **`validate`-Zelle** prüft die LOU-Kennung (genau 4 alphanumerische
+  Zeichen)
+"""
+
+[[parameters]]
+name = "lou"
+type = "string"
+description = "Vierstellige LOU-Kennung am LEI-Anfang (Standard \"5299\")."
+placeholder = "5299"
+
+[code]
+generate = """
+lou = ((params.get("lou") or "5299").strip().upper() + "0000")[:4]
+alphabet = ctx.np.array(list("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))
+core = ctx.rng.choice(alphabet, size=(n, 12))
+
+def check_digits(body):
+    # ISO 7064 (mod 97-10) wie bei der IBAN: Buchstaben als Zahlen
+    # (A=10 … Z=35), Prüfziffern = 98 - (Wert mod 97).
+    numeric = "".join(str(int(c, 36)) for c in body + "00")
+    return f"{98 - int(numeric) % 97:02d}"
+
+leis = []
+for row in core:
+    body = f"{lou}00{''.join(row)}"
+    leis.append(body + check_digits(body))
+return ctx.pd.Series(leis)
+"""
+parse_params = """
+return params
+"""
+display_value = """
+lou = ((params.get("lou") or "5299").strip().upper() + "0000")[:4]
+return f"LEI {lou}00…"
+"""
+validate = """
+warnings = []
+lou = (params.get("lou") or "").strip()
+if lou and (len(lou) != 4 or not lou.isalnum()):
+    warnings.append("lou must be exactly 4 alphanumeric characters")
+return warnings
+"""

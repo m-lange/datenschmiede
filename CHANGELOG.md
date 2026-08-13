@@ -2,6 +2,20 @@
 
 ## 0.6.0
 
+- **Beispiel-Kommentare in neuen `.tdgen`-Dateien**: die Code-Zellen einer
+  frisch angelegten Generator-Datei zeigen jetzt typische Muster als
+  Kommentar direkt im Code — `generate` die wichtigsten `ctx`-Helfer
+  (`ctx.faker`, `ctx.column`, `ctx.lookup_value`, `ctx.table`),
+  `parameters()` ein Beispiel-Parameterpaar (`required`, `choices`),
+  `parse_params`/`display_value`/`validate` je ein einzeiliges Muster.
+- **Neue Beispiele**: Nachschlageliste `bundeslaender` (Bundesland, Stadt
+  und Postleitzahl mit Bevölkerungs-Gewichten — drei Spalten aus derselben
+  Zeile, die Adresse bleibt je Datensatz konsistent) sowie die
+  benutzerdefinierten Generatoren `iban` (zufällige IBANs `DE`/`AT`/`CH`
+  mit gültigen Prüfziffern nach ISO 7064) und `lei` (Legal Entity
+  Identifier nach ISO 17442). `shop.core.customers` nutzt beides über die
+  neuen Spalten `bundesland`/`stadt`/`plz` und `iban`.
+
 - **Neuer Parametertyp `own_column`** für (benutzerdefinierte)
   Generatoren: bietet die Spalten der *eigenen* Tabelle an; die gewählte
   Spalte liefert ihre Werte für **dieselben Datensätze** (`ctx.column`)

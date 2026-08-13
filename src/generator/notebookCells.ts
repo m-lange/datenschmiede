@@ -144,7 +144,16 @@ function pyString(value: string): string {
 /** Baut den kanonischen parameters()-Rumpf aus den deklarativen `[[parameters]]`-Blöcken. */
 export function parametersBodyFromList(parameters: GeneratorParameter[]): string {
 	if (parameters.length === 0) {
-		return ['# type: eine Spaltenart oder lookup / table / column / own_column', 'return []'].join('\n');
+		return [
+			'# One dict per parameter: name, type (a column type or lookup / table / column / own_column),',
+			'# optional description, choices, required.',
+			'# Example:',
+			'#   return [',
+			'#       {"name": "prefix", "type": "string", "required": True},',
+			'#       {"name": "digits", "type": "string", "choices": ["4", "6", "8"]},',
+			'#   ]',
+			'return []',
+		].join('\n');
 	}
 	const lines: string[] = ['return ['];
 	for (const parameter of parameters) {
