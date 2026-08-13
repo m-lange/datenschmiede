@@ -1667,3 +1667,11 @@ body.vscode-high-contrast-light .chart-bar {
 .filename-row .icon-button {
 	opacity: 1;
 }
+
+/* Aktionszeile unter dem Ausgabeordner-Feld („Dynamischen Wert einfügen“). */
+.filename-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 4px;
+}
