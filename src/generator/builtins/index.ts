@@ -6,6 +6,7 @@
  */
 
 import { GeneratorBase } from '../base';
+import { defaultByTypeGenerator } from './defaultByType';
 import { randomIntGenerator } from './randomInt';
 import { randomFloatGenerator } from './randomFloat';
 import { fakerGenerator } from './faker';
@@ -15,6 +16,7 @@ import { foreignKeyGenerator } from './foreignKey';
 
 export const BUILTIN_GENERATORS: readonly GeneratorBase[] = [
 	foreignKeyGenerator,
+	defaultByTypeGenerator,
 	randomIntGenerator,
 	randomFloatGenerator,
 	fakerGenerator,

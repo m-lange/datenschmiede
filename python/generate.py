@@ -254,6 +254,11 @@ class Runner:
         gen_id = (generator or {}).get("id", "")
         params = (generator or {}).get("params", {})
 
+        if gen_id == "default":
+            # Explizit gewaehlter Standard je Datentyp — identisch zu einer
+            # Spalte ganz ohne Generator.
+            return self.default_by_type(table, column, n)
+
         if gen_id == "foreign-key" or (column.get("fk") and not gen_id):
             ref_table, ref_column = column.get("fk_table"), column.get("fk_column")
             ref_values = self.data.get(ref_table, {}).get(ref_column)

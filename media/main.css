@@ -1194,7 +1194,7 @@ body.vscode-high-contrast-light .chart-bar {
 /* ---------- Table Editor: Generator-Spalte ---------- */
 
 .col-generator {
-	min-width: 220px;
+	min-width: 385px;
 }
 
 /* Auswahl + Stift nebeneinander (siehe renderGeneratorCell in table.js). */

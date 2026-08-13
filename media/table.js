@@ -101,7 +101,7 @@
 		{ key: 'desc', minWidth: 180 },
 		{ key: 'refTable', minWidth: 170 },
 		{ key: 'refColumn', minWidth: 150 },
-		{ key: 'gen', minWidth: 220 },
+		{ key: 'gen', minWidth: 385 },
 	];
 
 	const app = document.getElementById('app');
