@@ -494,7 +494,7 @@
 				const recordsWrap = el('span', { className: 'records-cell-row' });
 				recordsWrap.appendChild(
 					el('i', {
-						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
+						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-table'} records-type-icon`,
 					}),
 				);
 				// Berechnete Anzahl aus der Konfiguration (bei referenzierten
@@ -1154,7 +1154,7 @@
 				? strings.tablesReferencedIconTooltip.replace('{0}', node.referencedTable || '')
 				: strings.tablesPrimaryIconTooltip;
 			const icon = el('i', {
-				className: `codicon ${node.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
+				className: `codicon ${node.secondary ? 'codicon-references' : 'codicon-table'} records-type-icon`,
 			});
 			icon.title = iconTitle;
 			icon.setAttribute('role', 'img');
