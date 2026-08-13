@@ -412,6 +412,8 @@ class Runner:
 
         for column in self.sorted_columns(table):
             self.data[label][column["name"]] = self.generate_column(table, column, n).reset_index(drop=True)
+            # Spalte-fuer-Spalte-Fortschritt fuers Lauf-Protokoll (Output-Channel).
+            emit("column_done", table=label, column=column["name"], records=n)
 
         return n
 

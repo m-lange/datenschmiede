@@ -2,6 +2,15 @@
 
 ## 0.6.0
 
+- **Output-Channel „Datenschmiede“** (Ansicht *Output*): öffnet sich beim
+  Start eines Generator-Laufs automatisch (ohne den Fokus zu stehlen) und
+  protokolliert den Fortschritt live — Plan-Zusammenfassung (Tabellen samt
+  konfigurierter Datensatzanzahl), jede Tabelle und **jede Spalte** beim
+  Generieren, erzeugte Dateien, Dauer, Abbrüche. Bei Fehlern stehen dort
+  die vollständigen Details: komplette Python-**Tracebacks** (bei
+  benutzerdefinierten Generatoren mit `<tdgen:name>`-Frames, die auf die
+  fehlerhafte Code-Zeile zeigen) und die gesamte stderr-Ausgabe. Jede
+  Fehler-Notification bietet dafür einen **„Details anzeigen“**-Knopf.
 - **Workspace-weite Hintergrund-Prüfung**: alle `.td`-, `.tdproject`-,
   `.lkp`- und `.tdgen`-Dateien des Workspace werden fortlaufend geprüft und
   ihre Probleme in der Problems-Ansicht gemeldet — **auch wenn keine der

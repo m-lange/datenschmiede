@@ -84,7 +84,19 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 
 	const projectName = project.name.trim() || vscode.workspace.asRelativePath(uri, false);
 	const channel = getOutputChannel();
+	// Lauf-Protokoll sichtbar machen (ohne den Fokus zu stehlen) und mit
+	// einer Plan-Zusammenfassung beginnen — der Fortschritt (Tabellen und
+	// Spalten) wird darunter live mitgeschrieben.
+	channel.show(true);
 	log(`Run "${projectName}" — ${pythonStatus.path}`);
+	for (const table of plan.plan.tables) {
+		channel.appendLine(
+			`    ${table.label}: ${
+				typeof table.records === 'number' ? `${table.records} records` : `${table.records.min}..${table.records.max} per ${table.driving_fk?.table ?? '?'}`
+			}`,
+		);
+	}
+	const startedAt = Date.now();
 
 	await vscode.window.withProgress(
 		{
@@ -139,6 +151,13 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 					switch (event.event) {
 						case 'table_start': {
 							progress.report({ message: String(event.table ?? '') });
+							const total = Number(event.total) || plan.plan.tables.length;
+							log(`Table ${String(event.table ?? '')} (${Number(event.index) + 1}/${total}) …`);
+							break;
+						}
+						case 'column_done': {
+							// Spalte-für-Spalte-Fortschritt im Protokoll (ohne Zeitstempel-Präfix).
+							channel.appendLine(`    ✓ ${String(event.column ?? '')} (${Number(event.records)} values)`);
 							break;
 						}
 						case 'table_done': {
@@ -204,7 +223,8 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 					}
 					if (doneFiles) {
 						const files = doneFiles;
-						log(`Run "${projectName}" finished: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
+						const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+						log(`Run "${projectName}" finished in ${seconds}s: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
 						const openLabel = vscode.l10n.t('Open Output Folder');
 						void vscode.window
 							.showInformationMessage(

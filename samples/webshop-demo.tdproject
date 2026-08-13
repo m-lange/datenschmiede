@@ -36,7 +36,7 @@ output_path = "output/webshop_{date}"
 
 [[tables]]
 path = "tables/customers.td"
-records = 250
+records = 25000
 
 [[tables]]
 path = "tables/order_items.td"
@@ -48,7 +48,7 @@ records = "1..5"
 
 [[tables]]
 path = "tables/products.td"
-records = 80
+records = 80000
 
 [[tables]]
 path = "tables/shipments.td"
