@@ -493,11 +493,9 @@
 			if (row.records) {
 				const recordsWrap = el('span', { className: 'records-cell-row' });
 				recordsWrap.appendChild(
-					!row.secondary && treeIcons
-						? renderThemedIcon(treeIcons.primary, 'tree-file-icon records-type-icon')
-						: el('i', {
-								className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
-							}),
+					el('i', {
+						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
+					}),
 				);
 				// Berechnete Anzahl aus der Konfiguration (bei referenzierten
 				// Tabellen die Kardinalität entlang der FK-Kette multipliziert)
@@ -1149,19 +1147,15 @@
 			// Noch nicht Teil des Projekts -> keine Datensatzanzahl relevant.
 		} else {
 			// Icon vor dem Eingabefeld kennzeichnet die Art der Tabelle:
-			// primär/führend (Tabellen-Schlüssel-Icon TableKey.svg, feste
-			// Gesamtanzahl) vs. referenziert/sekundär (Referenz-Codicon,
-			// Anzahl je Datensatz der referenzierten Tabelle, auch als
-			// Bereich — siehe renderRecordsInput).
+			// primär (feste Gesamtanzahl) vs. referenziert/sekundär (Anzahl je
+			// Datensatz der referenzierten Tabelle, auch als Bereich — siehe
+			// renderRecordsInput).
 			const iconTitle = node.secondary
 				? strings.tablesReferencedIconTooltip.replace('{0}', node.referencedTable || '')
 				: strings.tablesPrimaryIconTooltip;
-			const icon =
-				!node.secondary && treeIcons
-					? renderThemedIcon(treeIcons.primary, 'tree-file-icon records-type-icon')
-					: el('i', {
-							className: `codicon ${node.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
-						});
+			const icon = el('i', {
+				className: `codicon ${node.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
+			});
 			icon.title = iconTitle;
 			icon.setAttribute('role', 'img');
 			icon.setAttribute('aria-label', iconTitle);

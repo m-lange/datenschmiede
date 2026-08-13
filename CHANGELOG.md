@@ -24,10 +24,6 @@
   Lauf-Protokoll (Output-Channel) — `print()` auf stdout ist für das
   JSON-Protokoll reserviert. Beispiel für beides: `value_category.tdgen`
   (prüft Grenzen/Labels, protokolliert die Klassen-Verteilung).
-- **Tabellen-Schlüssel-Icon für führende Tabellen**: primäre Tabellen
-  zeigen im Projekt-Editor (Datensätze-Spalte und Ausgabedateien-
-  Übersicht) das neue `TableKey`-Icon (hell/dunkel, `icons/tablekey-*.svg`)
-  statt des generischen Schlüssel-Codicons.
 - **Zeilen-Konsistenz des Nachschagelisten-Generators**: je Datensatz wird
   EINE Listen-Zeile gezogen — alle Spalten, die aus derselben Liste
   ziehen, lesen dieselbe Zeile, auch über FK-verbundene Tabellen hinweg
