@@ -1,0 +1,1192 @@
+/*
+ * Styling für den Table Editor.
+ *
+ * Grid-Dichte (Zeilennummern, PK-/FK-Checkbox-Spalten) an Oracle SQL
+ * Developer for VS Code angelehnt, die Chrome drumherum (weichere, größere
+ * Rundungen, in Karten gruppierte Bereiche, Tabs als Segmented Control,
+ * großzügigere Abstände) an den Assistant-Panel-Look dieser Extension hier
+ * — technisch weiterhin ausschließlich über native VS-Code-Theme-Variablen,
+ * damit alles wie ein natives Editor-Panel wirkt (Light/Dark/High-Contrast).
+ */
+
+:root {
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 10px;
+	--card-border: color-mix(in srgb, var(--vscode-widget-border, var(--vscode-panel-border)) 65%, transparent);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	/* Vertikal wird gescrollt, sobald der Inhalt höher als das Panel ist.
+	   Horizontal bleibt es normalerweise bei voller Breite ohne Scrollen;
+	   einzelne breite Elemente (z. B. das Spalten-Grid) verwalten ihr
+	   eigenes horizontales Scrollen selbst (siehe .columns-table-wrap).
+	   "auto" statt "hidden", damit sehr schmale Panels (unterhalb der
+	   Mindestbreiten) nicht Inhalte unerreichbar abschneiden. */
+	overflow-x: auto;
+	overflow-y: auto;
+	/* Reserviert den Platz der vertikalen Scrollleiste immer, auch wenn sie
+	   gerade nicht gebraucht wird (z. B. nachdem eine Suche die Zeilenzahl
+	   verkürzt hat) — sonst springt der ganze Inhalt beim Auftauchen/
+	   Verschwinden der Leiste seitlich um deren Breite. */
+	scrollbar-gutter: stable;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	color: var(--vscode-editor-foreground);
+	background-color: var(--vscode-editor-background);
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	font-weight: var(--vscode-font-weight);
+}
+
+#app {
+	/* Volle Breite des Editor-Panels statt zentrierter, fixer Spalte —
+	   wächst mit dem Panel, schrumpft aber nie unter eine nutzbare Größe. */
+	width: 100%;
+	min-width: 420px;
+	padding: 0 24px 64px;
+}
+
+h1,
+h2,
+h3 {
+	font-weight: 600;
+	margin: 0;
+}
+
+/* ---------- Karten: gruppieren die Inhalte je Tab wie im Chat-Panel ---------- */
+
+.card {
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius-lg);
+	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+	padding: 20px 20px 24px;
+}
+
+/* ---------- Tabs (Segmented Control) ---------- */
+
+.tabbar {
+	display: inline-flex;
+	gap: 2px;
+	margin-top: 14px;
+	margin-bottom: 20px;
+	padding: 3px;
+	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius-lg);
+}
+
+.tab {
+	appearance: none;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-md);
+	color: var(--vscode-descriptionForeground);
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	padding: 6px 14px;
+	cursor: pointer;
+}
+
+.tab:hover {
+	color: var(--vscode-editor-foreground);
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.tab.active {
+	color: var(--vscode-editor-foreground);
+	background-color: var(--vscode-button-secondaryBackground, var(--vscode-toolbar-hoverBackground));
+	font-weight: 600;
+}
+
+.tab:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.tab-panel {
+	animation: fade-in 80ms ease-out;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* ---------- Tab "Übersicht" ---------- */
+
+.field-group {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	width: 100%;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	min-width: 240px;
+}
+
+.field label {
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.text-input {
+	width: 100%;
+	min-width: 140px;
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	color: var(--vscode-input-foreground);
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: var(--radius-sm);
+	padding: 5px 8px;
+	outline: none;
+}
+
+.text-input::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.text-input:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.textarea {
+	resize: vertical;
+	min-height: 5.5em;
+	line-height: 1.4;
+}
+
+select.text-input {
+	padding: 4px 6px;
+	background-color: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+	border-color: var(--vscode-dropdown-border, var(--vscode-input-border, transparent));
+}
+
+/* Eigener Chevron statt des nativen Browser-Pfeils: der native Pfeil ist
+   Teil der Select-Box selbst und kann bei sehr schmalen Grid-Spalten mit
+   aus dem sichtbaren Bereich rutschen. Der Wrapper ist width:100%, damit er
+   sich wie das <select> vorher in die Zelle einfügt. */
+.select-wrap {
+	position: relative;
+	width: 100%;
+}
+
+select.has-chevron {
+	-webkit-appearance: none;
+	appearance: none;
+	/* Platz für den Chevron reservieren, damit lange Optionstexte nicht
+	   darunter verschwinden. */
+	padding-right: 22px;
+}
+
+.select-chevron {
+	position: absolute;
+	top: 50%;
+	right: 6px;
+	transform: translateY(-50%);
+	font-size: 13px;
+	color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+	opacity: 0.75;
+	pointer-events: none;
+}
+
+select.has-chevron:disabled ~ .select-chevron {
+	opacity: 0.4;
+}
+
+/* ---------- Markdown-Beschreibungsfelder (Klick zum Bearbeiten) ---------- */
+/* Zeigt standardmäßig gerendertes Markdown; ein Klick auf .md-preview blendet
+   die dahinterliegende, gleich große .md-editor-Textarea ein (siehe
+   renderMarkdownField in common.js). */
+
+.md-field {
+	width: 100%;
+}
+
+.md-preview {
+	width: 100%;
+	min-height: 26px;
+	cursor: text;
+	line-height: 1.4;
+}
+
+.md-preview:hover {
+	border-color: var(--vscode-input-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+}
+
+.md-preview:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.md-preview-empty {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.md-preview > *:first-child {
+	margin-top: 0;
+}
+
+.md-preview > *:last-child {
+	margin-bottom: 0;
+}
+
+.md-preview p {
+	margin: 0 0 0.75em;
+}
+
+.md-preview ul,
+.md-preview ol {
+	margin: 0 0 0.75em;
+	padding-left: 1.5em;
+}
+
+.md-preview li {
+	margin: 0.25em 0;
+}
+
+.md-preview code {
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.9em;
+	background-color: var(--vscode-textCodeBlock-background);
+	padding: 1px 5px;
+	border-radius: var(--radius-sm);
+}
+
+.md-preview a {
+	color: var(--vscode-textLink-foreground);
+}
+
+.md-preview a:hover {
+	color: var(--vscode-textLink-activeForeground);
+}
+
+textarea.md-editor {
+	/* Höhe wird per JS an den Inhalt angepasst (autoGrowCellTextarea) —
+	   ein manueller Ziehgriff würde damit kollidieren. */
+	resize: none;
+}
+
+/* Wichtig: KEIN unbedingtes `display: block` hier — das würde als
+   Autoren-Regel die UA-Regel `[hidden] { display: none }` aushebeln
+   (Autoren-CSS schlägt UA-CSS unabhängig von Spezifität), sodass die
+   Textarea trotz `hidden` sichtbar bliebe und die Beschreibung doppelt
+   (gerendert + roh) angezeigt würde. Nur sichtbar block-artig, wenn sie
+   tatsächlich nicht hidden ist. */
+textarea.md-editor:not([hidden]) {
+	display: block;
+}
+
+/* Im Spalten-Grid bleibt die Vorschau bewusst einzeilig statt automatisch zu
+   wachsen: überlanger Text wird per Ellipsis abgeschnitten. `text-overflow:
+   ellipsis` funktioniert zuverlässig nur an einem Block-Element wie diesem
+   <div> — an einer <textarea> (unser erster Versuch) wird die Ellipsis von
+   keiner der gängigen Browser-Engines gerendert, obwohl `overflow: hidden`
+   dort durchaus greift und den Text abschneidet. Da gerendertes Markdown
+   auch block-artige Kindelemente (Absätze, Listen) enthalten kann, werden
+   die hier zusätzlich auf `inline` gezwungen, damit sie keinen eigenen
+   Zeilenumbruch erzwingen. */
+.columns-table .md-preview {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.columns-table .md-preview * {
+	display: inline;
+	margin: 0;
+	padding: 0;
+	white-space: nowrap;
+}
+
+.columns-table .md-preview li:not(:last-child)::after {
+	content: ', ';
+}
+
+/* ---------- Tab "Spalten": Toolbar ---------- */
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+.toolbar-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+	background-color: var(--vscode-button-secondaryBackground, transparent);
+	border: 1px solid var(--vscode-button-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+	border-radius: var(--radius-md);
+	padding: 5px 12px 5px 10px;
+	cursor: pointer;
+}
+
+.toolbar-btn:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
+}
+
+.toolbar-btn:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.toolbar-btn .codicon {
+	font-size: 15px;
+}
+
+/* ---------- Tab "Spalten": Grid ---------- */
+
+.columns-table-wrap {
+	width: 100%;
+	/* Das Grid selbst bekommt sein eigenes horizontales Scrollen, sobald
+	   die Summe der Mindestbreiten seiner Spalten nicht mehr ins Panel
+	   passt — unabhängig vom (nur vertikalen) Scrollen der restlichen Seite. */
+	overflow-x: auto;
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius-lg);
+	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+.columns-table {
+	/* Startet als table-layout: auto, damit Spalten sich beim ersten Rendern
+	   inhaltsbasiert einpendeln können; table.js misst danach die tatsächlich
+	   benötigte Breite und schaltet auf table-layout: fixed um — erst damit
+	   sind per Hand gezogene <col>-Breiten zuverlässig maßgeblich. width:100%
+	   sorgt dafür, dass das Grid die volle Breite ausfüllt — den dabei
+	   übrigen Platz nimmt die breitenlose col-spacer-Spalte am Ende auf
+	   (das ist unter table-layout:fixed die Standard-Verteilungsregel für
+	   Spalten ohne eigene Breite). */
+	width: 100%;
+	table-layout: auto;
+	border-collapse: collapse;
+}
+
+.columns-table thead th {
+	position: sticky;
+	top: 0;
+	text-align: left;
+	font-size: 0.9em;
+	font-weight: 600;
+	color: var(--vscode-editor-foreground);
+	background-color: var(--vscode-keybindingTable-headerBackground, var(--vscode-editorWidget-background));
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+	white-space: nowrap;
+}
+
+/* Bewusst keine width hier: eine <col> ohne Breite bekommt unter
+   table-layout: fixed automatisch den kompletten übrigen Platz. */
+
+/* Ziehgriff am rechten Rand größenziehbarer Kopfzellen. Die <th> ist bereits
+   durch position: sticky positioniert, das reicht als Anker für den
+   absolut positionierten Griff. */
+.col-resize-handle {
+	position: absolute;
+	top: 0;
+	right: -3px;
+	bottom: 0;
+	width: 6px;
+	cursor: col-resize;
+	z-index: 2;
+}
+
+.col-resize-handle:hover {
+	background-color: var(--vscode-focusBorder);
+	opacity: 0.5;
+}
+
+body.col-resizing {
+	cursor: col-resize;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+body.col-resizing .col-resize-handle {
+	background-color: var(--vscode-focusBorder);
+	opacity: 0.5;
+}
+
+.columns-table tbody tr {
+	border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+}
+
+.columns-table tbody tr:last-child {
+	border-bottom: none;
+}
+
+.columns-table tbody tr:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.columns-table td {
+	padding: 4px 6px;
+	vertical-align: middle;
+	/* Sicherheitsnetz: sollte ein Zellinhalt trotzdem einmal breiter als
+	   seine Spalte werden, wird er hier abgeschnitten statt sichtbar in die
+	   Nachbarzelle überzulaufen. */
+	overflow: hidden;
+}
+
+.columns-table td.col-num {
+	padding: 4px 8px;
+}
+
+/* Zellen wirken wie beschriftungsfreie Grid-Felder: Rahmen/Hintergrund
+   erscheinen erst bei Hover/Fokus, ähnlich einem inline editierbaren
+   Datenbank-Grid statt eines klassischen Formulars. */
+.columns-table .cell-input {
+	width: 100%;
+	/* .text-input bringt min-width: 140px mit (sinnvoll für die freistehenden
+	   Felder der Übersicht) — im Grid hat aber z. B. Datentyp (120px) eine
+	   schmalere Spalten-Mindestbreite.
+	   Ohne dieses Zurücksetzen zwingt sich das Feld breiter als seine Zelle
+	   und läuft sichtbar in die nächste Spalte über (z. B. über die
+	   Beschreibung). Die eigentlichen Untergrenzen setzen die col-*-Regeln. */
+	min-width: 0;
+	background-color: transparent;
+	border-color: transparent;
+}
+
+.columns-table tr:hover .cell-input {
+	background-color: var(--vscode-input-background);
+}
+
+.columns-table .cell-input:hover {
+	border-color: var(--vscode-input-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+}
+
+.columns-table .cell-input:focus {
+	background-color: var(--vscode-input-background);
+	border-color: var(--vscode-focusBorder);
+}
+
+/* Beschreibung pro Spalte: nutzt dasselbe Vorschau-/Editor-Paar wie die
+   Tabellenbeschreibung im Übersicht-Tab (renderMarkdownField, gridCell:
+   true) — mit Markdown-Unterstützung. Im Grid wird die Vorschau abweichend
+   einzeilig mit Ellipsis bei Überlänge dargestellt statt automatisch auf
+   die volle Höhe zu wachsen, siehe unten bei ".columns-table .md-preview". */
+
+.col-num {
+	width: 36px;
+	min-width: 36px;
+	text-align: right;
+	color: var(--vscode-descriptionForeground);
+	font-variant-numeric: tabular-nums;
+}
+
+.col-name {
+	min-width: 140px;
+}
+
+.col-type {
+	min-width: 120px;
+}
+
+.col-desc {
+	min-width: 180px;
+}
+
+.col-flag {
+	width: 40px;
+	min-width: 40px;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.col-actions {
+	width: 36px;
+	min-width: 36px;
+	text-align: center;
+}
+
+/* Aktionszelle mit mehreren Knöpfen (Table Editor: verschieben,
+   aus-/einblenden, entfernen — siehe renderColumnRow in table.js). */
+.col-actions-wide {
+	width: 118px;
+	min-width: 118px;
+}
+
+.row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+}
+
+/* „Ausgeblendete“ Spalte (Auge-Umschalter, rein visueller Merkzustand ohne
+   weitere Funktion): Zeileninhalt gedimmt, die Aktionen bleiben voll
+   sichtbar/bedienbar. */
+.columns-table tr.column-hidden td:not(.col-actions) {
+	opacity: 0.45;
+}
+
+.col-flag input[type='checkbox'] {
+	width: 15px;
+	height: 15px;
+	margin: 0;
+	accent-color: var(--vscode-inputOption-activeBackground, var(--vscode-focusBorder));
+	cursor: pointer;
+}
+
+/* ---------- FK-Spalten (referenzierte Tabelle/Spalte) ---------- */
+/* Immer sichtbare Grid-Spalten statt einer aufklappbaren Detailzeile;
+   nur aktiv (nicht ausgegraut), solange FK für die Zeile angehakt ist. */
+
+.col-ref-table {
+	min-width: 170px;
+}
+
+.col-ref-column {
+	min-width: 150px;
+}
+
+.columns-table .cell-input:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* ---------- Feld-Validierung (z. B. FK ohne Tabelle/ungültige Kardinalität) ---------- */
+/* Nur farbliche Markierung, kein Fehlertext im Grid — die ausführliche
+   Meldung steht in VS Codes Problems-Ansicht (siehe table/editorProvider.ts);
+   am Feld liegt sie zusätzlich als Tooltip (title-Attribut) an. */
+
+.has-error {
+	border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground)) !important;
+}
+
+/* ---------- Icon-Buttons (z. B. Spalte entfernen) ---------- */
+
+.icon-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	color: var(--vscode-icon-foreground);
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	opacity: 0;
+}
+
+.columns-table tr:hover .icon-button,
+.icon-button:focus-visible,
+.icon-button:focus {
+	opacity: 1;
+}
+
+/* Deaktivierte Aktionen (z. B. „nach oben“ in der ersten Zeile) erscheinen
+   beim Zeilen-Hover nur angedeutet statt voll sichtbar. */
+.columns-table tr:hover .icon-button:disabled {
+	opacity: 0.3;
+}
+
+.icon-button:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Rote Hover-Farbe nur für destruktive Aktionen (Zeile/Spalte entfernen) —
+   nicht für neutrale wie Verschieben, Aus-/Einblenden oder Öffnen. */
+.icon-button-danger:hover {
+	color: var(--vscode-errorForeground);
+}
+
+.icon-button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.icon-button:disabled {
+	cursor: not-allowed;
+}
+
+.icon-button:disabled:hover {
+	background-color: transparent;
+	color: var(--vscode-icon-foreground);
+}
+
+.link-button {
+	color: var(--vscode-textLink-foreground);
+	background: transparent;
+	border: none;
+	padding: 0;
+	font-size: inherit;
+	cursor: pointer;
+}
+
+.link-button:hover {
+	color: var(--vscode-textLink-activeForeground);
+	text-decoration: underline;
+}
+
+.link-button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.codicon {
+	font-size: 16px;
+}
+
+/* ---------- Leerzustand ---------- */
+
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 40px 16px;
+	color: var(--vscode-descriptionForeground);
+	border: 1px dashed var(--card-border);
+	border-radius: var(--radius-lg);
+}
+
+.empty-state .codicon {
+	font-size: 28px;
+	opacity: 0.7;
+}
+
+.empty-state p {
+	margin: 0;
+}
+
+/* ---------- Fehlerzustand ---------- */
+
+.error-state {
+	max-width: 560px;
+	margin: 48px auto;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+}
+
+.error-icon {
+	font-size: 32px;
+	color: var(--vscode-editorWarning-foreground);
+	margin-bottom: 4px;
+}
+
+.error-state h2 {
+	margin: 0;
+}
+
+.error-state p {
+	color: var(--vscode-descriptionForeground);
+	margin: 0;
+}
+
+.error-detail {
+	width: 100%;
+	text-align: left;
+	white-space: pre-wrap;
+	word-break: break-word;
+	background-color: var(--vscode-textCodeBlock-background);
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius-md);
+	padding: 10px 12px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: var(--vscode-editor-font-size);
+	color: var(--vscode-errorForeground);
+}
+
+.hint {
+	font-size: 0.9em;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* ---------- Projekt-Editor: Python-Interpreter-Zeile (Übersicht-Tab) ---------- */
+
+.python-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.python-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.python-status-ok {
+	color: var(--vscode-editor-foreground);
+}
+
+.python-status-ok .codicon {
+	color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, var(--vscode-editor-foreground)));
+}
+
+.python-status-warn {
+	color: var(--vscode-editor-foreground);
+}
+
+.python-status-warn .codicon {
+	color: var(--vscode-editorWarning-foreground);
+}
+
+/* ---------- Projekt-Editor: Tabellen-Tab ---------- */
+
+.project-tables-table .path-cell {
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.92em;
+}
+
+.col-records-wide {
+	min-width: 220px;
+}
+
+.project-tables-table .cell-input {
+	max-width: 160px;
+}
+
+/* „Datei nicht gefunden“-Hinweis in der Datensätze-Zelle (siehe renderTableRow in project.js). */
+.missing-file-note {
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.92em;
+}
+
+/* Datensätze-Eingabefeld: Ziffern mit fester Breite (Tausendertrennzeichen,
+   siehe renderRecordsInput in project.js) — linksbündig wie die übrigen
+   Grid-Felder. */
+.records-input {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Datensätze-Zelle: Tabellenart-Icon plus Eingabefeld nebeneinander (siehe
+   renderTableRow in project.js). */
+.records-cell-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+/* Kennzeichnet vor dem Eingabefeld die Art der Tabelle: primär
+   (Schlüssel-Icon, feste Gesamtanzahl) oder referenziert/sekundär
+   (Referenz-Icon, Anzahl je Datensatz der referenzierten Tabelle, auch
+   als Bereich "1..3"). */
+.records-type-icon {
+	flex: 0 0 auto;
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.row-warning-icon {
+	margin-left: 6px;
+	font-size: 14px;
+	color: var(--vscode-editorWarning-foreground);
+}
+
+/* Etwas Luft hinter den inhaltsbasiert bemessenen Zellinhalten (Name, Pfad):
+   fließt über das td-Padding direkt in die automatische Spaltenbreite ein
+   (siehe fixColumnWidths in common.js), sodass der Inhalt nicht direkt an
+   der nächsten Spalte klebt. */
+.project-tables-table td.tree-name-cell,
+.project-tables-table td.path-cell {
+	padding-right: 18px;
+}
+
+/* ---------- Projekt-Editor: Tabellen-Tab — Suche + Auswahlbaum ---------- */
+
+.tables-search {
+	position: relative;
+	margin-bottom: 10px;
+}
+
+.tables-search .text-input {
+	padding-left: 28px;
+}
+
+.tables-search-icon {
+	position: absolute;
+	top: 50%;
+	left: 8px;
+	transform: translateY(-50%);
+	font-size: 14px;
+	color: var(--vscode-input-placeholderForeground);
+	pointer-events: none;
+}
+
+/* Namensraum-Zwischenzeile (aus den Punkt-getrennten Segmenten des
+   `schema`-Felds, z. B. "ag.cor.sapbp" -> drei Ebenen) — eigener
+   Hintergrund, damit sie sich klar von den Tabellen-Zeilen abhebt, und
+   auf-/zuklappbar (siehe renderGroupRow in project.js). */
+.tree-group-row {
+	cursor: pointer;
+	background-color: var(--vscode-sideBarSectionHeader-background, var(--vscode-keybindingTable-headerBackground));
+}
+
+.tree-group-row:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.tree-group-row:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.tree-group-cell {
+	padding: 5px 6px;
+}
+
+.tree-group-text {
+	font-weight: 600;
+	font-size: 0.9em;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Gemeinsame Zeilen-Struktur für Namensraum- und Tabellen-Zeilen: Einrückung
+   nach Baumtiefe, dann ein Klapp-Pfeil (nur Namensräume) bzw. gleich
+   breiter Platzhalter (Tabellen) — nur so richten sich Icon und Text beider
+   Zeilenarten auf derselben Tiefe exakt aneinander aus (siehe
+   renderTreePrefix in project.js). */
+.tree-row {
+	/* Block-Flex statt inline-flex: eine Inline-Box säße auf der Text-
+	   Grundlinie der Zelle, und die Zeilenbox reserviert unter der
+	   Grundlinie Platz für Unterlängen — der Zeileninhalt rutschte dadurch
+	   sichtbar ein Stück nach unten. Als Block-Element zentriert ihn das
+	   vertical-align: middle der Zelle exakt mittig. */
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+}
+
+.tree-indent {
+	flex: 0 0 auto;
+}
+
+.tree-twistie,
+.tree-twistie-spacer {
+	flex: 0 0 16px;
+	width: 16px;
+	height: 16px;
+}
+
+.tree-twistie {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--vscode-icon-foreground);
+}
+
+.tree-twistie .codicon {
+	font-size: 16px;
+}
+
+/* Checkbox in der Baumzeile selbst (eingerückt, vor dem Datei-Icon) statt in
+   einer eigenen Spalte ganz links — wie in VS Codes eigenen Baum-Ansichten
+   (siehe renderTableRow in project.js). */
+.tree-checkbox {
+	flex: 0 0 auto;
+	width: 15px;
+	height: 15px;
+	margin: 0 2px 0 0;
+	accent-color: var(--vscode-inputOption-activeBackground, var(--vscode-focusBorder));
+	cursor: pointer;
+}
+
+.tree-checkbox:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.tree-namespace-icon,
+.tree-file-icon {
+	position: relative;
+	flex: 0 0 16px;
+	width: 16px;
+	height: 16px;
+}
+
+/* Zwei <img> pro Icon (hell/dunkel, siehe renderThemedIcon in project.js) —
+   nur die zum aktuellen VS-Code-Theme passende Variante wird gezeigt. VS
+   Code setzt dafür automatisch eine dieser Klassen auf <body> (siehe
+   https://code.visualstudio.com/api/extension-guides/webview#theming-webview-content). */
+.tree-namespace-icon img,
+.tree-file-icon img {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 16px;
+	height: 16px;
+	display: none;
+}
+
+/* Im hellen High-Contrast-Theme trägt <body> beide Klassen
+   (vscode-high-contrast UND vscode-high-contrast-light) — ohne das :not()
+   würden dort beide Icon-Varianten übereinander angezeigt. */
+body.vscode-dark .icon-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) .icon-dark {
+	display: block;
+}
+
+body.vscode-light .icon-light,
+body.vscode-high-contrast-light .icon-light {
+	display: block;
+}
+
+.tree-table-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ---------- Lookup-Editor: Werte-Grid ---------- */
+
+/* Kopfzelle einer Wertespalte: Umbenennen-Eingabefeld plus „Spalte
+   entfernen“-Knopf nebeneinander (siehe renderColumnHeader in lookup.js). */
+.header-cell {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.header-name-input {
+	font-weight: 600;
+}
+
+/* „Spalte entfernen“ erscheint wie die Zeilen-Aktionen erst bei Hover/Fokus —
+   das bestehende Pendant deckt nur tbody-Zeilen (tr:hover) ab. */
+.lookup-table thead th:hover .icon-button {
+	opacity: 1;
+}
+
+.col-value-header {
+	min-width: 140px;
+}
+
+/* Phantom-Spalte „+ Neue Spalte“: bewusst dezenter als echte Spalten. Feste
+   Breite, damit sie unter table-layout: fixed (siehe fixColumnWidths in
+   common.js) nicht wie die Füll-Spalte den ganzen Restplatz aufnimmt. */
+.col-new-column {
+	width: 140px;
+	min-width: 140px;
+}
+
+.new-column-input {
+	border: 1px dashed var(--card-border);
+	font-weight: 400;
+}
+
+.new-column-input:focus {
+	border-style: solid;
+}
+
+.col-weight {
+	min-width: 110px;
+}
+
+/* Gewichtszelle: Eingabefeld plus festes „%“-Suffix (siehe renderValueRow in lookup.js). */
+.weight-cell-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.weight-input {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.weight-suffix {
+	flex: 0 0 auto;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Leerzustand innerhalb des Grids (Kopfzeile bleibt sichtbar, damit sich
+   Spalten auch ohne Zeilen anlegen/umbenennen lassen). */
+.empty-grid-cell {
+	padding: 24px 16px;
+	text-align: center;
+	color: var(--vscode-descriptionForeground);
+}
+
+.empty-grid-cell .link-button {
+	margin-left: 6px;
+}
+
+/* Summenzeile (siehe renderTotalRow in lookup.js) — rein informativ, ohne
+   Prüfung: die Gewichte dürfen in Summe beliebig von 100 % abweichen. */
+.total-row td {
+	padding: 6px 8px;
+	border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+	font-weight: 600;
+}
+
+.total-row .total-label {
+	text-align: right;
+	color: var(--vscode-descriptionForeground);
+}
+
+.total-row .total-value {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	/* Gleiche rechte Innenkante wie die Gewichtsfelder darüber: deren
+	   td-Padding (6px) + Feld-Padding (8px) + „%“-Suffix samt Lücke. */
+	padding-right: 28px;
+}
+
+/* ---------- Lookup-Editor: Verteilungs-Diagramm (Übersicht-Tab) ---------- */
+
+.overview-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.chart-title {
+	font-size: 0.95em;
+	margin-bottom: 14px;
+}
+
+.chart-empty {
+	margin: 0;
+	color: var(--vscode-descriptionForeground);
+}
+
+.lookup-chart {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.chart-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	border-radius: var(--radius-sm);
+	padding: 1px 4px;
+}
+
+.chart-row:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+/* Zeilen-Beschriftung und Wert bleiben in Text-Farben (Theme-Tokens) — nur
+   der Balken selbst trägt die Serienfarbe. */
+.chart-label {
+	flex: 0 0 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.92em;
+}
+
+.chart-track {
+	flex: 1 1 auto;
+	height: 12px;
+	background-color: color-mix(in srgb, var(--vscode-editor-foreground) 7%, transparent);
+	border-radius: 0 4px 4px 0;
+	overflow: hidden;
+}
+
+/* Balken: an der Grundlinie (links) eckig, am Datenende 4px gerundet.
+   Listen-Grün passend zum .lkp-Datei-Icon; fürs helle Theme eine dunklere
+   Variante desselben Farbtons (Kontrast auf hellem Grund), analog zu den
+   hell/dunkel-Icon-Paaren in icons/. */
+.chart-bar {
+	height: 100%;
+	width: 0;
+	background-color: #23cc99;
+	border-radius: 0 4px 4px 0;
+}
+
+body.vscode-light .chart-bar,
+body.vscode-high-contrast-light .chart-bar {
+	background-color: #0e8a66;
+}
+
+.chart-value {
+	flex: 0 0 64px;
+	font-variant-numeric: tabular-nums;
+	font-size: 0.92em;
+}
+
+/* ---------- Projekt-Editor: Kontextmenü der Namensraum-Zeilen ---------- */
+/* Webviews haben kein natives VS-Code-Kontextmenü, daher ein eigenes,
+   über die Menü-Theme-Variablen gestyltes (siehe showGroupContextMenu in
+   project.js). */
+
+.context-menu {
+	position: fixed;
+	z-index: 100;
+	min-width: 170px;
+	padding: 4px;
+	background-color: var(--vscode-menu-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+	color: var(--vscode-menu-foreground, var(--vscode-foreground));
+	border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+	border-radius: var(--radius-md);
+	box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
+}
+
+.context-menu:focus {
+	outline: none;
+}
+
+.context-menu-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	color: inherit;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-sm);
+	padding: 4px 10px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.context-menu-item:hover:not(:disabled),
+.context-menu-item:focus {
+	background-color: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+	color: var(--vscode-menu-selectionForeground, inherit);
+	outline: none;
+}
+
+.context-menu-item:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.context-menu-separator {
+	height: 1px;
+	margin: 4px 6px;
+	background-color: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, var(--vscode-panel-border)));
+}

@@ -1,0 +1,119 @@
+/**
+ * Übersetzte Texte für die Lookup-Webview — gleiche Mechanik wie
+ * table/webviewStrings.ts: `vscode.l10n` ist in der Webview nicht verfügbar,
+ * daher schickt der Extension-Host das fertige Text-Objekt einmalig beim
+ * Start (siehe lookup/editorProvider.ts).
+ */
+export interface LookupWebviewStrings {
+	tabOverview: string;
+	tabValues: string;
+
+	fieldNameLabel: string;
+	fieldNamePlaceholder: string;
+	fieldDescriptionLabel: string;
+	fieldDescriptionPlaceholder: string;
+
+	chartTitle: string;
+	chartEmpty: string;
+	/** {0} = Zeilennummer — Fallback-Beschriftung für eine Zeile ohne Wert in der ersten Spalte. */
+	chartRowFallback: string;
+
+	addRowButton: string;
+	addColumnButton: string;
+
+	colHeaderWeight: string;
+	columnNamePlaceholder: string;
+	newColumnPlaceholder: string;
+	valuePlaceholder: string;
+	removeRowLabel: string;
+	removeColumnLabel: string;
+
+	totalLabel: string;
+	weightRequiredError: string;
+	weightInvalidError: string;
+
+	emptyStateText: string;
+	emptyStateAction: string;
+
+	errorTitle: string;
+	errorBody: string;
+	errorHint: string;
+}
+
+const en: LookupWebviewStrings = {
+	tabOverview: 'Overview',
+	tabValues: 'Values',
+
+	fieldNameLabel: 'Name',
+	fieldNamePlaceholder: 'e.g. currencies',
+	fieldDescriptionLabel: 'Description',
+	fieldDescriptionPlaceholder: 'What is this lookup list used for? Supports Markdown.',
+
+	chartTitle: 'Weight distribution',
+	chartEmpty: 'No values yet — add rows in the Values tab to see their distribution here.',
+	chartRowFallback: 'Row {0}',
+
+	addRowButton: 'Add Row',
+	addColumnButton: 'Add Column',
+
+	colHeaderWeight: 'Weight (%)',
+	columnNamePlaceholder: 'Column name',
+	newColumnPlaceholder: '+ New column',
+	valuePlaceholder: 'Value',
+	removeRowLabel: 'Remove row',
+	removeColumnLabel: 'Remove column',
+
+	totalLabel: 'Total',
+	weightRequiredError: 'Enter a weight in percent.',
+	weightInvalidError: 'Invalid weight (use e.g. "25" or "12.5").',
+
+	emptyStateText: 'No values yet.',
+	emptyStateAction: 'Add first row',
+
+	errorTitle: 'Unable to display file',
+	errorBody: 'This .lkp file contains invalid CSV and cannot be shown in the visual editor.',
+	errorHint: 'Use "Reopen Editor With…" (right-click the tab) to open it as text and fix the error.',
+};
+
+const de: LookupWebviewStrings = {
+	tabOverview: 'Übersicht',
+	tabValues: 'Werte',
+
+	fieldNameLabel: 'Name',
+	fieldNamePlaceholder: 'z. B. currencies',
+	fieldDescriptionLabel: 'Beschreibung',
+	fieldDescriptionPlaceholder: 'Wofür wird diese Nachschlageliste verwendet? Markdown wird unterstützt.',
+
+	chartTitle: 'Gewichtsverteilung',
+	chartEmpty: 'Noch keine Werte — im Tab „Werte“ Zeilen hinzufügen, um hier ihre Verteilung zu sehen.',
+	chartRowFallback: 'Zeile {0}',
+
+	addRowButton: 'Zeile hinzufügen',
+	addColumnButton: 'Spalte hinzufügen',
+
+	colHeaderWeight: 'Gewicht (%)',
+	columnNamePlaceholder: 'Spaltenname',
+	newColumnPlaceholder: '+ Neue Spalte',
+	valuePlaceholder: 'Wert',
+	removeRowLabel: 'Zeile entfernen',
+	removeColumnLabel: 'Spalte entfernen',
+
+	totalLabel: 'Summe',
+	weightRequiredError: 'Gewicht in Prozent eingeben.',
+	weightInvalidError: 'Ungültiges Gewicht (z. B. „25“ oder „12,5“ verwenden).',
+
+	emptyStateText: 'Noch keine Werte vorhanden.',
+	emptyStateAction: 'Erste Zeile hinzufügen',
+
+	errorTitle: 'Datei kann nicht angezeigt werden',
+	errorBody: 'Diese .lkp-Datei enthält kein gültiges CSV und kann im visuellen Editor nicht dargestellt werden.',
+	errorHint: 'Über „Reopen Editor With…“ (Rechtsklick auf den Tab) lässt sich die Datei als Text öffnen und der Fehler beheben.',
+};
+
+const CATALOG: Record<string, LookupWebviewStrings> = { en, de };
+
+/** Wählt den Text-Katalog passend zur VS-Code-Anzeigesprache (`vscode.env.language`). */
+export function getLookupWebviewStrings(vscodeLanguage: string): LookupWebviewStrings {
+	const lang = vscodeLanguage.toLowerCase().split('-')[0];
+	return CATALOG[lang] ?? en;
+}

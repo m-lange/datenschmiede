@@ -1,0 +1,10 @@
+# Datenschmiede Nachschlageliste
+# name: order_status
+# description: Statusverteilung für Shop-Bestellungen (siehe shop_orders.td) — Beispiel mit nur einer Wertespalte.
+"status";"weight"
+"open";"15"
+"paid";"20"
+"shipped";"25"
+"delivered";"30"
+"cancelled";"6"
+"returned";"4"

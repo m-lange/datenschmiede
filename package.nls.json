@@ -1,0 +1,11 @@
+{
+	"extension.displayName": "Datenschmiede: Table Editor",
+	"extension.description": "Visual editor for .td table definitions (TOML-based), the foundation for a synthetic test data generator.",
+	"language.td.alias": "Table Definition",
+	"language.tdproject.alias": "Test Data Project",
+	"language.lkp.alias": "Lookup List",
+	"command.newTable.title": "New Table…",
+	"command.newProject.title": "New Test Data Project…",
+	"command.newLookup.title": "New Lookup List…",
+	"command.selectPythonInterpreter.title": "Select Python Interpreter…"
+}

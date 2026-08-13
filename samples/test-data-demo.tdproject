@@ -1,0 +1,14 @@
+# Datenschmiede Testdatenprojekt
+name = "test-data-demo"
+description = "**Beispiel** Testdatenprojekt"
+python_path = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+python_id = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+
+[[tables]]
+path = "fin_cost_centers.td"
+
+[[tables]]
+path = "fin_invoices.td"
+
+[[tables]]
+path = "sapbp_business_partners.td"

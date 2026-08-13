@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: currencies
+# description: Beispiel-Nachschlageliste: Verteilung der Währungen für die Testdaten-Generierung.
+"code";"name";"";"hallo";"weight"
+"EUR";"Euro";"";"";"55"
+"USD";"US-Dollar";"";"";"25"
+"GBP";"Britisches Pfund";"";"";"10"
+"CHF";"Schweizer Franken";"";"";"7"
+"JPY";"Japanischer Yen";"";"";"3"

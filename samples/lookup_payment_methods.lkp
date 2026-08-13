@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: payment_methods
+# description: Verteilung der Zahlarten für Shop-Bestellungen (siehe shop_payments.td).
+"code";"name";"weight"
+"invoice";"Rechnung";"35"
+"credit_card";"Kreditkarte";"25"
+"paypal";"PayPal";"20"
+"direct_debit";"Lastschrift";"15"
+"prepayment";"Vorkasse";"5"
