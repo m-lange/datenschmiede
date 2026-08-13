@@ -255,10 +255,13 @@ Referenziert wird ein Generator über seinen **Namen** (`custom:<name>`),
 nicht den Dateinamen; wird die Datei gelöscht oder der Name geändert,
 melden betroffene Tabellen das als Warnung. Beispiele:
 [`samples/generators/sequential_id.tdgen`](samples/generators/sequential_id.tdgen)
-(fortlaufende Kennungen wie `ORD-001000`, vektorisiert) und
+(fortlaufende Kennungen wie `ORD-001000`, vektorisiert),
 [`samples/generators/tracking_code.tdgen`](samples/generators/tracking_code.tdgen)
 (Sendungsnummern mit Tabellen-/Spalten-Referenz auf eine andere Tabelle
-via `ctx.table`).
+via `ctx.table`) und
+[`samples/generators/related_sum.tdgen`](samples/generators/related_sum.tdgen)
+(Aggregation: Summe einer Spalte einer anderen Tabelle, gruppiert nach
+einem Schlüssel — `SUM(order_items.quantity) GROUP BY order_id`).
 
 ## Ausgabe je Tabelle (Dateiname + CSV)
 

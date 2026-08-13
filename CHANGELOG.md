@@ -33,9 +33,10 @@
 - **Neue Beispiel-Suite „Webshop Demo“** (`samples/`, komplett erneuert):
   fünf Tabellen in zwei Namensräumen (`shop.core.customers`/`products`,
   `shop.sales.orders`/`order_items`/`shipments`) mit FK-Ketten über drei
-  Ebenen, zwei Nachschlagelisten (`countries`, `order_status`), zwei
+  Ebenen, zwei Nachschlagelisten (`countries`, `order_status`), drei
   benutzerdefinierte Generatoren (`sequential_id`, `tracking_code` mit
-  Tabellen-Referenz via `ctx.table`) und ein fertiges Projekt
+  Tabellen-Referenz via `ctx.table`, `related_sum` — Summe über eine
+  andere Tabelle als vektorisiertes `groupby`) und ein fertiges Projekt
   `webshop-demo.tdproject` mit Ausgabeordner-Vorlage — jede Datei mit
   ausführlicher Markdown-Beschreibung der demonstrierten Funktionen.
   Faker um die Provider `boolean`, `date_this_year` und

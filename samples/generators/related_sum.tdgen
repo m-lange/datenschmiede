@@ -1,0 +1,72 @@
+# Datenschmiede Generator
+name = "related_sum"
+description = """
+**Aggregation über eine andere Tabelle**: summiert eine numerische Spalte
+einer referenzierten Tabelle, gruppiert nach einem Schlüssel — z. B. die
+*Summe der Positionsmengen je Bestellung* (`SUM(order_items.quantity)
+GROUP BY order_id`).
+
+**Parameter:**
+
+- `source_table` *(Pflicht)*: Tabelle, deren Zeilen summiert werden
+- `value_column` *(Pflicht)*: die zu summierende (numerische) Spalte —
+  die Auswahl folgt automatisch der gewählten Tabelle
+- `match_column` *(Pflicht)*: Schlüsselspalte der referenzierten Tabelle,
+  nach der gruppiert wird (z. B. deren FK-Spalte)
+- `key_column` *(Pflicht)*: Spalte **dieser** Tabelle, deren Werte mit
+  `match_column` verglichen werden (freie Eingabe, z. B. `order_id`)
+
+**Was dieses Beispiel zeigt:**
+
+- vektorisierte Aggregation mit pandas: `groupby(...).sum()` plus `map`
+  über die eigenen Schlüsselwerte (`ctx.column`) — kein Schleifen-Code
+- die referenzierte Tabelle wird automatisch mit ausgewählt und **vor**
+  dieser Tabelle generiert; Schlüssel ohne Treffer ergeben `0`
+- **Achtung Zyklus**: die Spalte darf nicht in einer Tabelle liegen, die
+  von `source_table` selbst per Fremdschlüssel referenziert wird (z. B.
+  Bestellsumme direkt in `orders` über `order_items` → die
+  Problems-Ansicht meldet die zirkuläre Referenz). Hier lebt sie deshalb
+  in `shipments`, das *nach* den Positionen generiert wird
+"""
+
+[[parameters]]
+name = "source_table"
+type = "table"
+description = "Tabelle, deren Zeilen summiert werden."
+required = true
+
+[[parameters]]
+name = "value_column"
+type = "column"
+description = "Zu summierende (numerische) Spalte der referenzierten Tabelle."
+required = true
+
+[[parameters]]
+name = "match_column"
+type = "column"
+description = "Schlüsselspalte der referenzierten Tabelle, nach der gruppiert wird."
+required = true
+
+[[parameters]]
+name = "key_column"
+type = "string"
+description = "Spalte dieser Tabelle, deren Werte mit match_column verglichen werden (z. B. \"order_id\")."
+required = true
+
+[code]
+generate = """
+values = ctx.pd.to_numeric(ctx.pd.Series(ctx.table(params["source_table"], params["value_column"])), errors="coerce").fillna(0)
+keys = ctx.pd.Series(ctx.table(params["source_table"], params["match_column"]))
+totals = values.groupby(keys.values).sum()
+own_keys = ctx.pd.Series(ctx.column(params["key_column"]))
+result = own_keys.map(totals).fillna(0)
+if (result % 1 == 0).all():
+    result = result.astype("int64")
+return result
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"SUM({params.get('value_column', '?')}) je {params.get('key_column', '?')}"
+"""

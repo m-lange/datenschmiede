@@ -16,6 +16,14 @@ per `ctx.table(...)` zufällig aus `shop.core.customers.country` gezogen —
 - wird die referenzierte Tabelle/Spalte später umbenannt oder gelöscht,
   meldet die Problems-Ansicht das als **Warnung** an dieser Spalte
 
+`total_quantity` demonstriert den Generator `related_sum`: eine
+**Aggregation** über eine andere Tabelle — die Summe von
+`order_items.quantity`, gruppiert nach `order_id` und über die eigene
+`order_id`-Spalte zugeordnet (`SUM(...) GROUP BY ...` als vektorisiertes
+pandas-`groupby`). Die Sendungen entstehen *nach* den Positionen, deshalb
+ist die Summe hier möglich (in `orders` selbst wäre sie eine zirkuläre
+Referenz).
+
 Der Dateiname demonstriert die Variable `{datetime}` (Datum + Uhrzeit des
 Laufs); geschrieben wird mit `UTF-8 (BOM)` — praktisch für Excel.
 """
@@ -66,6 +74,19 @@ generator = "custom:tracking_code"
 carrier = "DHL"
 origin_table = "shop.core.customers"
 origin_column = "country"
+
+[[columns]]
+name = "total_quantity"
+type = "integer"
+pk = false
+fk = false
+description = "Gesamtstückzahl der Sendung — **Summe** von `order_items.quantity` je `order_id` (benutzerdefinierter Generator `related_sum`)"
+generator = "custom:related_sum"
+[columns.generator_params]
+source_table = "shop.sales.order_items"
+value_column = "quantity"
+match_column = "order_id"
+key_column = "order_id"
 
 [[columns]]
 name = "shipped_at"

@@ -3,8 +3,8 @@ name = "Webshop Demo"
 description = """
 **Durchgängiges Beispielprojekt** über alle Funktionen der Extension: ein
 kleiner Webshop mit fünf Tabellen in zwei Namensräumen (`shop.core` und
-`shop.sales`), zwei Nachschlagelisten und zwei benutzerdefinierten
-Generatoren.
+`shop.sales`), zwei Nachschlagelisten und drei benutzerdefinierten
+Generatoren (`sequential_id`, `tracking_code`, `related_sum`).
 
 **Datenmodell** (Pfeile = Fremdschlüssel):
 
