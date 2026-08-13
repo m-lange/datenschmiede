@@ -596,6 +596,12 @@
 	function generatorDisplayString(column) {
 		const config = column.generator;
 		if (!config || !config.id) {
+			// FK-Spalten ohne gespeicherten Generator (z. B. aus älteren
+			// Dateien) verwenden implizit den Fremdschlüssel-Generator — auch
+			// so anzeigen.
+			if (column.fk) {
+				return `FK → ${(column.fkTable || '').trim() || '?'}.${(column.fkColumn || '').trim() || '?'}`;
+			}
 			return '';
 		}
 		if (config.id === 'foreign-key') {
@@ -1099,7 +1105,9 @@
 
 			// Einen gesetzten, aber nicht (mehr) vorhandenen Generator trotzdem
 			// anzeigen (z. B. .tdgen gelöscht/umbenannt), statt ihn zu verwerfen.
-			const currentId = column.generator ? column.generator.id : '';
+			// FK-Spalten ohne gespeicherten Generator zeigen den (implizit
+			// geltenden) Fremdschlüssel-Generator statt „— keiner —“.
+			const currentId = column.generator ? column.generator.id : column.fk ? 'foreign-key' : '';
 			if (currentId && !available.some((o) => o.id === currentId)) {
 				const opt = /** @type {HTMLOptionElement} */ (
 					el('option', { text: currentId + strings.generatorNotFoundSuffix })
@@ -1115,8 +1123,10 @@
 
 		/** Frischt Anzeige-Text, Stift-Zustand und Warnungs-Markierung auf. */
 		function refresh() {
-			const config = column.generator;
-			const option = config ? findGeneratorOption(config.id) : null;
+			// FK-Spalten ohne gespeicherten Generator verwenden implizit den
+			// Fremdschlüssel-Generator (siehe rebuildSelect).
+			const effectiveId = column.generator ? column.generator.id : column.fk ? 'foreign-key' : '';
+			const option = effectiveId ? findGeneratorOption(effectiveId) : null;
 			// Die gewählte Option zeigt den Anzeige-Text der Konfiguration
 			// (displayString) statt nur des Generator-Namens.
 			for (const opt of select.options) {
@@ -1124,7 +1134,7 @@
 					continue;
 				}
 				const optOption = findGeneratorOption(opt.value);
-				if (config && opt.value === config.id) {
+				if (effectiveId && opt.value === effectiveId) {
 					opt.textContent = generatorDisplayString(column) || (optOption ? optOption.label : opt.value);
 				} else if (optOption) {
 					opt.textContent = optOption.label;
@@ -1137,7 +1147,7 @@
 			if (warning) {
 				select.title = warning;
 			} else {
-				select.title = config ? generatorDisplayString(column) : '';
+				select.title = effectiveId ? generatorDisplayString(column) : '';
 			}
 		}
 

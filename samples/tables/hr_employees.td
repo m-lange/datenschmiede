@@ -5,6 +5,19 @@ description = """
 Mitarbeitende — referenziert **hr.core.departments**.
 """
 
+[output]
+file_name = "customers_{date}"
+format = "csv"
+
+[output.csv]
+delimiter = ";"
+quote_all = true
+decimal = "."
+date_format = "%Y-%m-%d"
+datetime_format = "%Y-%m-%d %H:%M:%S"
+include_header = true
+encoding = "utf-8"
+
 [[columns]]
 name = "id"
 type = "uuid"
