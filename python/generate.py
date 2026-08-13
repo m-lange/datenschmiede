@@ -109,30 +109,59 @@ class Context:
             raise RuntimeError(f'ctx.table("{label}", "{column}"): values are not available (yet)')
         return data[column]
 
-    def related(self, fk_column, column):
+    def related(self, fk_path, column):
         """
-        Zeilen-genau zugeordnete Werte der referenzierten (fuehrenden)
+        Zeilen-genau zugeordnete Werte einer referenzierten (fuehrenden)
         Tabelle: fuer jeden Datensatz dieser Tabelle der Wert von `column`
-        aus GENAU dem Datensatz, auf den die FK-Spalte `fk_column` zeigt —
-        ein Join ueber fk_table/fk_column statt einer Zufallsstichprobe
-        (ctx.table). Beispiel: in `orders` liefert
-        ctx.related("customer_id", "country") das Land des jeweils
-        bestellenden Kunden.
+        aus GENAU dem Datensatz, auf den die FK-Spalte zeigt — ein Join
+        ueber fk_table/fk_column statt einer Zufallsstichprobe (ctx.table).
+
+        `fk_path` darf auch ein Punkt-getrennter Pfad ueber MEHRERE
+        FK-Spalten sein — jeder weitere Teil ist eine FK-Spalte der zuvor
+        erreichten Tabelle. Beispiele (in `shipments`):
+
+            ctx.related("order_id", "status")                # Bestellung
+            ctx.related("order_id.customer_id", "country")   # -> Kunde
         """
-        col_def = next((c for c in self._table["columns"] if c["name"] == fk_column), None)
-        if col_def is None or not col_def.get("fk") or not col_def.get("fk_table"):
-            raise RuntimeError(f'ctx.related("{fk_column}", ...): "{fk_column}" is not a foreign key column of this table')
-        own_values = self._runner.data.get(self._table["label"], {}).get(fk_column)
-        if own_values is None:
-            raise RuntimeError(f'ctx.related("{fk_column}", ...): column "{fk_column}" is not generated yet')
-        parent_label, parent_key = col_def["fk_table"], col_def["fk_column"]
-        parent = self._runner.data.get(parent_label)
-        if parent is None or parent_key not in parent or column not in parent:
+        parts = [p.strip() for p in str(fk_path).split(".") if p.strip()]
+        if not parts:
+            raise RuntimeError('ctx.related: empty foreign key path')
+
+        table_def = self._table
+        keys = None
+        parent_key = None
+        for part in parts:
+            col_def = next((c for c in table_def["columns"] if c["name"] == part), None)
+            if col_def is None or not col_def.get("fk") or not col_def.get("fk_table"):
+                raise RuntimeError(
+                    f'ctx.related("{fk_path}", ...): "{part}" is not a foreign key column of {table_def["label"]}'
+                )
+            data = self._runner.data.get(table_def["label"], {})
+            if part not in data:
+                raise RuntimeError(f'ctx.related("{fk_path}", ...): column {table_def["label"]}.{part} is not generated yet')
+            if keys is None:
+                # Erster Sprung: die eigenen FK-Werte identifizieren die Datensaetze der naechsten Tabelle.
+                keys = pd.Series(data[part])
+            else:
+                # Weiterer Sprung: die bisherigen Schluessel in die FK-Werte
+                # der gerade erreichten Tabelle uebersetzen.
+                mapping = pd.Series(data[part].values, index=data[parent_key].values)
+                mapping = mapping[~mapping.index.duplicated(keep="first")]
+                keys = keys.map(mapping)
+            parent_label, parent_key = col_def["fk_table"], col_def["fk_column"]
+            next_table = self._runner.tables.get(parent_label)
+            if next_table is None:
+                raise RuntimeError(f'ctx.related("{fk_path}", ...): table {parent_label} is not part of this run')
+            table_def = next_table
+
+        final = self._runner.data.get(table_def["label"])
+        if final is None or parent_key not in final or column not in final:
             raise RuntimeError(
-                f'ctx.related("{fk_column}", "{column}"): values of {parent_label}.{column} are not available (yet)'
+                f'ctx.related("{fk_path}", "{column}"): values of {table_def["label"]}.{column} are not available (yet)'
             )
-        mapping = pd.Series(parent[column].values, index=parent[parent_key].values)
-        return pd.Series(own_values).map(mapping)
+        mapping = pd.Series(final[column].values, index=final[parent_key].values)
+        mapping = mapping[~mapping.index.duplicated(keep="first")]
+        return pd.Series(keys).map(mapping)
 
     def lookup(self, name, column):
         """Alle Werte einer Spalte einer Nachschlageliste (.lkp)."""

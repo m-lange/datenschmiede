@@ -13,8 +13,12 @@ Kunden**.
 - `fk_column` *(Pflicht)*: FK-Spalte **dieser** Tabelle (Parametertyp
   `own_column`), über die der zugehörige Datensatz bestimmt wird —
   z. B. `customer_id`
-- `source_column` *(Pflicht)*: Spaltenname in der referenzierten Tabelle,
-  dessen Wert übernommen wird — z. B. `country`
+- `via` *(optional)*: setzt den Weg über **mehrere Tabellen** fort —
+  Punkt-getrennte FK-Spalten der jeweils erreichten Tabelle. Beispiel in
+  `shipments`: `fk_column` = `order_id`, `via` = `customer_id` → Sendung
+  → Bestellung → **Kunde**
+- `source_column` *(Pflicht)*: Spaltenname in der zuletzt erreichten
+  Tabelle, dessen Wert übernommen wird — z. B. `country`
 
 **Was dieses Beispiel zeigt:**
 
@@ -22,8 +26,11 @@ Kunden**.
   referenzierten Tabelle (Join über `fk_table`/`fk_column` der FK-Spalte)
   — im Gegensatz zu `ctx.table(...)`, das *alle* Werte liefert und für
   Zufallsstichproben gedacht ist
-- die führende Tabelle ist über die FK-Spalte ohnehin Teil des Projekts
-  und wird vor dieser Tabelle generiert
+- der FK-Pfad darf **mehrstufig** sein
+  (`ctx.related("order_id.customer_id", "country")`) — jede Stufe ist
+  eine FK-Spalte der zuvor erreichten Tabelle
+- die führenden Tabellen sind über die FK-Ketten ohnehin Teil des
+  Projekts und werden vor dieser Tabelle generiert
 """
 
 [[parameters]]
@@ -33,18 +40,30 @@ description = "FK-Spalte dieser Tabelle, über die der zugehörige Datensatz der
 required = true
 
 [[parameters]]
+name = "via"
+type = "string"
+description = "Optional: weiterer FK-Pfad, Punkt-getrennt — z. B. \"customer_id\" für Sendung → Bestellung → Kunde."
+
+[[parameters]]
 name = "source_column"
 type = "string"
-description = "Spaltenname in der referenzierten Tabelle, dessen Wert übernommen wird (z. B. \"country\")."
+description = "Spaltenname in der zuletzt erreichten Tabelle, dessen Wert übernommen wird (z. B. \"country\")."
 required = true
 
 [code]
 generate = """
-return ctx.related(params["fk_column"], params["source_column"])
+path = params["fk_column"]
+via = (params.get("via") or "").strip()
+if via:
+    path = f"{path}.{via}"
+return ctx.related(path, params["source_column"])
 """
 parse_params = """
 return params
 """
 display_value = """
-return f"{params.get('fk_column', '?')} → {params.get('source_column', '?')}"
+path = params.get("fk_column", "?")
+if (params.get("via") or "").strip():
+    path = f"{path}.{params['via'].strip()}"
+return f"{path} → {params.get('source_column', '?')}"
 """

@@ -70,7 +70,7 @@ const en: GeneratorWebviewStrings = {
 	signatureFixedTooltip: 'This signature is fixed and cannot be changed — edit the body below.',
 	generateCellTitle: 'generate — required',
 	generateCellHint:
-		'Produces the column values: return a pandas Series of length n. Available: ctx.rng (numpy Generator), ctx.pd / ctx.np, ctx.faker(locale), ctx.column("name") for the generated values of another column of this table (same records), ctx.related("fk_column", "column") for row-aligned values of the referenced table joined via a foreign key column, ctx.table("schema.table", "column") for all values of another table, ctx.lookup("list", "column") for lookup list values.',
+		'Produces the column values: return a pandas Series of length n. Available: ctx.rng (numpy Generator), ctx.pd / ctx.np, ctx.faker(locale), ctx.column("name") for the generated values of another column of this table (same records), ctx.related("fk_column", "column") for row-aligned values of the referenced table joined via a foreign key column — also across multiple tables as a dotted path ("order_id.customer_id"), ctx.table("schema.table", "column") for all values of another table, ctx.lookup("list", "column") for lookup list values.',
 	parseParamsCellTitle: 'parse_params — optional',
 	parseParamsCellHint:
 		'Converts the raw string parameter values into typed values before generate runs. Return the (converted) dict.',
@@ -112,7 +112,7 @@ const de: GeneratorWebviewStrings = {
 	signatureFixedTooltip: 'Diese Signatur ist fest vorgegeben und kann nicht geändert werden — der Rumpf darunter ist editierbar.',
 	generateCellTitle: 'generate — Pflicht',
 	generateCellHint:
-		'Erzeugt die Spaltenwerte: eine pandas Series der Länge n zurückgeben. Verfügbar: ctx.rng (numpy Generator), ctx.pd / ctx.np, ctx.faker(locale), ctx.column("name") für die Werte einer anderen Spalte dieser Tabelle (dieselben Datensätze), ctx.related("fk_spalte", "spalte") für zeilengenau zugeordnete Werte der referenzierten Tabelle (Join über eine FK-Spalte), ctx.table("schema.tabelle", "spalte") für alle Werte einer anderen Tabelle, ctx.lookup("liste", "spalte") für Werte einer Nachschlageliste.',
+		'Erzeugt die Spaltenwerte: eine pandas Series der Länge n zurückgeben. Verfügbar: ctx.rng (numpy Generator), ctx.pd / ctx.np, ctx.faker(locale), ctx.column("name") für die Werte einer anderen Spalte dieser Tabelle (dieselben Datensätze), ctx.related("fk_spalte", "spalte") für zeilengenau zugeordnete Werte der referenzierten Tabelle (Join über eine FK-Spalte — auch über mehrere Tabellen als Punkt-Pfad "order_id.customer_id"), ctx.table("schema.tabelle", "spalte") für alle Werte einer anderen Tabelle, ctx.lookup("liste", "spalte") für Werte einer Nachschlageliste.',
 	parseParamsCellTitle: 'parse_params — optional',
 	parseParamsCellHint:
 		'Wandelt die rohen String-Parameterwerte in typisierte Werte um, bevor generate läuft. Das (umgewandelte) dict zurückgeben.',

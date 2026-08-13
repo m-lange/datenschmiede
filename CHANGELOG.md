@@ -10,7 +10,10 @@
   gelöschte Spalten erscheinen als Warnung. Dazu der neue Laufzeit-Helfer
   **`ctx.related("fk_spalte", "spalte")`**: zeilengenau zugeordnete Werte
   der referenzierten (führenden) Tabelle als Join über eine FK-Spalte —
-  im Gegensatz zur Zufallsstichprobe von `ctx.table`.
+  im Gegensatz zur Zufallsstichprobe von `ctx.table`. Der FK-Pfad darf
+  **mehrstufig** sein (`ctx.related("order_id.customer_id", "country")`:
+  Sendung → Bestellung → Kunde); der Beispiel-Generator `parent_value`
+  bietet dafür den optionalen `via`-Parameter.
 - **Zeilen-Konsistenz des Nachschagelisten-Generators**: je Datensatz wird
   EINE Listen-Zeile gezogen — alle Spalten, die aus derselben Liste
   ziehen, lesen dieselbe Zeile, auch über FK-verbundene Tabellen hinweg

@@ -101,6 +101,18 @@ limits = "5,12"
 labels = "small,medium,large"
 
 [[columns]]
+name = "customer_country"
+type = "string"
+pk = false
+fk = false
+description = "Land des Empfängers — **mehrstufiger FK-Pfad** Sendung → Bestellung → Kunde (`parent_value` mit `via`: `ctx.related(\"order_id.customer_id\", \"country\")`)"
+generator = "custom:parent_value"
+[columns.generator_params]
+fk_column = "order_id"
+via = "customer_id"
+source_column = "country"
+
+[[columns]]
 name = "shipped_at"
 type = "datetime"
 pk = false
