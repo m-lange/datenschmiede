@@ -7,6 +7,7 @@ import { listLookups } from '../lookup/repository';
 import { CustomGenerator } from '../generator/custom';
 import { resolveAnyInterpreter } from '../project/python';
 import { Plan, PlanTable, buildPlanColumns, toPlanCustomGenerators, toPlanLookups } from '../project/run';
+import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 
 /** Anzahl der Datensätze einer Tabellen-Vorschau. */
 const PREVIEW_LIMIT = 20;
@@ -120,6 +121,9 @@ export async function runTablePreview(
 	await vscode.workspace.fs.writeFile(planUri, Buffer.from(JSON.stringify(plan), 'utf8'));
 	const scriptPath = vscode.Uri.joinPath(context.extensionUri, 'python', 'generate.py').fsPath;
 
+	const channel = getOutputChannel();
+	log(`Preview "${targetLabel}" — ${interpreter.path}`);
+
 	return vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Window, title: vscode.l10n.t('Generating preview…') },
 		() =>
@@ -151,15 +155,19 @@ export async function runTablePreview(
 						};
 					} else if (event.event === 'error') {
 						reportedError = true;
+						// Vollständige Details (inkl. Python-Traceback) in den
+						// Output-Channel — die Notification bietet „Details anzeigen“.
+						log(`ERROR: ${String(event.message ?? '')}`);
+						if (typeof event.traceback === 'string' && event.traceback.trim()) {
+							channel.appendLine(event.traceback);
+						}
 						if (event.code === 'missing-packages') {
 							const packages = Array.isArray(event.packages) ? event.packages.join(' ') : 'pandas numpy';
-							void vscode.window.showErrorMessage(
+							void showErrorWithDetails(
 								vscode.l10n.t('Python packages are missing for test data generation: {0}', packages),
 							);
 						} else {
-							void vscode.window.showErrorMessage(
-								vscode.l10n.t('Preview failed: {0}', String(event.message ?? '')),
-							);
+							void showErrorWithDetails(vscode.l10n.t('Preview failed: {0}', String(event.message ?? '')));
 						}
 					}
 				};
@@ -173,17 +181,24 @@ export async function runTablePreview(
 					}
 				});
 				child.stderr.on('data', (chunk: Buffer) => {
-					stderrText += chunk.toString('utf8');
+					const text = chunk.toString('utf8');
+					stderrText += text;
+					// Python-stderr vollständig in den Output-Channel „Datenschmiede“.
+					channel.append(text);
 				});
 				child.on('error', (err) => {
-					void vscode.window.showErrorMessage(vscode.l10n.t('Unable to start Python: {0}', String(err.message)));
+					log(`ERROR: unable to start python: ${String(err.message)}`);
+					void showErrorWithDetails(vscode.l10n.t('Unable to start Python: {0}', String(err.message)));
 					resolve(null);
 				});
 				child.on('close', (code) => {
 					handleEvent(stdoutRest);
 					void vscode.workspace.fs.delete(planUri).then(undefined, () => undefined);
-					if (!result && !reportedError) {
-						void vscode.window.showErrorMessage(
+					if (result) {
+						log(`Preview "${targetLabel}" finished: ${result.rows.length} rows.`);
+					} else if (!reportedError) {
+						log(`ERROR: preview exited with code ${String(code)} without a result.`);
+						void showErrorWithDetails(
 							vscode.l10n.t('Preview failed (exit code {0}). {1}', String(code), stderrText.slice(-400)),
 						);
 					}

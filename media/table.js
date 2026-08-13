@@ -383,7 +383,11 @@
 		});
 		row.appendChild(tagField.element);
 		row.appendChild(el('span', { className: 'filename-ext', text: `.${(state.output.format || 'csv').toLowerCase()}` }));
+		nameField.appendChild(row);
 
+		// „Dynamischen Wert einfügen“ in einer eigenen Zeile unter dem Feld
+		// (gleiches Layout wie der Ausgabeordner im Projekt-Editor).
+		const actionsRow = el('div', { className: 'filename-actions' });
 		const addBtn = el('button', { className: 'toolbar-btn' });
 		addBtn.type = 'button';
 		addBtn.appendChild(el('i', { className: 'codicon codicon-add' }));
@@ -393,9 +397,9 @@
 			event.stopPropagation();
 			showVariableMenu(rect.left, rect.bottom + 2, (token) => tagField.insertVariable(token));
 		});
-		row.appendChild(addBtn);
+		actionsRow.appendChild(addBtn);
+		nameField.appendChild(actionsRow);
 
-		nameField.appendChild(row);
 		nameField.appendChild(el('p', { className: 'hint', text: strings.outputFileNameHint }));
 		card.appendChild(nameField);
 

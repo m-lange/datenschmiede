@@ -80,5 +80,6 @@
 	"Table file \"{0}\" was not found. It may have been deleted, renamed, or moved.": "Tabellendatei „{0}“ wurde nicht gefunden. Sie wurde möglicherweise gelöscht, umbenannt oder verschoben.",
 	"Python syntax error in \"{0}\": {1}": "Python-Syntaxfehler in „{0}“: {1}",
 	"Select Output Folder": "Ausgabeordner auswählen",
-	"Select": "Auswählen"
+	"Select": "Auswählen",
+	"Show Details": "Details anzeigen"
 }

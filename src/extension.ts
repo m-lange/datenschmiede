@@ -11,6 +11,7 @@ import { newGeneratorCommand } from './generator/commands/newGenerator';
 import { selectPythonInterpreterCommand } from './project/commands/selectPythonInterpreter';
 import { runGenerationCommand } from './project/run';
 import { checkPython310Available } from './project/python';
+import { disposeOutputChannel } from './outputChannel';
 
 export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(TableEditorProvider.register(context));
@@ -19,6 +20,8 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(GeneratorEditorProvider.register(context));
 	// Workspace-weite Hintergrund-Prüfung aller Dateien (auch nicht geöffneter).
 	context.subscriptions.push(WorkspaceDiagnostics.register(context));
+	// Output-Channel „Datenschmiede“ (Lauf-Protokolle, Python-Tracebacks).
+	context.subscriptions.push({ dispose: disposeOutputChannel });
 
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newTable', newTableCommand));
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newProject', newProjectCommand));

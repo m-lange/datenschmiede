@@ -11,6 +11,7 @@ import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
 import { CustomGenerator } from '../generator/custom';
 import { listLookups } from '../lookup/repository';
+import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 
 /**
  * Befehl "Testdaten generieren" (Run-Knopf in der Editor-Titelleiste des
@@ -82,6 +83,8 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 	const scriptPath = vscode.Uri.joinPath(context.extensionUri, 'python', 'generate.py').fsPath;
 
 	const projectName = project.name.trim() || vscode.workspace.asRelativePath(uri, false);
+	const channel = getOutputChannel();
+	log(`Run "${projectName}" — ${pythonStatus.path}`);
 
 	await vscode.window.withProgress(
 		{
@@ -94,7 +97,10 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 				const child = spawn(pythonStatus.path, [scriptPath, planUri.fsPath], {
 					cwd: vscode.Uri.joinPath(uri, '..').fsPath,
 				});
-				token.onCancellationRequested(() => child.kill());
+				token.onCancellationRequested(() => {
+					log(`Run "${projectName}" cancelled.`);
+					child.kill();
+				});
 
 				let stdoutRest = '';
 				let stderrText = '';
@@ -112,7 +118,11 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 					}
 				});
 				child.stderr.on('data', (chunk: Buffer) => {
-					stderrText += chunk.toString('utf8');
+					const text = chunk.toString('utf8');
+					stderrText += text;
+					// Python-stderr (Warnungen, unerwartete Ausgaben) landet
+					// vollständig im Output-Channel „Datenschmiede“.
+					channel.append(text);
 				});
 
 				const handleEvent = (line: string) => {
@@ -137,6 +147,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 								increment: 100 / total,
 								message: `${String(event.table ?? '')} (${Number(event.index) + 1}/${total})`,
 							});
+							log(`  ${String(event.table ?? '')}: ${Number(event.records)} records -> ${String(event.file ?? '')}`);
 							break;
 						}
 						case 'done': {
@@ -146,26 +157,31 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 						}
 						case 'error': {
 							reportedError = true;
+							// Vollständige Details (inkl. Python-Traceback) in den
+							// Output-Channel — die Notification bietet dafür
+							// „Details anzeigen“ an.
+							log(`ERROR: ${String(event.message ?? '')}`);
+							if (typeof event.traceback === 'string' && event.traceback.trim()) {
+								channel.appendLine(event.traceback);
+							}
 							if (event.code === 'missing-packages') {
 								const packages = Array.isArray(event.packages) ? event.packages.join(' ') : 'pandas numpy';
 								const installLabel = vscode.l10n.t('Install packages');
-								void vscode.window
-									.showErrorMessage(
-										vscode.l10n.t('Python packages are missing for test data generation: {0}', packages),
-										installLabel,
-									)
-									.then((choice) => {
-										if (choice === installLabel) {
-											// Installation bewusst sichtbar in einem Terminal statt
-											// versteckt im Hintergrund — der Interpreter des Projekts
-											// wird direkt verwendet.
-											const terminal = vscode.window.createTerminal(vscode.l10n.t('Datenschmiede: Install packages'));
-											terminal.show();
-											terminal.sendText(`& "${pythonStatus.path}" -m pip install ${packages}`);
-										}
-									});
+								void showErrorWithDetails(
+									vscode.l10n.t('Python packages are missing for test data generation: {0}', packages),
+									installLabel,
+								).then((choice) => {
+									if (choice === installLabel) {
+										// Installation bewusst sichtbar in einem Terminal statt
+										// versteckt im Hintergrund — der Interpreter des Projekts
+										// wird direkt verwendet.
+										const terminal = vscode.window.createTerminal(vscode.l10n.t('Datenschmiede: Install packages'));
+										terminal.show();
+										terminal.sendText(`& "${pythonStatus.path}" -m pip install ${packages}`);
+									}
+								});
 							} else {
-								void vscode.window.showErrorMessage(
+								void showErrorWithDetails(
 									vscode.l10n.t('Test data generation failed: {0}', String(event.message ?? '')),
 								);
 							}
@@ -175,7 +191,8 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 				};
 
 				child.on('error', (err) => {
-					void vscode.window.showErrorMessage(vscode.l10n.t('Unable to start Python: {0}', String(err.message)));
+					log(`ERROR: unable to start python: ${String(err.message)}`);
+					void showErrorWithDetails(vscode.l10n.t('Unable to start Python: {0}', String(err.message)));
 					resolve();
 				});
 				child.on('close', (code) => {
@@ -187,6 +204,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 					}
 					if (doneFiles) {
 						const files = doneFiles;
+						log(`Run "${projectName}" finished: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
 						const openLabel = vscode.l10n.t('Open Output Folder');
 						void vscode.window
 							.showInformationMessage(
@@ -203,7 +221,8 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 								}
 							});
 					} else if (!reportedError) {
-						void vscode.window.showErrorMessage(
+						log(`ERROR: run exited with code ${String(code)} without a result.`);
+						void showErrorWithDetails(
 							vscode.l10n.t('Test data generation failed (exit code {0}). {1}', String(code), stderrText.slice(-400)),
 						);
 					}

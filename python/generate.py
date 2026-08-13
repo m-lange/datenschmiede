@@ -28,6 +28,7 @@
 import json
 import re
 import sys
+import traceback
 from datetime import datetime, timedelta
 
 
@@ -572,9 +573,12 @@ def main():
     try:
         Runner(plan).run()
     except RuntimeError as err:
-        fail(err)
+        # Auch fuer "erwartete" Fehler den Traceback mitgeben — bei Fehlern
+        # aus Custom-Generator-Code zeigt er die betroffene Zeile
+        # (<tdgen:name>-Frames), siehe Output-Channel im Extension-Host.
+        fail(err, traceback=traceback.format_exc())
     except Exception as err:  # noqa: BLE001 — jede unerwartete Ausnahme sauber als Event melden
-        fail(f"{type(err).__name__}: {err}")
+        fail(f"{type(err).__name__}: {err}", traceback=traceback.format_exc())
 
 
 if __name__ == "__main__":
