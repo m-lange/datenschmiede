@@ -1640,10 +1640,18 @@ body.vscode-high-contrast-light .chart-bar {
 	max-height: calc(80vh - 96px);
 }
 
-/* Kopfzeile bleibt beim Scrollen der Vorschau stehen (wie im Spalten-Grid). */
+/* Kopfzeile bleibt beim Scrollen der Vorschau stehen (wie im Spalten-Grid).
+   Wichtig: eine OPAKE Hintergrundfarbe statt der Standard-Kopfzeilenfarbe —
+   --vscode-keybindingTable-headerBackground ist in vielen Themes
+   halbtransparent, und anders als im Spalten-Grid (dort scrollt die ganze
+   Seite) scrollen die Zeilen hier wirklich unter dem sticky Kopf hindurch:
+   sie schimmerten sichtbar durch den Kopf durch. z-index hebt den Kopf
+   zusätzlich über den Zellinhalt. */
 .preview-table thead th {
 	position: sticky;
 	top: 0;
+	z-index: 1;
+	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
 }
 
 .preview-cell {
