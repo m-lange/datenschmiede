@@ -25,8 +25,6 @@ export interface GeneratorWebviewStrings {
 	removeParameterLabel: string;
 	moveParameterUpLabel: string;
 	moveParameterDownLabel: string;
-	parametersEmptyText: string;
-	parametersEmptyAction: string;
 	paramNameRequiredError: string;
 	paramNameDuplicateError: string;
 
@@ -66,8 +64,6 @@ const en: GeneratorWebviewStrings = {
 	removeParameterLabel: 'Remove parameter',
 	moveParameterUpLabel: 'Move parameter up',
 	moveParameterDownLabel: 'Move parameter down',
-	parametersEmptyText: 'No parameters yet.',
-	parametersEmptyAction: 'Add first parameter',
 	paramNameRequiredError: 'Enter a parameter name.',
 	paramNameDuplicateError: 'Another parameter already uses this name.',
 
@@ -110,8 +106,6 @@ const de: GeneratorWebviewStrings = {
 	removeParameterLabel: 'Parameter entfernen',
 	moveParameterUpLabel: 'Parameter nach oben verschieben',
 	moveParameterDownLabel: 'Parameter nach unten verschieben',
-	parametersEmptyText: 'Noch keine Parameter vorhanden.',
-	parametersEmptyAction: 'Ersten Parameter hinzufügen',
 	paramNameRequiredError: 'Parameternamen eingeben.',
 	paramNameDuplicateError: 'Ein anderer Parameter verwendet diesen Namen bereits.',
 

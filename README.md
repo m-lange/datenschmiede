@@ -70,7 +70,9 @@ Grundgerüst anlegen.
 
 Über 20 Beispieltabellen mit unterschiedlich tiefen Fremdschlüssel-Ketten
 und Namensräumen (ein bis drei Schema-Ebenen, u. a. `ag.cor.sapbp`) liegen
-unter [`samples/`](samples/), angefangen bei [`samples/example.td`](samples/example.td).
+unter [`samples/`](samples/) (nach Dateityp in `tables/`, `lookups/` und
+`generators/` gegliedert), angefangen bei
+[`samples/tables/example.td`](samples/tables/example.td).
 
 ## Dateiformat
 
@@ -248,8 +250,10 @@ editierbarem Rumpf:
 
 Referenziert wird ein Generator über seinen **Namen** (`custom:<name>`),
 nicht den Dateinamen; wird die Datei gelöscht oder der Name geändert,
-melden betroffene Tabellen das als Warnung. Beispiel:
-[`samples/order_number.tdgen`](samples/order_number.tdgen).
+melden betroffene Tabellen das als Warnung. Beispiele:
+[`samples/generators/order_number.tdgen`](samples/generators/order_number.tdgen)
+und [`samples/generators/random_string.tdgen`](samples/generators/random_string.tdgen)
+(zufällige Strings mit konfigurierbarer Länge).
 
 ## Ausgabe je Tabelle (Dateiname + CSV)
 

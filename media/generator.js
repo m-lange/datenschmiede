@@ -131,7 +131,7 @@
 		const nameField = el('div', { className: 'field' });
 		const nameLabel = el('label', { text: strings.fieldNameLabel });
 		nameLabel.htmlFor = 'g-name';
-		const nameInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input generator-name-input' }));
+		const nameInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input title-input' }));
 		nameInput.type = 'text';
 		nameInput.id = 'g-name';
 		nameInput.placeholder = strings.fieldNamePlaceholder;
@@ -190,14 +190,8 @@
 		cell.appendChild(toolbar);
 
 		if (state.parameters.length === 0) {
-			const empty = el('div', { className: 'empty-state' });
-			empty.appendChild(el('i', { className: 'codicon codicon-symbol-parameter' }));
-			empty.appendChild(el('p', { text: strings.parametersEmptyText }));
-			const link = el('button', { className: 'link-button', text: strings.parametersEmptyAction });
-			link.type = 'button';
-			link.addEventListener('click', addParameter);
-			empty.appendChild(link);
-			cell.appendChild(empty);
+			// Ohne Parameter nur Überschrift, Hinweis und den Hinzufügen-Knopf
+			// zeigen — keine leere Tabelle und kein großer Leerzustands-Block.
 			return cell;
 		}
 
@@ -454,7 +448,7 @@
 	 * @param {boolean} required
 	 */
 	function renderCodeCell(key, title, hint, signature, required) {
-		const cell = el('section', { className: 'notebook-cell' });
+		const cell = el('section', { className: 'notebook-cell notebook-code-cell' });
 
 		const header = el('div', { className: 'cell-header' });
 		const titleRow = el('h3');

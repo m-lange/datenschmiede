@@ -5,10 +5,10 @@ python_path = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313
 python_id = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
 
 [[tables]]
-path = "fin_cost_centers.td"
+path = "tables/fin_cost_centers.td"
 
 [[tables]]
-path = "fin_invoices.td"
+path = "tables/fin_invoices.td"
 
 [[tables]]
-path = "sapbp_business_partners.td"
+path = "tables/sapbp_business_partners.td"

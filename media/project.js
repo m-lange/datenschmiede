@@ -33,7 +33,7 @@
 	/** @typedef {{kind:'table',path:string,label:string,found:boolean,checked:boolean,locked:boolean,secondary:boolean,referencedTable?:string,records?:string}} ProjectPickerTableNode */
 	/** @typedef {ProjectPickerGroupNode | ProjectPickerTableNode} ProjectPickerNode */
 	/** @typedef {{path:string,label:string,resolved:boolean,ok:boolean}} PythonStatus */
-	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
+	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,estimatedMin?:number,estimatedMax?:number,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
 	/** @typedef {import('../src/project/webviewStrings').ProjectWebviewStrings} ProjectWebviewStrings */
 
 	/** @type {ProjectWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
@@ -206,9 +206,17 @@
 
 		const section = el('section', { className: 'field-group card' });
 		section.appendChild(
-			renderTextField('f-name', strings.fieldNameLabel, project.name, strings.fieldNamePlaceholder, (v) => {
-				project.name = v;
-			}),
+			renderTextField(
+				'f-name',
+				strings.fieldNameLabel,
+				project.name,
+				strings.fieldNamePlaceholder,
+				(v) => {
+					project.name = v;
+				},
+				// Große Titel-Schrift wie im Generator-Editor.
+				'title-input',
+			),
 		);
 		section.appendChild(renderDescriptionField());
 		section.appendChild(renderPythonField());
@@ -242,12 +250,14 @@
 			const token = match[1];
 			const chip = el('span', { className: 'filename-tag' });
 			chip.title = `{${token}}`;
-			chip.appendChild(
+			const inner = el('span', { className: 'filename-tag-inner' });
+			inner.appendChild(
 				el('i', {
 					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'}`,
 				}),
 			);
-			chip.appendChild(el('span', { text: token.startsWith('column:') ? token.slice('column:'.length) : token }));
+			inner.appendChild(el('span', { text: token.startsWith('column:') ? token.slice('column:'.length) : token }));
+			chip.appendChild(inner);
 			wrap.appendChild(chip);
 			lastIndex = match.index + match[0].length;
 		}
@@ -333,10 +343,27 @@
 						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-key'} records-type-icon`,
 					}),
 				);
-				const text = row.secondary
-					? `${row.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', row.referencedTable || '')}`
-					: formatRecordsDisplay(row.records);
-				recordsWrap.appendChild(el('span', { text }));
+				// Berechnete Anzahl aus der Konfiguration (bei referenzierten
+				// Tabellen die Kardinalität entlang der FK-Kette multipliziert,
+				// bei Bereichen als Von–Bis) statt nur des konfigurierten
+				// Bereichs; die Konfiguration selbst steht im Tooltip. Ist die
+				// Kette nicht berechenbar, bleibt der konfigurierte Wert stehen.
+				let text;
+				if (row.estimatedMin !== undefined && row.estimatedMax !== undefined) {
+					text =
+						row.estimatedMin === row.estimatedMax
+							? formatRecordsNumber(row.estimatedMin)
+							: `${formatRecordsNumber(row.estimatedMin)} – ${formatRecordsNumber(row.estimatedMax)}`;
+				} else if (row.secondary) {
+					text = `${row.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', row.referencedTable || '')}`;
+				} else {
+					text = formatRecordsDisplay(row.records);
+				}
+				const textEl = el('span', { text });
+				if (row.secondary) {
+					textEl.title = `${row.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', row.referencedTable || '')}`;
+				}
+				recordsWrap.appendChild(textEl);
 				recordsTd.appendChild(recordsWrap);
 			}
 			tr.appendChild(recordsTd);
@@ -357,12 +384,15 @@
 	 * @param {string} value
 	 * @param {string} placeholder
 	 * @param {(value: string) => void} onChange
+	 * @param {string} [extraClass]
 	 */
-	function renderTextField(id, labelText, value, placeholder, onChange) {
+	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
 		const field = el('div', { className: 'field' });
 		const label = el('label', { text: labelText });
 		label.htmlFor = id;
-		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+		const input = /** @type {HTMLInputElement} */ (
+			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
+		);
 		input.type = 'text';
 		input.id = id;
 		input.placeholder = placeholder;

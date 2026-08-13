@@ -338,6 +338,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				);
 			case 'gen-fk-only':
 				return vscode.l10n.t('Column "{0}": the Foreign Key generator can only be used on foreign key columns.', label);
+			case 'gen-fk-mismatch':
+				return vscode.l10n.t('Column "{0}": foreign key columns always use the Foreign Key generator.', label);
 			case 'gen-param-missing':
 				return vscode.l10n.t('Column "{0}": generator parameter "{1}" has no value.', label, issue.paramName ?? '');
 			case 'gen-param-invalid':

@@ -46,6 +46,7 @@
 	"The generate method has no code — this generator will not produce any values.": "Die generate-Methode enthält keinen Code — dieser Generator wird keine Werte erzeugen.",
 	"Column \"{0}\": generator \"{1}\" was not found. Its .tdgen file may have been deleted, or the generator was renamed.": "Spalte „{0}“: Generator „{1}“ wurde nicht gefunden. Seine .tdgen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.",
 	"Column \"{0}\": the Foreign Key generator can only be used on foreign key columns.": "Spalte „{0}“: Der Fremdschlüssel-Generator kann nur für Fremdschlüssel-Spalten verwendet werden.",
+	"Column \"{0}\": foreign key columns always use the Foreign Key generator.": "Spalte „{0}“: Fremdschlüssel-Spalten verwenden immer den Fremdschlüssel-Generator.",
 	"Column \"{0}\": generator parameter \"{1}\" has no value.": "Spalte „{0}“: Generator-Parameter „{1}“ hat keinen Wert.",
 	"Column \"{0}\": generator parameter \"{1}\" has an invalid value (\"{2}\").": "Spalte „{0}“: Generator-Parameter „{1}“ hat einen ungültigen Wert („{2}“).",
 	"Column \"{0}\": generator parameter \"{1}\" references table \"{2}\", which was not found. It may have been deleted, renamed, or moved.": "Spalte „{0}“: Generator-Parameter „{1}“ referenziert die Tabelle „{2}“, die nicht gefunden wurde. Sie wurde möglicherweise gelöscht, umbenannt oder verschoben.",

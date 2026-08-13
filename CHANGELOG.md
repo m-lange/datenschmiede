@@ -45,7 +45,8 @@
   mit erklärender Beschreibung davor). Datei-Icon: `GenerateMethod`-Symbol
   in Magenta (`#D743EB`; für helle Themes eine dunklere Variante
   `#A21FB8`, `icons/tdgen-*.svg`). Befehl **„Datenschmiede: Neuen
-  Generator erstellen…“**; Beispiel unter `samples/order_number.tdgen`.
+  Generator erstellen…“**; Beispiele unter `samples/generators/`
+  (`order_number.tdgen`, `random_string.tdgen`).
 - **Ausgabe-Einstellungen je Tabelle (Übersicht-Tab des Table Editors)**:
   der **Dateiname** der generierten Datei als Tag-Feld im Stil von Power
   Automate — konstanter Text frei editierbar, dynamische Teile (aktuelles
@@ -57,9 +58,25 @@
   Kopfzeile und Encoding (`[output]`-Block der `.td`-Datei).
 - **Projekt-Editor**: der Übersicht-Tab zeigt neu die **generierten
   Dateien** (Tabelle, `.td`-Datei, Dateiname-Vorlage mit Tags,
-  Datensatzanzahl — rein lesend) samt Start-Knopf. Die automatische
-  Tabellen-Mitnahme im Tabellen-Tab berücksichtigt neben Fremdschlüsseln
-  jetzt auch die von Spaltengeneratoren **benötigten Tabellen**.
+  Datensatzanzahl — rein lesend) samt Start-Knopf. Die Datensatzanzahl
+  referenzierter Tabellen wird dabei aus der Konfiguration **berechnet**
+  (Kardinalität entlang der FK-Kette multipliziert, Bereiche als Von–Bis)
+  statt nur den konfigurierten Bereich zu zeigen; die Konfiguration selbst
+  steht im Tooltip. Die automatische Tabellen-Mitnahme im Tabellen-Tab
+  berücksichtigt neben Fremdschlüsseln jetzt auch die von
+  Spaltengeneratoren **benötigten Tabellen**.
+- **Bedienungs-Feinschliff**: FK-Spalten haben ihren Generator fest (die
+  Auswahl ist gesperrt, die FK-Checkbox weist den Fremdschlüssel-Generator
+  automatisch zu und entfernt ihn beim Abhaken; abweichende, von Hand ins
+  TOML geschriebene Generatoren erscheinen als Warnung). Der
+  Parameter-Dialog hat **Fertig**/**Abbrechen** — Abbrechen (auch
+  X/Escape/Klick daneben) stellt den Stand beim Öffnen wieder her. Das
+  Namensfeld nutzt in allen vier Editoren die große Titel-Schrift des
+  Generator-Editors; dort haben die Code-Zellen mehr Abstand zueinander,
+  und ohne Parameter zeigt der Parameter-Abschnitt nur Überschrift,
+  Hinweis und Hinzufügen-Knopf. Die Beispiele unter `samples/` sind nach
+  Dateityp in `tables/`, `lookups/` und `generators/` gegliedert (neu:
+  `random_string.tdgen` — zufällige Strings mit konfigurierbarer Länge).
 
 ## 0.5.0
 

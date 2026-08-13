@@ -118,6 +118,15 @@ export interface OutputFileRow {
 	ext: string;
 	/** Konfigurierte Datensatzanzahl ("100" bzw. "5"/"1..3" je referenziertem Datensatz). */
 	records?: string;
+	/**
+	 * Aus der Konfiguration berechnete Datensatzanzahl: bei referenzierten
+	 * Tabellen die Kardinalität multipliziert entlang der FK-Kette bis zur
+	 * primären Tabelle (bei Bereichen als Von/Bis) — statt nur den
+	 * konfigurierten Bereich anzuzeigen. Fehlt, wenn die Kette (noch) nicht
+	 * berechenbar ist (fehlende/ungültige Angaben).
+	 */
+	estimatedMin?: number;
+	estimatedMax?: number;
 	/** `false`, wenn die `.td`-Datei nicht (mehr) lesbar ist. */
 	found: boolean;
 	/** `true` bei einer referenzierten (sekundären) Tabelle — `records` gilt je Datensatz von `referencedTable`. */
@@ -128,6 +137,60 @@ export interface OutputFileRow {
 /** Baut die Ausgabedateien-Übersicht des Übersicht-Tabs (eine Zeile je ausgewählter Tabelle). */
 function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRow[] {
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
+
+	// Ausgewählte Tabellen nach ihrer logischen Identität, um die FK-Kette
+	// einer referenzierten Tabelle bis zur primären zurückzuverfolgen.
+	const byLabel = new Map<string, { entry: TableEntry; records?: string }>();
+	for (const projectTable of project.tables) {
+		const entry = byPath.get(projectTable.path);
+		if (entry?.table) {
+			byLabel.set(tableLabel(entry.table, entry.relativePath), { entry, records: projectTable.records });
+		}
+	}
+
+	/** Erste ausgehende FK-Referenz (dieselbe Regel wie die treibende FK-Spalte des Laufs, siehe project/run.ts). */
+	function outgoingLabel(entry: TableEntry): string | undefined {
+		if (!entry.table) {
+			return undefined;
+		}
+		const label = tableLabel(entry.table, entry.relativePath);
+		const outgoing = entry.table.columns.find(
+			(column) => column.fk && column.fkTable.trim() !== '' && column.fkTable.trim() !== label,
+		);
+		return outgoing?.fkTable.trim();
+	}
+
+	/**
+	 * Berechnete Datensatzanzahl einer Tabelle als Von/Bis-Bereich: primäre
+	 * Tabellen direkt aus ihrer festen Anzahl, referenzierte über die
+	 * Kardinalität multipliziert mit der (rekursiv berechneten) Anzahl der
+	 * referenzierten Tabelle. `null`, sobald ein Glied der Kette fehlt oder
+	 * ungültig ist; `visiting` bricht (über von Hand gebaute TOML mögliche)
+	 * Zyklen ab.
+	 */
+	function effectiveRange(label: string, visiting: Set<string>): { min: number; max: number } | null {
+		const selected = byLabel.get(label);
+		if (!selected || visiting.has(label)) {
+			return null;
+		}
+		const raw = (selected.records ?? '').trim();
+		const parentLabel = outgoingLabel(selected.entry);
+		if (!parentLabel || !byLabel.has(parentLabel)) {
+			return /^\d+$/.test(raw) ? { min: Number(raw), max: Number(raw) } : null;
+		}
+		const cardinality = parseCardinality(raw);
+		if (!cardinality) {
+			return null;
+		}
+		visiting.add(label);
+		const parent = effectiveRange(parentLabel, visiting);
+		visiting.delete(label);
+		if (!parent) {
+			return null;
+		}
+		return { min: parent.min * cardinality.min, max: parent.max * cardinality.max };
+	}
+
 	return project.tables.map((table): OutputFileRow => {
 		const entry = byPath.get(table.path);
 		if (!entry?.table) {
@@ -142,9 +205,8 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 			};
 		}
 		const label = tableLabel(entry.table, entry.relativePath);
-		const outgoing = entry.table.columns.find(
-			(column) => column.fk && column.fkTable.trim() !== '' && column.fkTable.trim() !== label,
-		);
+		const referencedTable = outgoingLabel(entry);
+		const estimated = effectiveRange(label, new Set());
 		return {
 			path: table.path,
 			label,
@@ -154,9 +216,11 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 			fileName: entry.table.output.fileName.trim() || '{schema}_{table}',
 			ext: `.${(entry.table.output.format || 'csv').toLowerCase()}`,
 			records: table.records,
+			estimatedMin: estimated?.min,
+			estimatedMax: estimated?.max,
 			found: true,
-			secondary: !!outgoing,
-			referencedTable: outgoing?.fkTable.trim(),
+			secondary: !!referencedTable,
+			referencedTable,
 		};
 	});
 }

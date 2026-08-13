@@ -56,13 +56,15 @@ export interface WebviewStrings {
 	generatorEditParamsLabel: string;
 	generatorDialogNoParams: string;
 	generatorParamEmptyOption: string;
-	generatorCloseLabel: string;
+	generatorDoneLabel: string;
+	generatorCancelLabel: string;
 	generatorRequiredSuffix: string;
 	generatorTrueLabel: string;
 	generatorFalseLabel: string;
 	/** Warnungstexte — Kurzfassungen der Meldungen aus table/editorProvider.ts für den Zell-Tooltip. */
 	genWarnNotFound: string;
 	genWarnFkOnly: string;
+	genWarnFkMismatch: string;
 	genWarnParamMissing: string;
 	genWarnParamInvalid: string;
 	genWarnRefNotFound: string;
@@ -150,12 +152,14 @@ const en: WebviewStrings = {
 	generatorEditParamsLabel: 'Edit generator parameters',
 	generatorDialogNoParams: 'This generator has no parameters.',
 	generatorParamEmptyOption: '— select —',
-	generatorCloseLabel: 'Close',
+	generatorDoneLabel: 'Done',
+	generatorCancelLabel: 'Cancel',
 	generatorRequiredSuffix: ' *',
 	generatorTrueLabel: 'true',
 	generatorFalseLabel: 'false',
 	genWarnNotFound: 'This generator was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
 	genWarnFkOnly: 'The Foreign Key generator can only be used on foreign key columns.',
+	genWarnFkMismatch: 'Foreign key columns always use the Foreign Key generator.',
 	genWarnParamMissing: 'Required parameter "{0}" has no value.',
 	genWarnParamInvalid: 'Parameter "{0}" has an invalid value.',
 	genWarnRefNotFound: 'Parameter "{0}" references "{1}", which was not found. It may have been deleted or renamed.',
@@ -243,13 +247,15 @@ const de: WebviewStrings = {
 	generatorEditParamsLabel: 'Generator-Parameter bearbeiten',
 	generatorDialogNoParams: 'Dieser Generator hat keine Parameter.',
 	generatorParamEmptyOption: '— auswählen —',
-	generatorCloseLabel: 'Schließen',
+	generatorDoneLabel: 'Fertig',
+	generatorCancelLabel: 'Abbrechen',
 	generatorRequiredSuffix: ' *',
 	generatorTrueLabel: 'wahr',
 	generatorFalseLabel: 'falsch',
 	genWarnNotFound:
 		'Dieser Generator wurde nicht gefunden. Seine .tdgen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.',
 	genWarnFkOnly: 'Der Fremdschlüssel-Generator kann nur für Fremdschlüssel-Spalten verwendet werden.',
+	genWarnFkMismatch: 'Fremdschlüssel-Spalten verwenden immer den Fremdschlüssel-Generator.',
 	genWarnParamMissing: 'Pflichtparameter „{0}“ hat keinen Wert.',
 	genWarnParamInvalid: 'Parameter „{0}“ hat einen ungültigen Wert.',
 	genWarnRefNotFound: 'Parameter „{0}“ referenziert „{1}“ — wurde nicht gefunden, möglicherweise gelöscht oder umbenannt.',

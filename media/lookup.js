@@ -157,9 +157,17 @@
 
 		const fields = el('div', { className: 'field-group card' });
 		fields.appendChild(
-			renderTextField('f-name', strings.fieldNameLabel, state.name, strings.fieldNamePlaceholder, (v) => {
-				state.name = v;
-			}),
+			renderTextField(
+				'f-name',
+				strings.fieldNameLabel,
+				state.name,
+				strings.fieldNamePlaceholder,
+				(v) => {
+					state.name = v;
+				},
+				// Große Titel-Schrift wie im Generator-Editor.
+				'title-input',
+			),
 		);
 		fields.appendChild(renderDescriptionField());
 		wrap.appendChild(fields);
@@ -174,12 +182,15 @@
 	 * @param {string} value
 	 * @param {string} placeholder
 	 * @param {(value: string) => void} onChange
+	 * @param {string} [extraClass]
 	 */
-	function renderTextField(id, labelText, value, placeholder, onChange) {
+	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
 		const field = el('div', { className: 'field' });
 		const label = el('label', { text: labelText });
 		label.htmlFor = id;
-		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+		const input = /** @type {HTMLInputElement} */ (
+			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
+		);
 		input.type = 'text';
 		input.id = id;
 		input.placeholder = placeholder;

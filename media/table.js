@@ -209,9 +209,17 @@
 
 		const section = el('section', { className: 'field-group card' });
 		section.appendChild(
-			renderTextField('f-name', strings.fieldNameLabel, state.name, strings.fieldNamePlaceholder, (v) => {
-				state.name = v;
-			}),
+			renderTextField(
+				'f-name',
+				strings.fieldNameLabel,
+				state.name,
+				strings.fieldNamePlaceholder,
+				(v) => {
+					state.name = v;
+				},
+				// Große Titel-Schrift wie im Generator-Editor.
+				'title-input',
+			),
 		);
 		section.appendChild(
 			renderTextField('f-schema', strings.fieldSchemaLabel, state.schema, strings.fieldSchemaPlaceholder, (v) => {
@@ -232,12 +240,15 @@
 	 * @param {string} value
 	 * @param {string} placeholder
 	 * @param {(value: string) => void} onChange
+	 * @param {string} [extraClass]
 	 */
-	function renderTextField(id, labelText, value, placeholder, onChange) {
+	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
 		const field = el('div', { className: 'field' });
 		const label = el('label', { text: labelText });
 		label.htmlFor = id;
-		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+		const input = /** @type {HTMLInputElement} */ (
+			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
+		);
 		input.type = 'text';
 		input.id = id;
 		input.placeholder = placeholder;
@@ -488,16 +499,22 @@
 
 		/** @param {string} token */
 		function createChip(token) {
+			// Äußeres Element bewusst inline-block mit einem inline-flex-Kind
+			// (.filename-tag-inner): ein atomarer Inline-Baustein direkt mit
+			// display:inline-flex wird von Chromium innerhalb von
+			// contenteditable unzuverlässig dargestellt (Grundlinie/Caret).
 			const chip = el('span', { className: 'filename-tag' });
 			chip.contentEditable = 'false';
 			chip.setAttribute('data-var', token);
 			chip.title = `{${token}}`;
-			chip.appendChild(
+			const inner = el('span', { className: 'filename-tag-inner' });
+			inner.appendChild(
 				el('i', {
 					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'}`,
 				}),
 			);
-			chip.appendChild(el('span', { text: variableLabel(token) }));
+			inner.appendChild(el('span', { text: variableLabel(token) }));
+			chip.appendChild(inner);
 			chip.addEventListener('click', () => {
 				// Klick entfernt das Tag (siehe outputFileNameHint).
 				chip.remove();
@@ -544,7 +561,13 @@
 		}
 
 		function refreshEmptyState() {
-			field.classList.toggle('tag-field-empty', field.childNodes.length === 0);
+			// Ein geleertes contenteditable behält oft ein <br> zurück — dann
+			// gilt das Feld trotzdem als leer (Platzhalter anzeigen).
+			const empty = (field.textContent || '') === '' && !field.querySelector('[data-var]');
+			if (empty && field.childNodes.length > 0) {
+				field.innerHTML = '';
+			}
+			field.classList.toggle('tag-field-empty', empty);
 		}
 
 		function commit() {
@@ -773,6 +796,11 @@
 		}
 		if (option.fkOnly && !column.fk) {
 			return strings.genWarnFkOnly;
+		}
+		if (column.fk && config.id !== 'foreign-key') {
+			// Über die Oberfläche nicht mehr möglich (Auswahl gesperrt) — kann
+			// nur aus von Hand bearbeitetem TOML stammen.
+			return strings.genWarnFkMismatch;
 		}
 		if (config.id === 'combine') {
 			const template = (config.params.template || '').trim();
@@ -1100,12 +1128,13 @@
 				columnSelect.disabled = !column.fk;
 				refreshTableError();
 				refreshColumnError();
-				// FK anhaken weist automatisch den Fremdschlüssel-Generator zu;
-				// Abhaken entfernt ihn wieder (andere Generatoren bleiben).
-				if (column.fk && !column.generator) {
+				// FK anhaken weist automatisch (und fest) den Fremdschlüssel-
+				// Generator zu — die Generator-Auswahl ist für FK-Spalten
+				// gesperrt; Abhaken entfernt ihn wieder.
+				if (column.fk) {
 					column.generator = { id: 'foreign-key', params: {} };
 					postEdit();
-				} else if (!column.fk && column.generator && column.generator.id === 'foreign-key') {
+				} else if (column.generator && column.generator.id === 'foreign-key') {
 					delete column.generator;
 					postEdit();
 				}
@@ -1209,6 +1238,9 @@
 				select.appendChild(opt);
 			}
 			select.value = currentId;
+			// FK-Spalten verwenden immer den Fremdschlüssel-Generator (wird über
+			// die FK-Checkbox automatisch zugewiesen) — die Auswahl ist gesperrt.
+			select.disabled = column.fk;
 		}
 
 		/** Frischt Anzeige-Text, Stift-Zustand und Warnungs-Markierung auf. */
@@ -1277,12 +1309,13 @@
 		return { element: td, refresh, rebuild };
 	}
 
-	/** Räumt einen evtl. offenen Parameter-Dialog ab (höchstens einer gleichzeitig). @type {(() => void) | null} */
+	/** Räumt einen evtl. offenen Parameter-Dialog ab (höchstens einen gleichzeitig); `true` übernimmt die Änderungen, sonst werden sie verworfen. @type {((keepChanges?: boolean) => void) | null} */
 	let closeParamDialog = null;
 
+	/** Schließt den Dialog wie „Abbrechen“ (Änderungen verwerfen). */
 	function dismissParamDialog() {
 		if (closeParamDialog) {
-			closeParamDialog();
+			closeParamDialog(false);
 		}
 	}
 
@@ -1291,7 +1324,9 @@
 	 * Webview): je Parameter ein zum Datentyp passendes Eingabefeld —
 	 * Auswahl bei vordefinierten Wertelisten und Referenz-Typen
 	 * (table/lookup/column), Datums-/Zeit-Felder, Zahlenfelder, sonst freie
-	 * Eingabe. Werte werden direkt in die Spalten-Konfiguration geschrieben.
+	 * Eingabe. Werte werden direkt in die Spalten-Konfiguration geschrieben;
+	 * **Fertig** behält sie, **Abbrechen** (auch X/Escape/Klick daneben)
+	 * stellt den Stand beim Öffnen wieder her.
 	 * @param {Column} column
 	 * @param {GeneratorOption} option
 	 * @param {() => void} onChanged Frischt die Generator-Zelle auf (Anzeige-Text + Warnung).
@@ -1302,6 +1337,8 @@
 			return;
 		}
 		const params = column.generator.params;
+		// Stand beim Öffnen, um ihn bei Abbrechen wiederherzustellen.
+		const originalParams = JSON.parse(JSON.stringify(params));
 
 		const overlay = el('div', { className: 'dialog-overlay' });
 		const dialog = el('div', { className: 'param-dialog card' });
@@ -1315,10 +1352,10 @@
 		titleRow.appendChild(heading);
 		const closeBtn = el('button', { className: 'icon-button param-dialog-close' });
 		closeBtn.type = 'button';
-		closeBtn.title = strings.generatorCloseLabel;
-		closeBtn.setAttribute('aria-label', strings.generatorCloseLabel);
+		closeBtn.title = strings.generatorCancelLabel;
+		closeBtn.setAttribute('aria-label', strings.generatorCancelLabel);
 		closeBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
-		closeBtn.addEventListener('click', dismissParamDialog);
+		closeBtn.addEventListener('click', () => dismissParamDialog());
 		titleRow.appendChild(closeBtn);
 		dialog.appendChild(titleRow);
 
@@ -1459,6 +1496,23 @@
 			}
 		}
 
+		// Fußzeile: Fertig übernimmt die Werte, Abbrechen stellt den Stand beim
+		// Öffnen wieder her (X/Escape/Klick daneben wirken wie Abbrechen).
+		const footer = el('div', { className: 'param-dialog-footer' });
+		const cancelBtn = el('button', { className: 'toolbar-btn', text: strings.generatorCancelLabel });
+		cancelBtn.type = 'button';
+		cancelBtn.addEventListener('click', () => dismissParamDialog());
+		const doneBtn = el('button', { className: 'button-primary', text: strings.generatorDoneLabel });
+		doneBtn.type = 'button';
+		doneBtn.addEventListener('click', () => {
+			if (closeParamDialog) {
+				closeParamDialog(true);
+			}
+		});
+		footer.appendChild(cancelBtn);
+		footer.appendChild(doneBtn);
+		dialog.appendChild(footer);
+
 		overlay.appendChild(dialog);
 		document.body.appendChild(overlay);
 
@@ -1476,10 +1530,17 @@
 		};
 		document.addEventListener('keydown', onKeyDown, true);
 
-		closeParamDialog = () => {
+		closeParamDialog = (keepChanges) => {
 			closeParamDialog = null;
 			document.removeEventListener('keydown', onKeyDown, true);
 			overlay.remove();
+			if (!keepChanges) {
+				// Abbrechen: alle Änderungen dieses Dialogs verwerfen.
+				for (const key of Object.keys(params)) {
+					delete params[key];
+				}
+				Object.assign(params, originalParams);
+			}
 			postEdit();
 			onChanged();
 		};

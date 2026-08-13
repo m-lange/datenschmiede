@@ -1282,6 +1282,37 @@ body.vscode-high-contrast-light .chart-bar {
 	font-size: 0.85em;
 }
 
+/* Fußzeile des Parameter-Dialogs: Abbrechen (sekundär) + Fertig (primär). */
+.param-dialog-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.button-primary {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	color: var(--vscode-button-foreground);
+	background-color: var(--vscode-button-background);
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: var(--radius-md);
+	padding: 5px 14px;
+	cursor: pointer;
+}
+
+.button-primary:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.button-primary:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
 /* ---------- Table Editor: Ausgabe-Karte (Übersicht-Tab) ---------- */
 
 .card-title {
@@ -1338,24 +1369,34 @@ body.vscode-high-contrast-light .chart-bar {
 	pointer-events: none;
 }
 
+/* Äußeres Chip-Element bewusst inline-block, der eigentliche Inhalt in
+   einem inline-flex-Kind (.filename-tag-inner): display:inline-flex direkt
+   auf dem atomaren Inline-Baustein wird von Chromium innerhalb von
+   contenteditable unzuverlässig dargestellt (Grundlinie/Caret) — ebenso
+   user-select:none, das Chromium dort ganze Elemente beim Editieren
+   verschlucken lässt (daher hier bewusst NICHT gesetzt; die Chips sind
+   bereits contenteditable=false). */
 .filename-tag {
-	display: inline-flex;
-	align-items: center;
-	gap: 3px;
-	margin: 0 1px;
-	padding: 0 6px 0 4px;
+	display: inline-block;
+	margin: 0 2px;
+	padding: 1px 8px 1px 5px;
 	border-radius: 999px;
 	background-color: var(--vscode-badge-background, var(--vscode-button-secondaryBackground));
 	color: var(--vscode-badge-foreground, var(--vscode-button-secondaryForeground));
 	font-size: 0.9em;
+	line-height: normal;
 	cursor: pointer;
-	-webkit-user-select: none;
-	user-select: none;
-	vertical-align: baseline;
+	vertical-align: middle;
 }
 
 .filename-tag:hover {
 	opacity: 0.8;
+}
+
+.filename-tag-inner {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
 }
 
 .filename-tag .codicon {
@@ -1445,7 +1486,15 @@ body.vscode-high-contrast-light .chart-bar {
 	gap: 8px;
 }
 
-.generator-name-input {
+/* Code-Zellen bekommen etwas mehr Abstand über ihrer Überschrift, damit
+   sich generate / parse_params / display_value klarer voneinander absetzen. */
+.notebook-code-cell {
+	margin-top: 14px;
+}
+
+/* Große Titel-Schrift für das Namensfeld — im Generator-Editor eingeführt
+   und von Table-, Projekt- und Lookup-Editor mitgenutzt. */
+.title-input {
 	font-size: 1.25em;
 	font-weight: 600;
 	padding: 8px 10px;

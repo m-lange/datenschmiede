@@ -25,6 +25,7 @@ export type IssueKind =
 	| 'fk-column-not-found'
 	| 'gen-not-found'
 	| 'gen-fk-only'
+	| 'gen-fk-mismatch'
 	| GeneratorIssueKind;
 
 export interface Issue {
@@ -109,6 +110,14 @@ export function validateTable(
 
 		if (generator.id === 'foreign-key' && !column.fk) {
 			issues.push({ columnIndex, columnName: column.name, kind: 'gen-fk-only', warning: true });
+			return;
+		}
+
+		if (column.fk && generator.id !== 'foreign-key') {
+			// Über die Oberfläche nicht mehr möglich (die Generator-Auswahl ist
+			// für FK-Spalten gesperrt) — kann nur aus von Hand bearbeitetem TOML
+			// stammen.
+			issues.push({ columnIndex, columnName: column.name, kind: 'gen-fk-mismatch', warning: true });
 			return;
 		}
 
