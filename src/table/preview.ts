@@ -153,6 +153,9 @@ export async function runTablePreview(
 							columns: Array.isArray(event.columns) ? (event.columns as string[]) : [],
 							rows: Array.isArray(event.rows) ? (event.rows as string[][]) : [],
 						};
+					} else if (event.event === 'log') {
+						// ctx.log(...) aus (benutzerdefinierten) Generatoren.
+						channel.appendLine(`    » ${String(event.message ?? '')}`);
 					} else if (event.event === 'error') {
 						reportedError = true;
 						// Vollständige Details (inkl. Python-Traceback) in den

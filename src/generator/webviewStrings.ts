@@ -35,6 +35,8 @@ export interface GeneratorWebviewStrings {
 	parseParamsCellHint: string;
 	displayValueCellTitle: string;
 	displayValueCellHint: string;
+	validateCellTitle: string;
+	validateCellHint: string;
 	codePlaceholder: string;
 
 	errorTitle: string;
@@ -77,6 +79,9 @@ const en: GeneratorWebviewStrings = {
 	displayValueCellTitle: 'display_value — optional',
 	displayValueCellHint:
 		'Compact one-line summary of a configuration, used in the run log and preview. The table editor shows a generic summary of the parameter values.',
+	validateCellTitle: 'validate — optional',
+	validateCellHint:
+		'Custom validation of the (raw string) parameter values: return a list of warning texts, an empty list means everything is fine. The background check runs it for every column using this generator and shows the warnings at that column in the Problems view.',
 	codePlaceholder: '# Python code…',
 
 	errorTitle: 'Unable to display file',
@@ -119,6 +124,9 @@ const de: GeneratorWebviewStrings = {
 	displayValueCellTitle: 'display_value — optional',
 	displayValueCellHint:
 		'Kompakte einzeilige Zusammenfassung einer Konfiguration, genutzt in Lauf-Protokoll und Vorschau. Der Table Editor zeigt eine generische Zusammenfassung der Parameterwerte.',
+	validateCellTitle: 'validate — optional',
+	validateCellHint:
+		'Eigene Prüfung der (rohen String-)Parameterwerte: eine Liste von Warnungs-Texten zurückgeben, eine leere Liste heißt „alles in Ordnung“. Die Hintergrund-Prüfung führt sie für jede Spalte aus, die diesen Generator verwendet, und zeigt die Warnungen an der Spalte in der Problems-Ansicht.',
 	codePlaceholder: '# Python-Code…',
 
 	errorTitle: 'Datei kann nicht angezeigt werden',

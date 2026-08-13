@@ -32,6 +32,7 @@ export function parseGeneratorText(text: string): GeneratorFile {
 			generate: toStr(code.generate),
 			parseParams: toStr(code.parse_params),
 			displayValue: toStr(code.display_value),
+			validate: toStr(code.validate),
 		},
 	};
 }
@@ -97,6 +98,7 @@ export function serializeGenerator(generator: GeneratorFile): string {
 	lines.push(`generate = ${tomlString(ensureMultiline(generator.code.generate))}`);
 	lines.push(`parse_params = ${tomlString(ensureMultiline(generator.code.parseParams))}`);
 	lines.push(`display_value = ${tomlString(ensureMultiline(generator.code.displayValue))}`);
+	lines.push(`validate = ${tomlString(ensureMultiline(generator.code.validate))}`);
 
 	lines.push('');
 	return lines.join('\n');

@@ -27,7 +27,7 @@
 	} = window.DatenschmiedeCommon;
 
 	/** @typedef {{name:string,type:string,description:string,choices?:string[],required?:boolean}} Parameter */
-	/** @typedef {{generate:string,parseParams:string,displayValue:string}} GeneratorCode */
+	/** @typedef {{generate:string,parseParams:string,displayValue:string,validate:string}} GeneratorCode */
 	/** @typedef {{name:string,description:string,parameters:Parameter[],code:GeneratorCode}} GeneratorFile */
 	/** @typedef {import('../src/generator/webviewStrings').GeneratorWebviewStrings} GeneratorWebviewStrings */
 
@@ -36,6 +36,7 @@
 	const GENERATE_SIGNATURE = 'def generate(params: dict, n: int, ctx) -> "pandas.Series":';
 	const PARSE_PARAMS_SIGNATURE = 'def parse_params(params: dict[str, str]) -> dict:';
 	const DISPLAY_VALUE_SIGNATURE = 'def display_value(params: dict) -> str:';
+	const VALIDATE_SIGNATURE = 'def validate(params: dict[str, str]) -> "list[str]":';
 
 	/** @type {GeneratorWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
 	let strings = null;
@@ -44,7 +45,7 @@
 		name: '',
 		description: '',
 		parameters: [],
-		code: { generate: '', parseParams: '', displayValue: '' },
+		code: { generate: '', parseParams: '', displayValue: '', validate: '' },
 	};
 	/** @type {string | null} */
 	let parseError = null;
@@ -111,6 +112,9 @@
 				DISPLAY_VALUE_SIGNATURE,
 				false,
 			),
+		);
+		notebook.appendChild(
+			renderCodeCell('validate', strings.validateCellTitle, strings.validateCellHint, VALIDATE_SIGNATURE, false),
 		);
 		app.appendChild(notebook);
 
@@ -441,7 +445,7 @@
 	// ---------------------------------------------------------------------
 
 	/**
-	 * @param {'generate'|'parseParams'|'displayValue'} key
+	 * @param {'generate'|'parseParams'|'displayValue'|'validate'} key
 	 * @param {string} title
 	 * @param {string} hint
 	 * @param {string} signature

@@ -13,6 +13,7 @@ import { parseWeight } from './lookup/model';
 import { listLookups, toLookupRefs } from './lookup/repository';
 import { parseGeneratorText, findParameterLineInfo, isKnownParameterType } from './generator/toml';
 import { listGenerators, toGeneratorList } from './generator/repository';
+import { customGeneratorName, isCustomGeneratorId } from './generator/custom';
 
 /** Alle Dateitypen dieser Extension, die im Hintergrund geprüft werden. */
 const WATCH_PATTERN = '**/*.{td,tdproject,lkp,tdgen}';
@@ -20,6 +21,13 @@ const OUR_EXTENSIONS = ['.td', '.tdproject', '.lkp', '.tdgen'];
 
 function isOurs(uri: vscode.Uri): boolean {
 	return OUR_EXTENSIONS.some((ext) => uri.path.endsWith(ext));
+}
+
+/** Eine geprüfte Datei: Rohtext plus die (noch erweiterbare) Diagnostics-Liste, die in die Collection wandert. */
+interface FileCheck {
+	uri: vscode.Uri;
+	text: string;
+	diagnostics: vscode.Diagnostic[];
 }
 
 /**
@@ -114,21 +122,26 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 
 			const results: [vscode.Uri, vscode.Diagnostic[]][] = [];
 
+			const tableChecks: FileCheck[] = [];
 			for (const entry of tableEntries) {
 				const text = await readFileText(entry.uri).catch(() => '');
-				results.push([entry.uri, this.checkTable(text, { tableOptions, generators, lookups, edges })]);
+				const diagnostics = this.checkTable(text, { tableOptions, generators, lookups, edges });
+				tableChecks.push({ uri: entry.uri, text, diagnostics });
+				results.push([entry.uri, diagnostics]);
 			}
-			const generatorChecks: { uri: vscode.Uri; text: string; diagnostics: vscode.Diagnostic[] }[] = [];
+			const generatorChecks: FileCheck[] = [];
 			for (const entry of generatorEntries) {
 				const text = await readFileText(entry.uri).catch(() => '');
 				const diagnostics = this.checkGenerator(text);
 				generatorChecks.push({ uri: entry.uri, text, diagnostics });
 				results.push([entry.uri, diagnostics]);
 			}
-			// Python-Syntaxprüfung der Code-Zellen (gebündelt in einem einzigen
-			// Python-Aufruf) — hängt Warnungen an die bereits gesammelten
+			// Python-Prüfungen der Code-Zellen (gebündelt in einem einzigen
+			// Python-Aufruf): Syntaxfehler je .tdgen plus die eigene
+			// validate-Prüfung jedes Generators für jede Spalte, die ihn
+			// verwendet — hängt Warnungen an die bereits gesammelten
 			// Diagnostics der jeweiligen Datei an.
-			await this.appendPythonSyntaxDiagnostics(generatorChecks);
+			await this.runPythonCodeChecks(generatorChecks, tableChecks);
 			for (const entry of lookupEntries) {
 				const text = await readFileText(entry.uri).catch(() => '');
 				results.push([entry.uri, this.checkLookup(text)]);
@@ -434,33 +447,89 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	/**
-	 * Prüft die Code-Zellen aller `.tdgen`-Dateien auf Python-Syntaxfehler:
-	 * ein einziger Python-Aufruf kompiliert jeden Rumpf (mit derselben
-	 * Signatur-Umhüllung wie python/generate.py) und meldet Fehler als
-	 * Warnung an der passenden Zeile der Datei.
+	 * Gebündelte Python-Prüfung der Code-Zellen (EIN Python-Aufruf für den
+	 * ganzen Workspace):
+	 *
+	 * 1. **Syntax**: jeder Zellen-Rumpf jeder `.tdgen`-Datei wird kompiliert
+	 *    (mit derselben Signatur-Umhüllung wie python/generate.py);
+	 *    Syntaxfehler erscheinen als Warnung an der passenden Zeile.
+	 * 2. **Eigene validate-Prüfung**: hat ein Generator eine `validate`-Zelle,
+	 *    wird sie für JEDE Spalte ausgeführt, die den Generator verwendet
+	 *    (mit deren rohen Parameterwerten) — zurückgegebene Warnungs-Texte
+	 *    erscheinen an der Spalte in der `.td`-Datei. Der Code stammt aus dem
+	 *    eigenen Workspace (dieselbe Vertrauensstufe wie der Generator-Lauf).
 	 */
-	private async appendPythonSyntaxDiagnostics(
-		checks: { uri: vscode.Uri; text: string; diagnostics: vscode.Diagnostic[] }[],
-	): Promise<void> {
-		const payload: { id: number; generate: string; parse_params: string; display_value: string }[] = [];
-		const parsed: { check: (typeof checks)[number]; generator: ReturnType<typeof parseGeneratorText> }[] = [];
-		for (const check of checks) {
+	private async runPythonCodeChecks(generatorChecks: FileCheck[], tableChecks: FileCheck[]): Promise<void> {
+		interface CodeDef {
+			id: number;
+			generate: string;
+			parse_params: string;
+			display_value: string;
+			validate: string;
+		}
+		const defs: CodeDef[] = [];
+		const defOwner: FileCheck[] = [];
+		const defIndexByName = new Map<string, number>();
+		for (const check of generatorChecks) {
 			try {
 				const generator = parseGeneratorText(check.text);
-				payload.push({
-					id: parsed.length,
+				if (generator.name.trim() && !defIndexByName.has(generator.name.trim())) {
+					defIndexByName.set(generator.name.trim(), defs.length);
+				}
+				defs.push({
+					id: defs.length,
 					generate: generator.code.generate,
 					parse_params: generator.code.parseParams,
 					display_value: generator.code.displayValue,
+					validate: generator.code.validate,
 				});
-				parsed.push({ check, generator });
+				defOwner.push(check);
 			} catch {
 				// Kaputtes TOML wird bereits gemeldet.
 			}
 		}
-		if (payload.length === 0) {
+		if (defs.length === 0) {
 			return;
 		}
+
+		// Spalten einsammeln, deren benutzerdefinierter Generator eine
+		// validate-Zelle hat.
+		interface ValidationCheck {
+			id: number;
+			def_id: number;
+			params: Record<string, string>;
+			tableCheck: FileCheck;
+			columnIndex: number;
+			columnName: string;
+		}
+		const validationChecks: ValidationCheck[] = [];
+		for (const tableCheck of tableChecks) {
+			let table;
+			try {
+				table = parseTableText(tableCheck.text);
+			} catch {
+				continue;
+			}
+			table.columns.forEach((column, columnIndex) => {
+				const id = column.generator?.id ?? '';
+				if (!isCustomGeneratorId(id)) {
+					return;
+				}
+				const defIndex = defIndexByName.get(customGeneratorName(id).trim());
+				if (defIndex === undefined || !defs[defIndex].validate.trim()) {
+					return;
+				}
+				validationChecks.push({
+					id: validationChecks.length,
+					def_id: defIndex,
+					params: column.generator?.params ?? {},
+					tableCheck,
+					columnIndex,
+					columnName: column.name,
+				});
+			});
+		}
+
 		const pythonPath = await this.getPythonPath();
 		if (!pythonPath) {
 			return;
@@ -468,52 +537,84 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 
 		const script = [
 			'import sys, json',
-			'defs = json.load(sys.stdin)',
-			'out = []',
-			'for d in defs:',
-			'    for cell in ("generate", "parse_params", "display_value"):',
+			'data = json.load(sys.stdin)',
+			'out = {"syntax": [], "validations": []}',
+			'validators = {}',
+			'for d in data.get("defs", []):',
+			'    for cell in ("generate", "parse_params", "display_value", "validate"):',
 			'        body = d.get(cell) or ""',
 			'        if not body.strip():',
 			'            continue',
-			'        src = "def _f(params, n, ctx):\\n" + "\\n".join("    " + l for l in body.split("\\n")) + "\\n"',
+			'        src = "def _f(params, n=None, ctx=None):\\n" + "\\n".join("    " + l for l in body.split("\\n")) + "\\n"',
 			'        try:',
-			'            compile(src, cell, "exec")',
+			'            code = compile(src, cell, "exec")',
 			'        except SyntaxError as e:',
-			'            out.append({"id": d["id"], "cell": cell, "line": (e.lineno or 2) - 1, "message": e.msg or "syntax error"})',
+			'            out["syntax"].append({"id": d["id"], "cell": cell, "line": (e.lineno or 2) - 1, "message": e.msg or "syntax error"})',
+			'            continue',
+			'        if cell == "validate":',
+			'            ns = {}',
+			'            try:',
+			'                exec(code, ns)',
+			'                validators[d["id"]] = ns["_f"]',
+			'            except Exception:',
+			'                pass',
+			'for c in data.get("checks", []):',
+			'    fn = validators.get(c.get("def_id"))',
+			'    if fn is None:',
+			'        continue',
+			'    try:',
+			'        raw = fn(dict(c.get("params") or {}))',
+			'        messages = [str(m).strip() for m in (raw or []) if str(m).strip()]',
+			'    except Exception as e:',
+			'        messages = [f"validate raised {type(e).__name__}: {e}"]',
+			'    if messages:',
+			'        out["validations"].append({"id": c["id"], "messages": messages})',
 			'print(json.dumps(out))',
 		].join('\n');
 
-		const findings = await new Promise<{ id: number; cell: string; line: number; message: string }[]>((resolve) => {
+		interface CheckResult {
+			syntax: { id: number; cell: string; line: number; message: string }[];
+			validations: { id: number; messages: string[] }[];
+		}
+		const findings = await new Promise<CheckResult>((resolve) => {
+			const empty: CheckResult = { syntax: [], validations: [] };
 			const child = spawn(pythonPath, ['-c', script]);
 			let stdout = '';
 			child.stdout.on('data', (chunk: Buffer) => {
 				stdout += chunk.toString('utf8');
 			});
-			child.on('error', () => resolve([]));
+			child.on('error', () => resolve(empty));
 			child.on('close', () => {
 				try {
 					const result = JSON.parse(stdout.trim());
-					resolve(Array.isArray(result) ? result : []);
+					resolve({
+						syntax: Array.isArray(result.syntax) ? result.syntax : [],
+						validations: Array.isArray(result.validations) ? result.validations : [],
+					});
 				} catch {
-					resolve([]);
+					resolve(empty);
 				}
 			});
-			child.stdin.write(JSON.stringify(payload));
+			child.stdin.write(
+				JSON.stringify({
+					defs,
+					checks: validationChecks.map(({ id, def_id, params }) => ({ id, def_id, params })),
+				}),
+			);
 			child.stdin.end();
 		});
 
-		const cellKeys: Record<string, string> = { generate: 'generate', parse_params: 'parse_params', display_value: 'display_value' };
-		for (const finding of findings) {
-			const target = parsed[finding.id];
-			if (!target || !cellKeys[finding.cell]) {
+		for (const finding of findings.syntax) {
+			const target = defOwner[finding.id];
+			if (!target) {
 				continue;
 			}
-			const lines = target.check.text.split('\n');
+			const lines = target.text.split('\n');
 			// Zeile des `<zelle> = """`-Schlüssels; der Rumpf beginnt in der
 			// Zeile darunter (mehrzeiliger TOML-String, siehe serializeGenerator).
 			const keyLine = lines.findIndex((line) => new RegExp(`^\\s*${finding.cell}\\s*=`).test(line));
 			const bodyLine = keyLine >= 0 ? keyLine + Math.max(1, finding.line) : 0;
-			target.check.diagnostics.push(
+			target.diagnostics.push(
 				this.diagnostic(
 					this.lineRange(lines, bodyLine),
 					vscode.l10n.t('Python syntax error in "{0}": {1}', finding.cell, finding.message),
@@ -521,6 +622,28 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 					true,
 				),
 			);
+		}
+
+		for (const validation of findings.validations) {
+			const target = validationChecks[validation.id];
+			if (!target) {
+				continue;
+			}
+			const lines = target.tableCheck.text.split('\n');
+			const columnLines = findColumnLineInfo(target.tableCheck.text);
+			const info = columnLines[target.columnIndex];
+			const line = info ? info.nameLine ?? info.columnsLine : 0;
+			const label = target.columnName.trim() || vscode.l10n.t('column {0}', target.columnIndex + 1);
+			for (const message of validation.messages) {
+				target.tableCheck.diagnostics.push(
+					this.diagnostic(
+						this.lineRange(lines, line),
+						vscode.l10n.t('Column "{0}": {1}', label, message),
+						'gen-custom-validate',
+						true,
+					),
+				);
+			}
 		}
 	}
 

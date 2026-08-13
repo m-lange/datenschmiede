@@ -30,12 +30,21 @@ export interface GeneratorCode {
 	parseParams: string;
 	/** Optional: kompakter Anzeige-Text der Konfiguration für Lauf-Protokoll und Vorschau. */
 	displayValue: string;
+	/**
+	 * Optional: eigene Prüfung der Parameterwerte — liefert eine Liste von
+	 * Warnungs-Texten (leer = alles in Ordnung). Wird von der Workspace-
+	 * Hintergrund-Prüfung für jede Spalte ausgeführt, die diesen Generator
+	 * verwendet, und erscheint an der Spalte in der Problems-Ansicht
+	 * (siehe src/diagnostics.ts).
+	 */
+	validate: string;
 }
 
 /** Feste, im Editor nicht änderbare Python-Signaturen der Code-Zellen. */
 export const GENERATE_SIGNATURE = 'def generate(params: dict, n: int, ctx) -> "pandas.Series":';
 export const PARSE_PARAMS_SIGNATURE = 'def parse_params(params: dict[str, str]) -> dict:';
 export const DISPLAY_VALUE_SIGNATURE = 'def display_value(params: dict) -> str:';
+export const VALIDATE_SIGNATURE = 'def validate(params: dict[str, str]) -> "list[str]":';
 
 /** Standard-Rümpfe für eine frisch angelegte .tdgen-Datei. */
 export const DEFAULT_GENERATE_BODY = [
@@ -52,6 +61,11 @@ export const DEFAULT_PARSE_PARAMS_BODY = [
 
 export const DEFAULT_DISPLAY_VALUE_BODY = ['return ", ".join(f"{k}: {v}" for k, v in params.items() if v)'].join('\n');
 
+export const DEFAULT_VALIDATE_BODY = [
+	'# Return a list of warning texts for the current parameter values (empty = ok).',
+	'return []',
+].join('\n');
+
 export function createEmptyGeneratorFile(name = ''): GeneratorFile {
 	return {
 		name,
@@ -61,6 +75,7 @@ export function createEmptyGeneratorFile(name = ''): GeneratorFile {
 			generate: DEFAULT_GENERATE_BODY,
 			parseParams: DEFAULT_PARSE_PARAMS_BODY,
 			displayValue: DEFAULT_DISPLAY_VALUE_BODY,
+			validate: DEFAULT_VALIDATE_BODY,
 		},
 	};
 }

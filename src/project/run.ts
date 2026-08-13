@@ -160,6 +160,11 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 							channel.appendLine(`    ✓ ${String(event.column ?? '')} (${Number(event.records)} values)`);
 							break;
 						}
+						case 'log': {
+							// ctx.log(...) aus (benutzerdefinierten) Generatoren.
+							channel.appendLine(`    » ${String(event.message ?? '')}`);
+							break;
+						}
 						case 'table_done': {
 							const total = Number(event.total) || plan.plan.tables.length;
 							progress.report({
@@ -313,6 +318,7 @@ export interface Plan {
 		generate: string;
 		parse_params: string;
 		display_value: string;
+		validate: string;
 	}[];
 	/** Vorschau-Modus (siehe table/preview.ts): nichts schreiben, stattdessen die Zeilen dieser Tabelle zurückmelden. */
 	preview?: { table: string; limit: number };
@@ -376,6 +382,7 @@ export function toPlanCustomGenerators(usedCustomGenerators: Map<string, CustomG
 		generate: generator.file.code.generate,
 		parse_params: generator.file.code.parseParams,
 		display_value: generator.file.code.displayValue,
+		validate: generator.file.code.validate,
 	}));
 }
 

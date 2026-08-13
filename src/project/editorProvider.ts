@@ -39,6 +39,8 @@ interface ProjectTreeIcons {
 	required: IconPair;
 	invalid: IconPair;
 	namespace: IconPair;
+	/** Tabellen-Schlüssel-Icon primärer (führender) Tabellen (TableKey.svg — kein eingebautes Codicon vorhanden). */
+	primary: IconPair;
 }
 
 /** Löst die Icon-Dateien (icons/) einmal je Webview-Panel in Webview-URIs auf (siehe getHtml für dasselbe Muster bei media/). */
@@ -49,6 +51,7 @@ function buildTableIcons(webview: vscode.Webview, extensionUri: vscode.Uri): Pro
 		required: { dark: iconUri('td-required-dark.svg'), light: iconUri('td-required-light.svg') },
 		invalid: { dark: iconUri('td-invalid-dark.svg'), light: iconUri('td-invalid-light.svg') },
 		namespace: { dark: iconUri('schema-dark.svg'), light: iconUri('schema-light.svg') },
+		primary: { dark: iconUri('tablekey-dark.svg'), light: iconUri('tablekey-light.svg') },
 	};
 }
 

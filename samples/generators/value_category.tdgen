@@ -23,6 +23,11 @@ Tabelle in benannte Klassen — z. B. eine Sendungsgröße `small` / `medium`
   Umbenennen/Löschen der Spalte erscheint als **Warnung** in der
   Problems-Ansicht
 - vektorisierte Klassifizierung über `pd.cut` statt Schleifen-Code
+- die **`validate`-Zelle**: eigene Prüfungen der Parameterwerte (Grenzen
+  aufsteigend? genau ein Label mehr als Grenzen?) — die Warnungen
+  erscheinen an der konfigurierten Spalte in der Problems-Ansicht
+- **`ctx.log(...)`**: schreibt die erzeugte Klassen-Verteilung ins
+  Lauf-Protokoll (Output-Channel „Datenschmiede“)
 """
 
 [[parameters]]
@@ -51,11 +56,27 @@ labels = [x.strip() for x in str(params.get("labels", "")).split(",") if x.strip
 if len(labels) != len(limits) + 1:
     raise RuntimeError("value_category: labels must contain exactly one more entry than limits")
 bins = [float("-inf")] + limits + [float("inf")]
-return ctx.pd.cut(values, bins=bins, labels=labels).astype(str)
+result = ctx.pd.cut(values, bins=bins, labels=labels).astype(str)
+ctx.log(f"value_category({params['source_column']}): " + str(result.value_counts().to_dict()))
+return result
 """
 parse_params = """
 return params
 """
 display_value = """
 return f"{params.get('source_column', '?')} → {params.get('labels', '?')}"
+"""
+validate = """
+warnings = []
+raw_limits = [x.strip() for x in str(params.get("limits", "")).split(",") if x.strip()]
+labels = [x.strip() for x in str(params.get("labels", "")).split(",") if x.strip()]
+try:
+    numbers = [float(x) for x in raw_limits]
+    if numbers != sorted(numbers):
+        warnings.append("limits must be ascending")
+except ValueError:
+    warnings.append("limits must be comma-separated numbers")
+if raw_limits and labels and len(labels) != len(raw_limits) + 1:
+    warnings.append(f"labels must contain exactly one more entry than limits ({len(raw_limits) + 1} expected, got {len(labels)})")
+return warnings
 """

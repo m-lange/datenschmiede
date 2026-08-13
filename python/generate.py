@@ -92,6 +92,16 @@ class Context:
     def faker(self, locale="en_US"):
         return get_faker(locale)
 
+    def log(self, *args):
+        """
+        Schreibt eine Meldung ins Lauf-Protokoll (Output-Channel
+        "Datenschmiede" in VS Code). Bewusst statt print(): stdout ist fuer
+        das JSON-Ereignis-Protokoll reserviert — rohe print()-Zeilen werden
+        dort verworfen (print(..., file=sys.stderr) landet ebenfalls im
+        Output-Channel).
+        """
+        emit("log", table=self._table["label"], message=" ".join(str(a) for a in args))
+
     def column(self, name):
         """Bereits generierte Werte einer anderen Spalte dieser Tabelle."""
         data = self._runner.data.get(self._table["label"], {})
