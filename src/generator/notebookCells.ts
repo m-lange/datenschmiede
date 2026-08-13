@@ -218,8 +218,11 @@ export function defaultScratch(parameters: GeneratorParameter[]): string {
 /** Baut die Notebook-Zellen aus dem Datei-Modell (`locale` wählt die Sprache der Beschreibungs-Zellen). */
 export function fileToCells(file: GeneratorFile, locale: 'de' | 'en' = 'en'): CellSpec[] {
 	const cells: CellSpec[] = [];
+	// <small> verkleinert die Beschreibungs-Zellen gegenüber normalem
+	// Markdown-Text (das Tag gehört zur erlaubten HTML-Teilmenge des
+	// Notebook-Renderers; wird es entfernt, bleibt der Text normal groß).
 	const doc = (key: string) =>
-		cells.push({ kind: 'markdown', language: 'markdown', value: CELL_DOCS[key][locale], role: 'doc' });
+		cells.push({ kind: 'markdown', language: 'markdown', value: `<small>${CELL_DOCS[key][locale]}</small>`, role: 'doc' });
 
 	const header = file.description.trim()
 		? `# ${file.name.trim()}\n\n${file.description.trim()}`
