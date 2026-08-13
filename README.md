@@ -235,21 +235,37 @@ erscheinen als **Warnungen** in der Problems-Ansicht.
 ## Benutzerdefinierte Generatoren (`.tdgen`)
 
 Über **„Datenschmiede: Neuen Generator erstellen…“** entsteht eine
-`.tdgen`-Datei (TOML) mit eigenem Custom Editor im Stil eines
-**Jupyter-Notebooks**: Name und Beschreibung als Markdown oben, darunter
-eine dynamische **Parameter-Tabelle** (Name, Datentyp — die Spaltentypen
-erweitert um Nachschlageliste, referenzierte Tabelle und Spalte —,
-Beschreibung, optionale vordefinierte Werteliste, Pflicht-Flag) sowie drei
-Python-**Code-Zellen** mit fest vorgegebener, nicht änderbarer Signatur und
-editierbarem Rumpf:
+`.tdgen`-Datei (TOML), die als **echtes VS-Code-Notebook** öffnet
+(Notebook-Typ `datenschmiede-generator`) — mit echten Monaco-Editoren je
+Zelle (Python-Highlighting, IntelliSense) und einem **persistenten
+Python-Prozess je Notebook** als Kernel: Variablen, Importe und Funktionen
+bleiben zwischen Zell-Ausführungen erhalten, wie in Jupyter. Aufbau:
 
-- `def generate(params, n, ctx) -> pandas.Series` (Pflicht): erzeugt die
-  Werte; `ctx` bietet `rng` (numpy), `pd`/`np`, `faker(locale)`,
-  `column("name")` (Werte anderer Spalten) und `lookup("liste", "spalte")`
-- `def parse_params(params)` (optional): wandelt die String-Parameter in
-  typisierte Werte
-- `def display_value(params)` (optional): kompakte Zusammenfassung für
-  Lauf-Protokoll/Vorschau
+- **Markdown-Kopfzelle**: `# Name` plus Beschreibung
+- **`parameters()`-Zelle**: gibt die Parameterdefinitionen als
+  Literal-Liste von dicts zurück (`{"name": …, "type": …, "description":
+  …, "choices": […], "required": True}`; Datentypen = Spaltentypen plus
+  `lookup`/`table`/`column`/`own_column`). Beim Speichern leitet der
+  Serializer daraus die `[[parameters]]`-Blöcke der Datei ab, mit denen
+  Table Editor, Validierung und Lauf arbeiten — der Code selbst bleibt
+  verbatim erhalten
+- **Scratch-Zelle**: Testwerte (`params = {…}`, `n = 10`) und freie
+  Experimente — ausführen setzt den Session-Zustand für die
+  Methoden-Zellen
+- die vier **Methoden-Zellen** — das Ausführen einer Zelle definiert die
+  Methode *und* ruft sie automatisch mit den aktuellen Testwerten auf,
+  das Ergebnis erscheint nativ unter der Zelle:
+  - `def generate(params, n, ctx) -> pandas.Series` (Pflicht): erzeugt die
+    Werte; `ctx` bietet `rng` (numpy), `pd`/`np`, `faker(locale)`,
+    `column("name")` (Werte anderer Spalten), `related("fk", "spalte")`
+    (zeilengenauer Join, auch mehrstufig), `table(...)`,
+    `lookup("liste", "spalte")` und `log(...)`
+  - `def parse_params(params)` (optional): wandelt die String-Parameter in
+    typisierte Werte
+  - `def display_value(params)` (optional): kompakte Zusammenfassung für
+    Lauf-Protokoll/Vorschau
+  - `def validate(params)` (optional): eigene Prüfungen — Warnungen
+    erscheinen an den konfigurierten Spalten in der Problems-Ansicht
 
 Referenziert wird ein Generator über seinen **Namen** (`custom:<name>`),
 nicht den Dateinamen; wird die Datei gelöscht oder der Name geändert,

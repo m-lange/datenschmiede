@@ -14,19 +14,29 @@
   **mehrstufig** sein (`ctx.related("order_id.customer_id", "country")`:
   Sendung → Bestellung → Kunde); der Beispiel-Generator `parent_value`
   bietet dafür den optionalen `via`-Parameter.
-- **Generator-Editor: Python-Hervorhebung + Zellen-Testlauf**: die
-  Code-Zellen zeigen Python-Syntaxhervorhebung (eigener kleiner
-  Tokenizer als Overlay hinter der Textarea, Farben je Theme-Helligkeit an
-  Dark+/Light+ angelehnt — Webviews haben keinen Zugriff auf die
-  TextMate-Token-Farben des Editors), auch für die feste Signatur-Zeile.
-  Jede Zelle hat einen **Run-Knopf**: ein Dialog fragt die Parameterwerte
-  ab (vorbelegt mit den zuletzt verwendeten Testwerten; bei `generate`
-  zusätzlich die Datensatzanzahl n), dann läuft genau diese Zelle über
-  `python/run_cell.py` und das Ergebnis erscheint Notebook-artig **unter
-  der Zelle** — Werte, `ctx.log`-Ausgaben, Warnungslisten oder der Fehler
-  samt Traceback. `ctx.rng/np/pd/faker/lookup` funktionieren im Testlauf;
-  `ctx.column/related/table` verweisen mit einer klaren Meldung auf die
-  Tabellen-Vorschau.
+- **Generator-Editor ist jetzt ein echtes VS-Code-Notebook**
+  (Notebook-Typ `datenschmiede-generator`, ersetzt den bisherigen
+  Webview-Editor): `.tdgen`-Dateien öffnen als natives Notebook mit echten
+  Monaco-Editoren je Zelle (echtes Python-Highlighting, IntelliSense) —
+  Markdown-Kopfzelle (`# Name` + Beschreibung), **`parameters()`-Zelle**
+  (gibt die Parameterdefinitionen als Literal-Liste von dicts zurück;
+  beim Speichern leitet der Serializer daraus die `[[parameters]]`-Blöcke
+  der Datei ab, der Code selbst bleibt verbatim erhalten), eine
+  **Scratch-Zelle** für Testwerte (`params = {...}`, `n = 10`) und die
+  vier Methoden-Zellen. Ausgeführt wird über einen **persistenten
+  Python-Prozess je Notebook** (`python/notebook_kernel.py`): Variablen,
+  Importe und Funktionen bleiben zwischen Ausführungen erhalten — volles
+  Python wie in einem Jupyter-Kernel. Das Ausführen einer Methoden-Zelle
+  ruft die Methode automatisch mit den aktuellen Testwerten auf und zeigt
+  das Ergebnis nativ unter der Zelle (Werte, `ctx.log`, Warnungslisten,
+  Fehler samt Traceback); freie Zellen zeigen wie in Jupyter den Wert
+  ihres letzten Ausdrucks. Zellen-Rollen stecken in Metadaten (Umsortieren
+  unkritisch), unbekannte Zusatz-Zellen wandern beim Speichern in die
+  Scratch-Zelle statt verloren zu gehen. Die `.tdgen`-Datei bleibt
+  unverändert TOML — Table Editor, Validierung und Generator-Lauf arbeiten
+  weiter mit der abgeleiteten Parameterliste; gibt `parameters()` kein
+  Literal zurück, bleibt die letzte gültige Liste erhalten und die
+  Problems-Ansicht meldet es.
 - **Eigene Validierung und Protokoll-Ausgaben für benutzerdefinierte
   Generatoren**: die neue Code-Zelle **`validate`** prüft die (rohen
   String-)Parameterwerte und liefert Warnungs-Texte zurück — die

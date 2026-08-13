@@ -14,6 +14,7 @@ import { listLookups, toLookupRefs } from './lookup/repository';
 import { parseGeneratorText, findParameterLineInfo, isKnownParameterType } from './generator/toml';
 import { listGenerators, toGeneratorList } from './generator/repository';
 import { customGeneratorName, isCustomGeneratorId } from './generator/custom';
+import { parametersFromBody } from './generator/notebookCells';
 
 /** Alle Dateitypen dieser Extension, die im Hintergrund geprüft werden. */
 const WATCH_PATTERN = '**/*.{td,tdproject,lkp,tdgen}';
@@ -462,6 +463,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	private async runPythonCodeChecks(generatorChecks: FileCheck[], tableChecks: FileCheck[]): Promise<void> {
 		interface CodeDef {
 			id: number;
+			parameters: string;
 			generate: string;
 			parse_params: string;
 			display_value: string;
@@ -478,6 +480,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				}
 				defs.push({
 					id: defs.length,
+					parameters: generator.code.parameters,
 					generate: generator.code.generate,
 					parse_params: generator.code.parseParams,
 					display_value: generator.code.displayValue,
@@ -541,7 +544,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			'out = {"syntax": [], "validations": []}',
 			'validators = {}',
 			'for d in data.get("defs", []):',
-			'    for cell in ("generate", "parse_params", "display_value", "validate"):',
+			'    for cell in ("parameters", "generate", "parse_params", "display_value", "validate"):',
 			'        body = d.get(cell) or ""',
 			'        if not body.strip():',
 			'            continue',
@@ -714,6 +717,24 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 					this.lineRange(lines, 0),
 					vscode.l10n.t('The generate method has no code — this generator will not produce any values.'),
 					'gen-file-empty-generate',
+					true,
+				),
+			);
+		}
+
+		// Die parameters()-Zelle muss ein *Literal* zurückgeben, damit der
+		// Notebook-Serializer daraus die [[parameters]]-Blöcke ableiten kann
+		// (siehe generator/notebookCells.ts) — sonst bleibt die abgeleitete
+		// Liste auf dem letzten gültigen Stand.
+		if (generator.code.parameters.trim() && parametersFromBody(generator.code.parameters) === null) {
+			const keyLine = lines.findIndex((line) => /^\s*parameters\s*=/.test(line));
+			diagnostics.push(
+				this.diagnostic(
+					this.lineRange(lines, Math.max(0, keyLine)),
+					vscode.l10n.t(
+						'parameters() does not return a literal list of dicts — the derived parameter list cannot be updated.',
+					),
+					'gen-file-parameters-literal',
 					true,
 				),
 			);

@@ -81,6 +81,9 @@
 	"Table file \"{0}\" was not found. It may have been deleted, renamed, or moved.": "Tabellendatei „{0}“ wurde nicht gefunden. Sie wurde möglicherweise gelöscht, umbenannt oder verschoben.",
 	"Python syntax error in \"{0}\": {1}": "Python-Syntaxfehler in „{0}“: {1}",
 	"Column \"{0}\": {1}": "Spalte „{0}“: {1}",
+	"parameters() does not return a literal list of dicts — the derived parameter list cannot be updated.": "parameters() gibt keine Literal-Liste von dicts zurück — die abgeleitete Parameterliste kann nicht aktualisiert werden.",
+	"Persistent Python process with the generator ctx": "Persistenter Python-Prozess mit dem Generator-ctx",
+	"The Python kernel exited.": "Der Python-Kernel wurde beendet.",
 	"Select Output Folder": "Ausgabeordner auswählen",
 	"Select": "Auswählen",
 	"Show Details": "Details anzeigen"

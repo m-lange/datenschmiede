@@ -24,6 +24,16 @@ export interface GeneratorFile {
 
 /** Die Python-Methodenrümpfe der Code-Zellen (nur der Rumpf, ohne die feste Signatur). */
 export interface GeneratorCode {
+	/**
+	 * Rumpf der `parameters()`-Zelle: gibt die Parameterdefinitionen als
+	 * Literal-Liste von dicts zurück (siehe PARAMETERS_SIGNATURE). Der Code
+	 * wird verbatim gespeichert; beim Speichern des Notebooks leitet der
+	 * Serializer daraus die deklarativen `[[parameters]]`-Blöcke ab, mit
+	 * denen Table Editor, Validierung und Plan arbeiten (siehe
+	 * generator/pyliteral.ts). Leer -> die Zelle wird aus den
+	 * `[[parameters]]`-Blöcken erzeugt.
+	 */
+	parameters: string;
 	/** Pflicht: erzeugt die Werte der Spalte (siehe GENERATE_SIGNATURE). */
 	generate: string;
 	/** Optional: wandelt die String-Parameterwerte in typisierte Werte um, bevor generate läuft. */
@@ -38,9 +48,16 @@ export interface GeneratorCode {
 	 * (siehe src/diagnostics.ts).
 	 */
 	validate: string;
+	/**
+	 * Freie Notebook-Zelle für Testwerte und Experimente (z. B.
+	 * `params = {...}` und `n = 10` für die Ausführung der Methoden-Zellen)
+	 * — wird gespeichert, aber vom Generator-Lauf ignoriert.
+	 */
+	scratch: string;
 }
 
-/** Feste, im Editor nicht änderbare Python-Signaturen der Code-Zellen. */
+/** Feste Python-Signaturen der Code-Zellen (im Notebook die jeweils erste Zeile der Zelle). */
+export const PARAMETERS_SIGNATURE = 'def parameters() -> "list[dict]":';
 export const GENERATE_SIGNATURE = 'def generate(params: dict, n: int, ctx) -> "pandas.Series":';
 export const PARSE_PARAMS_SIGNATURE = 'def parse_params(params: dict[str, str]) -> dict:';
 export const DISPLAY_VALUE_SIGNATURE = 'def display_value(params: dict) -> str:';
@@ -72,10 +89,12 @@ export function createEmptyGeneratorFile(name = ''): GeneratorFile {
 		description: '',
 		parameters: [],
 		code: {
+			parameters: '',
 			generate: DEFAULT_GENERATE_BODY,
 			parseParams: DEFAULT_PARSE_PARAMS_BODY,
 			displayValue: DEFAULT_DISPLAY_VALUE_BODY,
 			validate: DEFAULT_VALIDATE_BODY,
+			scratch: '',
 		},
 	};
 }

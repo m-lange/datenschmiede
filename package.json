@@ -114,16 +114,17 @@
           }
         ],
         "priority": "default"
-      },
+      }
+    ],
+    "notebooks": [
       {
-        "viewType": "datenschmiede.generatorEditor",
-        "displayName": "Generator Editor",
+        "type": "datenschmiede-generator",
+        "displayName": "Datenschmiede Generator",
         "selector": [
           {
             "filenamePattern": "*.tdgen"
           }
-        ],
-        "priority": "default"
+        ]
       }
     ],
     "commands": [

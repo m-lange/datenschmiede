@@ -29,10 +29,12 @@ export function parseGeneratorText(text: string): GeneratorFile {
 		description: toStr(data.description),
 		parameters,
 		code: {
+			parameters: toStr(code.parameters),
 			generate: toStr(code.generate),
 			parseParams: toStr(code.parse_params),
 			displayValue: toStr(code.display_value),
 			validate: toStr(code.validate),
+			scratch: toStr(code.scratch),
 		},
 	};
 }
@@ -95,10 +97,18 @@ export function serializeGenerator(generator: GeneratorFile): string {
 
 	lines.push('');
 	lines.push('[code]');
+	if (generator.code.parameters.trim()) {
+		// Verbatim gespeicherter Rumpf der parameters()-Zelle (die
+		// [[parameters]]-Blöcke oben sind die daraus abgeleitete Form).
+		lines.push(`parameters = ${tomlString(ensureMultiline(generator.code.parameters))}`);
+	}
 	lines.push(`generate = ${tomlString(ensureMultiline(generator.code.generate))}`);
 	lines.push(`parse_params = ${tomlString(ensureMultiline(generator.code.parseParams))}`);
 	lines.push(`display_value = ${tomlString(ensureMultiline(generator.code.displayValue))}`);
 	lines.push(`validate = ${tomlString(ensureMultiline(generator.code.validate))}`);
+	if (generator.code.scratch.trim()) {
+		lines.push(`scratch = ${tomlString(ensureMultiline(generator.code.scratch))}`);
+	}
 
 	lines.push('');
 	return lines.join('\n');

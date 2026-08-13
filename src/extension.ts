@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { TableEditorProvider } from './table/editorProvider';
 import { ProjectEditorProvider } from './project/editorProvider';
 import { LookupEditorProvider } from './lookup/editorProvider';
-import { GeneratorEditorProvider } from './generator/editorProvider';
+import { GeneratorNotebook } from './generator/notebook';
 import { WorkspaceDiagnostics } from './diagnostics';
 import { newTableCommand } from './table/commands/newTable';
 import { newProjectCommand } from './project/commands/newProject';
@@ -17,7 +17,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(TableEditorProvider.register(context));
 	context.subscriptions.push(ProjectEditorProvider.register(context));
 	context.subscriptions.push(LookupEditorProvider.register(context));
-	context.subscriptions.push(GeneratorEditorProvider.register(context));
+	context.subscriptions.push(GeneratorNotebook.register(context));
 	// Workspace-weite Hintergrund-Prüfung aller Dateien (auch nicht geöffneter).
 	context.subscriptions.push(WorkspaceDiagnostics.register(context));
 	// Output-Channel „Datenschmiede“ (Lauf-Protokolle, Python-Tracebacks).
