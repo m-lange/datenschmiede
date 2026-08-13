@@ -160,6 +160,29 @@ export async function resolveLinkedInterpreter(link: PythonLink): Promise<Resolv
 }
 
 /**
+ * Bester verfügbarer Interpreter ohne Projekt-Bezug (für die
+ * Tabellen-Vorschau, siehe table/preview.ts): zuerst die in VS Code aktive
+ * Umgebung, sonst die erste bekannte Umgebung mit Python 3.10+. `null`,
+ * wenn keine nutzbare Umgebung gefunden wurde.
+ */
+export async function resolveAnyInterpreter(): Promise<ResolvedPythonStatus | null> {
+	const api = await getPythonApi();
+	if (!api) {
+		return null;
+	}
+	try {
+		const active = await api.environments.resolveEnvironment(api.environments.getActiveEnvironmentPath());
+		if (active && versionAtLeast(active.version, MIN_PYTHON)) {
+			return { path: active.path, label: environmentLabel(active), resolved: true, ok: true };
+		}
+	} catch {
+		// Aktive Umgebung nicht auflösbar -> unten auf die bekannte Liste zurückfallen.
+	}
+	const known = api.environments.known.find((env) => versionAtLeast(env.version, MIN_PYTHON));
+	return known ? { path: known.path, label: environmentLabel(known), resolved: true, ok: true } : null;
+}
+
+/**
  * Best-effort-Prüfung beim Aktivieren der Extension: warnt (einmal pro
  * Sitzung), falls keine Python-3.10+-Installation gefunden werden konnte. Sie
  * selbst zu installieren gibt es keine VS-Code-API dafür — stattdessen wird

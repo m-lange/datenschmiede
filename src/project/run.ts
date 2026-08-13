@@ -4,11 +4,12 @@ import { Project } from './model';
 import { parseProjectText } from './toml';
 import { resolveLinkedInterpreter } from './python';
 import { parseCardinality } from '../table/cardinality';
+import { Table } from '../table/model';
 import { TableEntry, listTables, readFileText, tableLabel } from '../table/repository';
 import { GeneratorConfig } from '../generator/types';
 import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
-import { CustomGenerator, isCustomGeneratorId } from '../generator/custom';
+import { CustomGenerator } from '../generator/custom';
 import { listLookups } from '../lookup/repository';
 
 /**
@@ -99,6 +100,8 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 				let stderrText = '';
 				let reportedError = false;
 				let doneFiles: { table: string; file: string; records: number }[] | null = null;
+				/** Vom Läufer aufgelöster Ausgabeordner (Variablen ersetzt), aus dem done-Event. */
+				let doneOutputDir = '';
 
 				child.stdout.on('data', (chunk: Buffer) => {
 					stdoutRest += chunk.toString('utf8');
@@ -138,6 +141,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 						}
 						case 'done': {
 							doneFiles = Array.isArray(event.files) ? (event.files as typeof doneFiles) : [];
+							doneOutputDir = typeof event.output_dir === 'string' ? event.output_dir : '';
 							break;
 						}
 						case 'error': {
@@ -186,7 +190,11 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 						const openLabel = vscode.l10n.t('Open Output Folder');
 						void vscode.window
 							.showInformationMessage(
-								vscode.l10n.t('Test data generated: {0} file(s) in "{1}".', files.length, plan.plan.output_dir),
+								vscode.l10n.t(
+									'Test data generated: {0} file(s) in "{1}".',
+									files.length,
+									doneOutputDir || plan.plan.project_dir,
+								),
 								openLabel,
 							)
 							.then((choice) => {
@@ -217,7 +225,7 @@ function activeProjectUri(): vscode.Uri | undefined {
 	return undefined;
 }
 
-interface PlanColumn {
+export interface PlanColumn {
 	name: string;
 	type: string;
 	pk: boolean;
@@ -227,7 +235,7 @@ interface PlanColumn {
 	generator: (GeneratorConfig & { table_refs: string[]; own_column_refs: string[] }) | null;
 }
 
-interface PlanTable {
+export interface PlanTable {
 	path: string;
 	schema: string;
 	name: string;
@@ -251,8 +259,13 @@ interface PlanTable {
 	};
 }
 
-interface Plan {
-	output_dir: string;
+export interface Plan {
+	/** Ordner der Projekt- bzw. Tabellendatei — Bezugspunkt für den (relativen) Ausgabeordner. */
+	project_dir: string;
+	/** Ausgabeordner-Vorlage mit `{…}`-Variablen (leer -> `output`), aufgelöst in python/generate.py. */
+	output_path: string;
+	/** Projektname für die `{project}`-Variable. */
+	project_name: string;
 	tables: PlanTable[];
 	lookups: { name: string; columns: string[]; rows: { values: string[]; weight: string }[] }[];
 	custom_generators: {
@@ -262,6 +275,80 @@ interface Plan {
 		parse_params: string;
 		display_value: string;
 	}[];
+	/** Vorschau-Modus (siehe table/preview.ts): nichts schreiben, stattdessen die Zeilen dieser Tabelle zurückmelden. */
+	preview?: { table: string; limit: number };
+}
+
+/**
+ * Baut die Plan-Spalten einer Tabelle inkl. der aufgelösten Generator-
+ * Referenzen (table_refs/own_column_refs, für die Generier-Reihenfolge in
+ * python/generate.py). Nicht auflösbare Generatoren landen als Meldung in
+ * `errors`; verwendete benutzerdefinierte Generatoren werden in
+ * `usedCustomGenerators` gesammelt. Gemeinsame Grundlage für den vollen
+ * Lauf (buildPlan) und die Tabellen-Vorschau (table/preview.ts).
+ */
+export function buildPlanColumns(
+	table: Table,
+	label: string,
+	generators: GeneratorBase[],
+	errors: string[],
+	usedCustomGenerators: Map<string, CustomGenerator>,
+): PlanColumn[] {
+	const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
+	return table.columns.map((column): PlanColumn => {
+		let generator: PlanColumn['generator'] = null;
+		const config = column.generator;
+		if (config?.id.trim()) {
+			const resolved = generators.find((g) => g.id === config.id);
+			if (!resolved) {
+				errors.push(vscode.l10n.t('Column "{0}.{1}": generator "{2}" was not found.', label, column.name, config.id));
+			} else {
+				if (resolved instanceof CustomGenerator) {
+					usedCustomGenerators.set(resolved.name, resolved);
+				}
+				const refs = resolved.requiredRefs(config, {
+					ownColumnName: column.name.trim(),
+					ownColumns,
+					fkTable: column.fkTable,
+					fkColumn: column.fkColumn,
+					tables: [],
+					lookups: [],
+				});
+				generator = { ...config, table_refs: refs.tables, own_column_refs: refs.ownColumns };
+			}
+		}
+		return {
+			name: column.name,
+			type: column.type,
+			pk: column.pk,
+			fk: column.fk,
+			fk_table: column.fkTable.trim(),
+			fk_column: column.fkColumn.trim(),
+			generator,
+		};
+	});
+}
+
+/** Verdichtet die verwendeten benutzerdefinierten Generatoren zum Plan-Format. */
+export function toPlanCustomGenerators(usedCustomGenerators: Map<string, CustomGenerator>): Plan['custom_generators'] {
+	return [...usedCustomGenerators.values()].map((generator) => ({
+		name: generator.name,
+		parameters: generator.file.parameters.map((p) => ({ name: p.name, type: p.type })),
+		generate: generator.file.code.generate,
+		parse_params: generator.file.code.parseParams,
+		display_value: generator.file.code.displayValue,
+	}));
+}
+
+/** Alle lesbaren Nachschlagelisten im Plan-Format — auch Custom-Code kann per ctx.lookup(...) beliebige Listen ansprechen. */
+export function toPlanLookups(lookupEntries: Awaited<ReturnType<typeof listLookups>>): Plan['lookups'] {
+	return lookupEntries
+		.filter((entry) => entry.lookup)
+		.map((entry) => ({
+			name: entry.name,
+			columns: entry.lookup?.columns ?? [],
+			rows: (entry.lookup?.rows ?? []).map((row) => ({ values: row.values, weight: row.weight })),
+		}));
 }
 
 /**
@@ -329,38 +416,7 @@ function buildPlan(
 			records = Number(rawRecords);
 		}
 
-		const columns: PlanColumn[] = table.columns.map((column): PlanColumn => {
-			let generator: PlanColumn['generator'] = null;
-			const config = column.generator;
-			if (config?.id.trim()) {
-				const resolved = generators.find((g) => g.id === config.id);
-				if (!resolved) {
-					errors.push(vscode.l10n.t('Column "{0}.{1}": generator "{2}" was not found.', label, column.name, config.id));
-				} else {
-					if (resolved instanceof CustomGenerator) {
-						usedCustomGenerators.set(resolved.name, resolved);
-					}
-					const refs = resolved.requiredRefs(config, {
-						ownColumnName: column.name.trim(),
-						ownColumns,
-						fkTable: column.fkTable,
-						fkColumn: column.fkColumn,
-						tables: [],
-						lookups: [],
-					});
-					generator = { ...config, table_refs: refs.tables, own_column_refs: refs.ownColumns };
-				}
-			}
-			return {
-				name: column.name,
-				type: column.type,
-				pk: column.pk,
-				fk: column.fk,
-				fk_table: column.fkTable.trim(),
-				fk_column: column.fkColumn.trim(),
-				generator,
-			};
-		});
+		const columns = buildPlanColumns(table, label, generators, errors, usedCustomGenerators);
 
 		tables.push({
 			path: entry.relativePath,
@@ -391,25 +447,14 @@ function buildPlan(
 		return { errors };
 	}
 
-	// Alle lesbaren Nachschlagelisten mitgeben — auch Custom-Code kann per
-	// ctx.lookup(...) beliebige Listen ansprechen.
-	const lookups = lookupEntries
-		.filter((entry) => entry.lookup)
-		.map((entry) => ({
-			name: entry.name,
-			columns: entry.lookup?.columns ?? [],
-			rows: (entry.lookup?.rows ?? []).map((row) => ({ values: row.values, weight: row.weight })),
-		}));
-
-	const customGenerators = [...usedCustomGenerators.values()].map((generator) => ({
-		name: generator.name,
-		parameters: generator.file.parameters.map((p) => ({ name: p.name, type: p.type })),
-		generate: generator.file.code.generate,
-		parse_params: generator.file.code.parseParams,
-		display_value: generator.file.code.displayValue,
-	}));
-
-	const outputDir = vscode.Uri.joinPath(projectUri, '..', 'output').fsPath;
-
-	return { plan: { output_dir: outputDir, tables, lookups, custom_generators: customGenerators } };
+	return {
+		plan: {
+			project_dir: vscode.Uri.joinPath(projectUri, '..').fsPath,
+			output_path: project.outputPath,
+			project_name: project.name.trim(),
+			tables,
+			lookups: toPlanLookups(lookupEntries),
+			custom_generators: toPlanCustomGenerators(usedCustomGenerators),
+		},
+	};
 }

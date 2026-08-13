@@ -24,11 +24,13 @@
 		buildColGroup,
 		attachColumnResizeHandle,
 		fixColumnWidths,
+		showFloatingMenu,
+		renderTagField,
 	} = window.DatenschmiedeCommon;
 
 	/** @typedef {{path:string,records?:string}} ProjectTable */
 	/** @typedef {{path:string,id?:string}} PythonLink */
-	/** @typedef {{name:string,description:string,python:PythonLink|null,tables:ProjectTable[]}} Project */
+	/** @typedef {{name:string,description:string,python:PythonLink|null,outputPath:string,tables:ProjectTable[]}} Project */
 	/** @typedef {{kind:'group',segment:string,children:ProjectPickerNode[]}} ProjectPickerGroupNode */
 	/** @typedef {{kind:'table',path:string,label:string,found:boolean,checked:boolean,locked:boolean,secondary:boolean,referencedTable?:string,records?:string}} ProjectPickerTableNode */
 	/** @typedef {ProjectPickerGroupNode | ProjectPickerTableNode} ProjectPickerNode */
@@ -39,7 +41,7 @@
 	/** @type {ProjectWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
 	let strings = null;
 	/** @type {Project} */
-	let project = { name: '', description: '', python: null, tables: [] };
+	let project = { name: '', description: '', python: null, outputPath: '', tables: [] };
 	/** @type {string | null} */
 	let parseError = null;
 	/** @type {'overview' | 'tables'} */
@@ -150,8 +152,53 @@
 		}, 250);
 	}
 
+	// ---------------------------------------------------------------------
+	// Anti-Flacker: Baum-/Übersichts-Broadcasts vom Extension-Host (nach
+	// Datei-Änderungen im Workspace) lösen kein sofortiges Neuzeichnen mehr
+	// aus — unverändert wird ignoriert, bei echten Änderungen wird das
+	// Neuzeichnen aufgeschoben, solange ein Eingabefeld fokussiert ist
+	// (gleiches Muster wie in table.js).
+	// ---------------------------------------------------------------------
+
+	let pendingRender = false;
+	/** Zuletzt verarbeiteter Baum-/Übersichts-Stand (JSON), um unveränderte Broadcasts zu ignorieren. */
+	let lastBroadcastJson = '';
+
+	function isEditing() {
+		const active = document.activeElement;
+		return !!(
+			active &&
+			active !== document.body &&
+			(active.tagName === 'INPUT' ||
+				active.tagName === 'TEXTAREA' ||
+				active.tagName === 'SELECT' ||
+				/** @type {HTMLElement} */ (active).isContentEditable)
+		);
+	}
+
+	/** Zeichnet sofort neu — oder erst, sobald kein Eingabefeld mehr fokussiert ist. */
+	function renderSoon() {
+		if (isEditing()) {
+			pendingRender = true;
+			return;
+		}
+		render();
+	}
+
+	document.addEventListener('focusout', () => {
+		if (!pendingRender) {
+			return;
+		}
+		window.setTimeout(() => {
+			if (pendingRender && !isEditing()) {
+				render();
+			}
+		}, 100);
+	});
+
 	function render() {
 		app.innerHTML = '';
+		pendingRender = false;
 		pendingColumnSizing = null;
 		if (!strings) {
 			return;
@@ -228,8 +275,44 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Übersicht: Ausgabedateien + Start-Knopf des Generator-Laufs
+	// Übersicht: Ausgabedateien + Ausgabeordner + Start-Knopf des
+	// Generator-Laufs
 	// ---------------------------------------------------------------------
+
+	/**
+	 * Anzeigename einer `{…}`-Variable — dieselben Beschriftungen wie im
+	 * Tag-Feld des Table Editors (siehe variableLabel in table.js), damit
+	 * Tags in beiden Editoren gleich heißen.
+	 * @param {string} token
+	 */
+	function variableLabel(token) {
+		if (token.startsWith('column:')) {
+			return token.slice('column:'.length);
+		}
+		switch (token) {
+			case 'date':
+				return strings.outputVarDate;
+			case 'time':
+				return strings.outputVarTime;
+			case 'datetime':
+				return strings.outputVarDatetime;
+			case 'timestamp':
+				return strings.outputVarTimestamp;
+			case 'schema':
+				return strings.outputVarSchema;
+			case 'table':
+				return strings.outputVarTable;
+			case 'records':
+				return strings.outputVarRecords;
+			case 'project':
+				return strings.outputVarProject;
+			default:
+				return token;
+		}
+	}
+
+	/** Variablen für den Ausgabeordner des Projekts (kein Tabellen-/Spaltenbezug). */
+	const OUTPUT_PATH_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'project'];
 
 	/**
 	 * Zeigt die Dateinamen-Vorlage einer Tabelle rein lesend an: `{…}`-Teile
@@ -256,7 +339,7 @@
 					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'}`,
 				}),
 			);
-			inner.appendChild(el('span', { text: token.startsWith('column:') ? token.slice('column:'.length) : token }));
+			inner.appendChild(el('span', { text: variableLabel(token) }));
 			chip.appendChild(inner);
 			wrap.appendChild(chip);
 			lastIndex = match.index + match[0].length;
@@ -266,6 +349,59 @@
 		}
 		wrap.appendChild(el('span', { className: 'filename-ext', text: ext }));
 		return wrap;
+	}
+
+	/**
+	 * Feld „Ausgabeordner“: Tag-Feld wie der Dateiname im Table Editor —
+	 * fester Text plus dynamische Variablen (Datum, Zeitstempel,
+	 * Projektname, …). Relativ zur Projektdatei; leer -> „output“.
+	 */
+	function renderOutputPathField() {
+		const field = el('div', { className: 'field' });
+		field.appendChild(el('label', { text: strings.outputPathLabel }));
+
+		const row = el('div', { className: 'filename-row' });
+		const tagField = renderTagField({
+			value: project.outputPath || '',
+			placeholder: strings.outputPathPlaceholder,
+			ariaLabel: strings.outputPathLabel,
+			labelFor: variableLabel,
+			iconFor: () => 'symbol-variable',
+			onChange: (value, immediate) => {
+				project.outputPath = value;
+				if (immediate) {
+					postEdit();
+				} else {
+					postEditDebounced();
+				}
+			},
+		});
+		row.appendChild(tagField.element);
+
+		const addBtn = el('button', { className: 'toolbar-btn' });
+		addBtn.type = 'button';
+		addBtn.appendChild(el('i', { className: 'codicon codicon-add' }));
+		addBtn.appendChild(document.createTextNode(strings.outputAddVariableButton));
+		addBtn.addEventListener('click', (event) => {
+			event.stopPropagation();
+			const rect = addBtn.getBoundingClientRect();
+			/** @type {any[]} */
+			const entries = [{ kind: 'label', text: strings.outputVariableGroupLabel }];
+			for (const variable of OUTPUT_PATH_VARIABLES) {
+				entries.push({
+					kind: 'item',
+					text: variableLabel(variable),
+					icon: 'symbol-variable',
+					onPick: () => tagField.insertVariable(variable),
+				});
+			}
+			showFloatingMenu(rect.left, rect.bottom + 2, entries);
+		});
+		row.appendChild(addBtn);
+
+		field.appendChild(row);
+		field.appendChild(el('p', { className: 'hint', text: strings.outputPathHint }));
+		return field;
 	}
 
 	/**
@@ -287,6 +423,8 @@
 		});
 		toolbar.appendChild(runBtn);
 		card.appendChild(toolbar);
+
+		card.appendChild(renderOutputPathField());
 
 		card.appendChild(el('h3', { className: 'card-title', text: strings.outputFilesTitle }));
 		card.appendChild(el('p', { className: 'hint', text: strings.outputFilesHint }));
@@ -1161,6 +1299,7 @@
 				strings = message.strings;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
+				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles]);
 				pythonStatus = message.pythonStatus || null;
 				treeIcons = message.icons || null;
 				columnWidths = message.columnWidths && typeof message.columnWidths === 'object' ? message.columnWidths : {};
@@ -1175,6 +1314,7 @@
 				project = message.project;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
+				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles]);
 				pythonStatus = message.pythonStatus || null;
 				render();
 				break;
@@ -1182,15 +1322,25 @@
 				parseError = message.message;
 				render();
 				break;
-			case 'pickerTree':
+			case 'pickerTree': {
+				// Baum-/Übersichts-Broadcast nach Datei-Änderungen im Workspace:
+				// unverändert -> ignorieren, geändert -> aufgeschoben neu
+				// zeichnen (siehe renderSoon) — sonst verlöre z. B. das
+				// Datensätze-Feld beim Tippen Fokus und Cursor.
+				const broadcastJson = JSON.stringify([message.pickerTree, message.outputFiles]);
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				if (Array.isArray(message.outputFiles)) {
 					outputFiles = message.outputFiles;
 				}
+				if (broadcastJson === lastBroadcastJson) {
+					break;
+				}
+				lastBroadcastJson = broadcastJson;
 				if (!parseError) {
-					render();
+					renderSoon();
 				}
 				break;
+			}
 		}
 	});
 

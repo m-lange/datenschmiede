@@ -62,12 +62,18 @@ export interface WebviewStrings {
 	generatorTrueLabel: string;
 	generatorFalseLabel: string;
 	/** Warnungstexte — Kurzfassungen der Meldungen aus table/editorProvider.ts für den Zell-Tooltip. */
+	genWarnNoGenerator: string;
 	genWarnNotFound: string;
 	genWarnFkOnly: string;
 	genWarnFkMismatch: string;
 	genWarnParamMissing: string;
 	genWarnParamInvalid: string;
 	genWarnRefNotFound: string;
+
+	previewButton: string;
+	/** Titel des Vorschau-Dialogs; `{0}` = Anzahl der Datensätze. */
+	previewDialogTitle: string;
+	previewCloseLabel: string;
 
 	outputSectionTitle: string;
 	outputFileNameLabel: string;
@@ -157,12 +163,17 @@ const en: WebviewStrings = {
 	generatorRequiredSuffix: ' *',
 	generatorTrueLabel: 'true',
 	generatorFalseLabel: 'false',
+	genWarnNoGenerator: 'No generator selected — select and configure one for this column.',
 	genWarnNotFound: 'This generator was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
 	genWarnFkOnly: 'The Foreign Key generator can only be used on foreign key columns.',
 	genWarnFkMismatch: 'Foreign key columns always use the Foreign Key generator.',
 	genWarnParamMissing: 'Required parameter "{0}" has no value.',
 	genWarnParamInvalid: 'Parameter "{0}" has an invalid value.',
 	genWarnRefNotFound: 'Parameter "{0}" references "{1}", which was not found. It may have been deleted or renamed.',
+
+	previewButton: 'Preview',
+	previewDialogTitle: 'Preview — {0} records',
+	previewCloseLabel: 'Close',
 
 	outputSectionTitle: 'Output',
 	outputFileNameLabel: 'File name',
@@ -252,6 +263,7 @@ const de: WebviewStrings = {
 	generatorRequiredSuffix: ' *',
 	generatorTrueLabel: 'wahr',
 	generatorFalseLabel: 'falsch',
+	genWarnNoGenerator: 'Kein Generator ausgewählt — für diese Spalte einen Generator auswählen und konfigurieren.',
 	genWarnNotFound:
 		'Dieser Generator wurde nicht gefunden. Seine .tdgen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.',
 	genWarnFkOnly: 'Der Fremdschlüssel-Generator kann nur für Fremdschlüssel-Spalten verwendet werden.',
@@ -259,6 +271,10 @@ const de: WebviewStrings = {
 	genWarnParamMissing: 'Pflichtparameter „{0}“ hat keinen Wert.',
 	genWarnParamInvalid: 'Parameter „{0}“ hat einen ungültigen Wert.',
 	genWarnRefNotFound: 'Parameter „{0}“ referenziert „{1}“ — wurde nicht gefunden, möglicherweise gelöscht oder umbenannt.',
+
+	previewButton: 'Vorschau',
+	previewDialogTitle: 'Vorschau — {0} Datensätze',
+	previewCloseLabel: 'Schließen',
 
 	outputSectionTitle: 'Ausgabe',
 	outputFileNameLabel: 'Dateiname',

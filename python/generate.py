@@ -137,6 +137,13 @@ def sanitize_filename(name):
     return name or "output"
 
 
+def sanitize_path_segment(part):
+    """Wie sanitize_filename, aber fuer einzelne Ordner-Segmente (laesst `.`/`..` durch)."""
+    if part in (".", ".."):
+        return part
+    return re.sub(r'[<>:"|?*\x00-\x1f]', "_", part).strip() or "_"
+
+
 class Runner:
     def __init__(self, plan):
         self.plan = plan
@@ -406,6 +413,42 @@ class Runner:
     # Ausgabe
     # ------------------------------------------------------------------
 
+    def resolve_output_dir(self):
+        """
+        Loest den Ausgabeordner des Plans auf: die `{…}`-Variablen der
+        Vorlage (Datum/Zeit/Zeitstempel/Projektname) werden ersetzt, jedes
+        Pfad-Segment bereinigt; relative Pfade beziehen sich auf den Ordner
+        der Projektdatei. Leer -> `output`.
+        """
+        import os
+
+        template = (self.plan.get("output_path") or "").strip() or "output"
+
+        def replace(match):
+            token = match.group(1).strip()
+            if token == "date":
+                return RUN_DT.strftime("%Y%m%d")
+            if token == "time":
+                return RUN_DT.strftime("%H%M%S")
+            if token == "datetime":
+                return RUN_DT.strftime("%Y%m%d_%H%M%S")
+            if token == "timestamp":
+                return str(int(RUN_DT.timestamp()))
+            if token == "project":
+                return self.plan.get("project_name", "")
+            return ""
+
+        resolved = re.sub(r"\{([^{}]+)\}", replace, template)
+        # Trenner (und ein fuehrendes Laufwerk wie `C:`) erhalten, jedes
+        # Segment einzeln bereinigen.
+        parts = re.split(r"([\\/]+)", resolved)
+        cleaned = "".join(
+            part if re.fullmatch(r"[\\/]+", part) or re.fullmatch(r"[A-Za-z]:", part) else sanitize_path_segment(part)
+            for part in parts
+            if part
+        )
+        return os.path.normpath(os.path.join(self.plan.get("project_dir", "."), cleaned or "output"))
+
     def resolve_filename(self, table, n, df):
         template = (table["output"].get("file_name") or "").strip()
         if not template:
@@ -437,15 +480,9 @@ class Runner:
 
         return sanitize_filename(re.sub(r"\{([^{}]+)\}", replace, template))
 
-    def write_csv(self, table, df, n):
-        import os
-
+    def format_dataframe(self, table, df):
+        """Datums-/Zeit-Spalten gemaess der konfigurierten Formate als Text (gemeinsam fuer CSV und Vorschau)."""
         csv_cfg = table["output"].get("csv", {})
-        out_dir = self.plan["output_dir"]
-        os.makedirs(out_dir, exist_ok=True)
-
-        # Datums-/Zeit-Spalten gemaess der konfigurierten Formate als Text
-        # ausgeben (to_csv wuerde sonst das pandas-Standardformat schreiben).
         date_fmt = csv_cfg.get("date_format") or "%Y-%m-%d"
         datetime_fmt = csv_cfg.get("datetime_format") or "%Y-%m-%d %H:%M:%S"
         out = df.copy()
@@ -465,11 +502,19 @@ class Runner:
                         out[cname] = base.dt.strftime("%H:%M:%S")
             except (ValueError, TypeError):
                 # Werte, die sich nicht als Datum/Zeit lesen lassen (z. B. aus
-                # einem Custom-Generator), unveraendert schreiben.
+                # einem Custom-Generator), unveraendert lassen.
                 pass
+        return out
 
+    def write_csv(self, table, df, n):
+        import os
+
+        csv_cfg = table["output"].get("csv", {})
+        os.makedirs(self.out_dir, exist_ok=True)
+
+        out = self.format_dataframe(table, df)
         file_name = self.resolve_filename(table, n, out) + ".csv"
-        path = os.path.join(out_dir, file_name)
+        path = os.path.join(self.out_dir, file_name)
         out.to_csv(
             path,
             index=False,
@@ -483,6 +528,8 @@ class Runner:
 
     def run(self):
         ordered = self.sorted_tables()
+        preview = self.plan.get("preview")
+        self.out_dir = self.resolve_output_dir()
         emit("start", tables=len(ordered))
         files = []
         for index, table in enumerate(ordered):
@@ -490,10 +537,23 @@ class Runner:
             n = self.run_table(table)
             # Spaltenreihenfolge der Tabellendefinition beibehalten.
             df = pd.DataFrame({c["name"]: self.data[table["label"]][c["name"]] for c in table["columns"]})
+            if preview:
+                # Vorschau-Modus: nichts schreiben; nur die Ziel-Tabelle wird
+                # am Ende zurueckgemeldet.
+                if table["label"] == preview.get("table"):
+                    out = self.format_dataframe(table, df).head(int(preview.get("limit", 20)))
+                    emit(
+                        "preview",
+                        table=table["label"],
+                        columns=[c["name"] for c in table["columns"]],
+                        rows=[["" if v is None else str(v) for v in row] for row in out.itertuples(index=False)],
+                    )
+                continue
             path = self.write_csv(table, df, n)
             files.append({"table": table["label"], "file": path, "records": n})
             emit("table_done", table=table["label"], file=path, records=n, index=index, total=len(ordered))
-        emit("done", files=files)
+        if not preview:
+            emit("done", files=files, output_dir=self.out_dir)
 
 
 def main():

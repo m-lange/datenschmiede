@@ -89,6 +89,56 @@ export function tableLabel(table: Table, fallbackPath: string): string {
 }
 
 /**
+ * Referenz-Kanten zwischen den Tabellen des Workspace (logische Identität →
+ * referenzierte Identitäten), aus FK-Spalten und den `table`-Referenzen der
+ * konfigurierten Generatoren. Selbst-Referenzen werden übersprungen (die
+ * meldet bereits die FK-Validierung). Grundlage der Zyklus-Erkennung
+ * (findTableCycle in table/validation.ts).
+ */
+export function buildTableRefEdges(entries: TableEntry[], generators: GeneratorBase[]): Map<string, string[]> {
+	const edges = new Map<string, string[]>();
+	for (const entry of entries) {
+		if (!entry.table) {
+			continue;
+		}
+		const ownLabel = tableLabel(entry.table, entry.relativePath);
+		const ownColumns = entry.table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
+		const targets = new Set<string>();
+		for (const column of entry.table.columns) {
+			if (column.fk) {
+				const fkTable = column.fkTable.trim();
+				if (fkTable && fkTable !== ownLabel) {
+					targets.add(fkTable);
+				}
+			}
+			if (column.generator?.id.trim()) {
+				const generator = generators.find((g) => g.id === column.generator?.id);
+				if (generator) {
+					const refs = generator.requiredRefs(column.generator, {
+						ownColumnName: column.name.trim(),
+						ownColumns,
+						fkTable: column.fkTable,
+						fkColumn: column.fkColumn,
+						tables: [],
+						lookups: [],
+					});
+					for (const label of refs.tables) {
+						const trimmed = label.trim();
+						if (trimmed && trimmed !== ownLabel) {
+							targets.add(trimmed);
+						}
+					}
+				}
+			}
+		}
+		if (targets.size > 0 && !edges.has(ownLabel)) {
+			edges.set(ownLabel, [...targets]);
+		}
+	}
+	return edges;
+}
+
+/**
  * Löst die transitive Hülle der referenzierten Tabellen auf: ausgehend von
  * `selected` (workspace-relative Pfade) wird für jede Tabelle jede gültige
  * `fk_table`-Referenz aufgelöst und rekursiv weiterverfolgt — plus jede

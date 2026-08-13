@@ -1,22 +1,24 @@
 import * as vscode from 'vscode';
-import { Table } from './model';
+import { Table, logicalTableName } from './model';
 import { parseTableText, serializeTable, findColumnLineInfo } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getWebviewStrings } from './webviewStrings';
-import { validateTable, Issue } from './validation';
-import { TableOption, listTables, toTableOptions } from './repository';
+import { validateTable, findTableCycle, findColumnCycle, Issue } from './validation';
+import { TableEntry, TableOption, buildTableRefEdges, listTables, toTableOptions } from './repository';
 import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
 import { listLookups, toLookupRefs } from '../lookup/repository';
 import { GeneratorParameter, KnownLookupRef } from '../generator/types';
 import { isCustomGeneratorId } from '../generator/custom';
+import { runTablePreview } from './preview';
 
 export type { TableOption } from './repository';
 
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
 	| { type: 'edit'; table: Table }
+	| { type: 'preview' }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { table: Table } | { error: unknown };
 
@@ -104,6 +106,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	 * teuer.
 	 */
 	private cachedTableOptions: TableOption[] = [];
+	/** Vollständige Tabellen-Einträge des letzten Scans (für die Zyklus-Erkennung, die die FK-/Generator-Kanten aller Tabellen braucht). */
+	private cachedEntries: TableEntry[] = [];
 	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), analog zu cachedTableOptions. */
 	private cachedGenerators: GeneratorBase[] = [];
 	/** Zuletzt ermittelte Nachschlagelisten (.lkp), analog zu cachedTableOptions. */
@@ -226,6 +230,18 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					}
 					break;
 				}
+				case 'preview': {
+					// Erzeugt 20 Datensätze mit der aktuellen Konfiguration über
+					// den Python-Läufer (siehe table/preview.ts); Fehler zeigt
+					// runTablePreview selbst als Meldung an.
+					const result = await runTablePreview(this.context, document);
+					if (result) {
+						void webviewPanel.webview.postMessage({ type: 'previewResult', ...result });
+					} else {
+						void webviewPanel.webview.postMessage({ type: 'previewDone' });
+					}
+					break;
+				}
 				case 'columnWidths': {
 					// Geräteweit über alle .td-Dateien hinweg gemerkt (persönliche
 					// Anzeige-Präferenz, kein Teil der Tabellendefinition selbst).
@@ -287,19 +303,14 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 
 	private buildValidationDiagnostics(document: vscode.TextDocument, table: Table): vscode.Diagnostic[] {
 		const issues = validateTable(table, this.cachedTableOptions, this.cachedGenerators, this.cachedLookups);
-		if (issues.length === 0) {
-			return [];
-		}
-
 		const columnLines = findColumnLineInfo(document.getText());
+		const lineRange = (line: number) => document.lineAt(Math.min(line, Math.max(0, document.lineCount - 1))).range;
 
-		return issues.map((issue) => {
+		const diagnostics = issues.map((issue) => {
 			const info = columnLines[issue.columnIndex];
 			const line = info ? info.nameLine ?? info.columnsLine : 0;
-			const lineIndex = Math.min(line, Math.max(0, document.lineCount - 1));
-			const range = document.lineAt(lineIndex).range;
 			const diagnostic = new vscode.Diagnostic(
-				range,
+				lineRange(line),
 				this.formatIssueMessage(issue),
 				issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
 			);
@@ -307,6 +318,46 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			diagnostic.code = issue.kind;
 			return diagnostic;
 		});
+
+		// Zyklische Referenzen: über FK-/Generator-Ketten zwischen Tabellen
+		// bzw. zwischen den Spalten dieser Tabelle — dann lässt sich keine
+		// Generier-Reihenfolge auflösen.
+		const ownLabel = logicalTableName(table);
+		if (ownLabel) {
+			const edges = buildTableRefEdges(this.cachedEntries, this.cachedGenerators);
+			const cycle = findTableCycle(ownLabel, edges);
+			if (cycle) {
+				const diagnostic = new vscode.Diagnostic(
+					lineRange(0),
+					vscode.l10n.t(
+						'Circular reference between tables ({0}) — the generation order cannot be resolved.',
+						cycle.join(' → '),
+					),
+					vscode.DiagnosticSeverity.Warning,
+				);
+				diagnostic.source = 'Datenschmiede';
+				diagnostic.code = 'cycle-tables';
+				diagnostics.push(diagnostic);
+			}
+		}
+		const columnCycle = findColumnCycle(table, this.cachedGenerators);
+		if (columnCycle) {
+			const firstIndex = table.columns.findIndex((c) => c.name.trim() === columnCycle[0]);
+			const info = firstIndex >= 0 ? columnLines[firstIndex] : undefined;
+			const diagnostic = new vscode.Diagnostic(
+				lineRange(info ? info.nameLine ?? info.columnsLine : 0),
+				vscode.l10n.t(
+					'Circular reference between columns ({0}) — the generation order cannot be resolved.',
+					columnCycle.join(' → '),
+				),
+				vscode.DiagnosticSeverity.Warning,
+			);
+			diagnostic.source = 'Datenschmiede';
+			diagnostic.code = 'cycle-columns';
+			diagnostics.push(diagnostic);
+		}
+
+		return diagnostics;
 	}
 
 	private formatIssueMessage(issue: Issue): string {
@@ -330,6 +381,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					label,
 					issue.detail ?? '',
 				);
+			case 'gen-missing':
+				return vscode.l10n.t('Column "{0}" has no generator selected — select and configure one.', label);
 			case 'gen-not-found':
 				return vscode.l10n.t(
 					'Column "{0}": generator "{1}" was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
@@ -391,6 +444,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	/** Liest Tabellen-, Generator- und Nachschlagelisten-Liste neu ein und hält sie für die (synchrone) Validierung vor. */
 	private async refreshOptionsCache(): Promise<void> {
 		const [tables, generators, lookups] = await Promise.all([listTables(), listGenerators(), listLookups()]);
+		this.cachedEntries = tables;
 		this.cachedTableOptions = toTableOptions(tables);
 		this.cachedGenerators = toGeneratorList(generators);
 		this.cachedLookups = toLookupRefs(lookups);

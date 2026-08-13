@@ -23,6 +23,7 @@ export type IssueKind =
 	| 'fk-self-reference'
 	| 'fk-missing-column'
 	| 'fk-column-not-found'
+	| 'gen-missing'
 	| 'gen-not-found'
 	| 'gen-fk-only'
 	| 'gen-fk-mismatch'
@@ -45,6 +46,86 @@ export interface KnownTable {
 	/** Logische Identität (`schema.name` bzw. nur `name`), wie sie in `fk_table` gespeichert wird. */
 	label: string;
 	columns: string[];
+}
+
+/**
+ * Sucht einen Zyklus, der bei `start` beginnt und über die gerichteten
+ * Kanten wieder zu `start` zurückführt. Liefert den Pfad inklusive Start-
+ * und End-Knoten (`[start, …, start]`), oder `null`. Bereits erfolglos
+ * abgesuchte Knoten werden gemerkt, damit die Suche linear bleibt.
+ */
+function findCycleFrom(start: string, edges: Map<string, string[]>): string[] | null {
+	const dead = new Set<string>();
+
+	function dfs(node: string, path: string[]): string[] | null {
+		for (const target of edges.get(node) ?? []) {
+			if (target === start) {
+				return [...path, node, start];
+			}
+			if (dead.has(target) || path.includes(target) || target === node) {
+				continue;
+			}
+			const found = dfs(target, [...path, node]);
+			if (found) {
+				return found;
+			}
+		}
+		dead.add(node);
+		return null;
+	}
+
+	return dfs(start, []);
+}
+
+/**
+ * Zyklus zwischen Tabellen über ihre FK-/Generator-Referenzen (Kanten siehe
+ * buildTableRefEdges in table/repository.ts): ist die eigene Tabelle Teil
+ * eines Kreises (A → B → A), lässt sich keine Generier-Reihenfolge auflösen
+ * — der Aufrufer meldet das als Warnung in der Problems-Ansicht.
+ */
+export function findTableCycle(ownLabel: string, edges: Map<string, string[]>): string[] | null {
+	if (!ownLabel) {
+		return null;
+	}
+	return findCycleFrom(ownLabel, edges);
+}
+
+/**
+ * Zyklus zwischen den Spalten *einer* Tabelle über ihre Generator-
+ * Abhängigkeiten (z. B. zwei Kombinations-Vorlagen, die sich gegenseitig
+ * referenzieren) — auch dann lässt sich keine Generier-Reihenfolge auflösen.
+ */
+export function findColumnCycle(table: Table, generators: GeneratorBase[]): string[] | null {
+	const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
+	const edges = new Map<string, string[]>();
+	for (const column of table.columns) {
+		const name = column.name.trim();
+		if (!name || !column.generator?.id.trim()) {
+			continue;
+		}
+		const generator = generators.find((g) => g.id === column.generator?.id);
+		if (!generator) {
+			continue;
+		}
+		const refs = generator.requiredRefs(column.generator, {
+			ownColumnName: name,
+			ownColumns,
+			fkTable: column.fkTable,
+			fkColumn: column.fkColumn,
+			tables: [],
+			lookups: [],
+		});
+		if (refs.ownColumns.length > 0) {
+			edges.set(name, refs.ownColumns);
+		}
+	}
+	for (const name of edges.keys()) {
+		const cycle = findCycleFrom(name, edges);
+		if (cycle) {
+			return cycle;
+		}
+	}
+	return null;
 }
 
 /**
@@ -91,6 +172,12 @@ export function validateTable(
 		}
 
 		if (!column.generator || !column.generator.id.trim()) {
+			// Jede Spalte soll einen Generator ausgewählt und konfiguriert
+			// haben. FK-Spalten sind ausgenommen — sie verwenden implizit
+			// immer den Fremdschlüssel-Generator.
+			if (!column.fk) {
+				issues.push({ columnIndex, columnName: column.name, kind: 'gen-missing', warning: true });
+			}
 			return;
 		}
 

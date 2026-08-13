@@ -10,7 +10,7 @@ records = 100
 
 [[tables]]
 path = "tables/fin_invoices.td"
-records = "1.33"
+records = "1..3"
 
 [[tables]]
 path = "tables/sapbp_business_partners.td"

@@ -65,6 +65,35 @@
   steht im Tooltip. Die automatische Tabellen-Mitnahme im Tabellen-Tab
   berücksichtigt neben Fremdschlüsseln jetzt auch die von
   Spaltengeneratoren **benötigten Tabellen**.
+- **Vorschau im Table Editor**: der Knopf **„Vorschau“** über dem
+  Spalten-Grid erzeugt 20 Datensätze mit der aktuellen Konfiguration —
+  inklusive aller (auch ausgeblendeter) Spalten und der referenzierten
+  Tabellen — über denselben Python-Läufer wie der volle Lauf (ohne etwas zu
+  schreiben) und zeigt sie als Tabelle im Dialog. Nutzt die in VS Code
+  aktive Python-Umgebung, kein Projekt nötig.
+- **Strengere Prüfungen**: Jede Spalte (außer FK-Spalten, die implizit den
+  Fremdschlüssel-Generator verwenden) soll einen Generator ausgewählt und
+  konfiguriert haben — fehlt er, erscheint eine Warnung an der Zelle und in
+  der Problems-Ansicht. Zirkuläre Referenzen zwischen Tabellen
+  (FK-/Generator-Ketten) oder zwischen den Spalten einer Tabelle
+  (z. B. Kombinations-Vorlagen), bei denen sich keine Generier-Reihenfolge
+  auflösen lässt, werden ebenfalls als Warnung gemeldet.
+- **Ausgabeordner je Projekt**: der Übersicht-Tab des Projekt-Editors hat
+  ein eigenes Tag-Feld für den **Ausgabeordner** (relativ zur Projektdatei,
+  absolute Pfade erlaubt) — wie der Dateiname im Table Editor mit
+  dynamischen Variablen (Datum, Uhrzeit, Zeitstempel, Projektname);
+  leer gilt weiterhin `output` (`output_path` in der `.tdproject`-Datei).
+- **Ruhigere Oberfläche**: Workspace-Broadcasts (Auswahllisten,
+  Tabellenbaum) zeichnen die Editoren nicht mehr bei jeder Datei-Änderung
+  neu — unveränderte Stände werden ignoriert, echte Änderungen erst
+  übernommen, sobald kein Eingabefeld mehr fokussiert ist. Das beseitigt
+  das gelegentliche Flackern samt Fokusverlust des gerade bearbeiteten
+  Felds. Variablen-Tags heißen im Projekt-Editor jetzt genauso wie im
+  Table Editor (gemeinsame Beschriftungen), das Tag-Feld und das
+  Variablen-Menü liegen als gemeinsame Bausteine in `media/common.js`.
+  Neues Beispiel `samples/generators/table_sample.tdgen`: zieht Werte aus
+  einer Spalte einer anderen Tabelle (Tabellen-/Spalten-Referenz mit
+  automatischer Mitnahme und Reihenfolge).
 - **Bedienungs-Feinschliff**: FK-Spalten haben ihren Generator fest (die
   Auswahl ist gesperrt, die FK-Checkbox weist den Fremdschlüssel-Generator
   automatisch zu und entfernt ihn beim Abhaken; abweichende, von Hand ins

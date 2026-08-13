@@ -406,6 +406,234 @@
 		}
 	}
 
+	// ---------------------------------------------------------------------
+	// Schwebendes Menü: gemeinsame Grundlage für „Dynamischen Wert
+	// einfügen“ (Dateiname/Ausgabeordner in table.js/project.js). Webviews
+	// haben kein natives VS-Code-Menü, daher ein eigenes über die
+	// Menü-Theme-Variablen gestyltes (siehe .context-menu in main.css) —
+	// höchstens eines gleichzeitig offen.
+	// ---------------------------------------------------------------------
+
+	/** @type {(() => void) | null} */
+	let closeFloatingMenu = null;
+
+	function dismissFloatingMenu() {
+		if (closeFloatingMenu) {
+			closeFloatingMenu();
+		}
+	}
+
+	/**
+	 * @typedef {{kind:'label',text:string}|{kind:'separator'}|{kind:'item',text:string,icon?:string,onPick:()=>void}} FloatingMenuEntry
+	 * @param {number} x
+	 * @param {number} y
+	 * @param {FloatingMenuEntry[]} entries
+	 */
+	function showFloatingMenu(x, y, entries) {
+		dismissFloatingMenu();
+
+		const menu = el('div', { className: 'context-menu variable-menu' });
+		menu.setAttribute('role', 'menu');
+		menu.tabIndex = -1;
+
+		for (const entry of entries) {
+			if (entry.kind === 'label') {
+				menu.appendChild(el('div', { className: 'context-menu-label', text: entry.text }));
+			} else if (entry.kind === 'separator') {
+				menu.appendChild(el('div', { className: 'context-menu-separator' }));
+			} else {
+				const item = /** @type {HTMLButtonElement} */ (el('button', { className: 'context-menu-item' }));
+				item.type = 'button';
+				item.setAttribute('role', 'menuitem');
+				if (entry.icon) {
+					item.appendChild(el('i', { className: `codicon codicon-${entry.icon} menu-item-icon` }));
+				}
+				item.appendChild(el('span', { text: entry.text }));
+				item.addEventListener('click', () => {
+					dismissFloatingMenu();
+					entry.onPick();
+				});
+				menu.appendChild(item);
+			}
+		}
+
+		document.body.appendChild(menu);
+		// Erst nach dem Anhängen messen, damit das Menü bei Bedarf nach
+		// links/oben ausweicht, statt aus dem Sichtbereich zu ragen.
+		const rect = menu.getBoundingClientRect();
+		menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - rect.width - 4))}px`;
+		menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - rect.height - 4))}px`;
+		menu.focus();
+
+		/** @param {MouseEvent} event */
+		const onGlobalPointerDown = (event) => {
+			if (!(event.target instanceof Node) || !menu.contains(event.target)) {
+				dismissFloatingMenu();
+			}
+		};
+		/** @param {KeyboardEvent} event */
+		const onGlobalKeyDown = (event) => {
+			if (event.key === 'Escape') {
+				event.stopPropagation();
+				dismissFloatingMenu();
+			}
+		};
+		const onWindowBlur = () => dismissFloatingMenu();
+		document.addEventListener('mousedown', onGlobalPointerDown, true);
+		document.addEventListener('keydown', onGlobalKeyDown, true);
+		window.addEventListener('blur', onWindowBlur);
+
+		closeFloatingMenu = () => {
+			closeFloatingMenu = null;
+			document.removeEventListener('mousedown', onGlobalPointerDown, true);
+			document.removeEventListener('keydown', onGlobalKeyDown, true);
+			window.removeEventListener('blur', onWindowBlur);
+			menu.remove();
+		};
+	}
+
+	// ---------------------------------------------------------------------
+	// Tag-Feld (Power-Automate-artig): fester Text ist direkt editierbar,
+	// dynamische `{…}`-Variablen erscheinen als atomare Tags — per
+	// Backspace/Entfernen wie ein Zeichen löschbar, ein Klick auf ein Tag
+	// entfernt es. Genutzt für den Dateinamen je Tabelle (table.js) und den
+	// Ausgabeordner je Projekt (project.js).
+	// ---------------------------------------------------------------------
+
+	/**
+	 * @param {{
+	 *   value: string,
+	 *   placeholder: string,
+	 *   ariaLabel: string,
+	 *   labelFor: (token: string) => string,
+	 *   iconFor: (token: string) => string,
+	 *   onChange: (value: string, immediate: boolean) => void,
+	 * }} config
+	 */
+	function renderTagField(config) {
+		const field = el('div', { className: 'text-input tag-field' });
+		field.contentEditable = 'true';
+		field.spellcheck = false;
+		field.setAttribute('role', 'textbox');
+		field.setAttribute('aria-label', config.ariaLabel);
+		field.setAttribute('data-placeholder', config.placeholder);
+
+		/** @param {string} token */
+		function createChip(token) {
+			// Äußeres Element bewusst inline-block mit einem inline-flex-Kind
+			// (.filename-tag-inner): ein atomarer Inline-Baustein direkt mit
+			// display:inline-flex wird von Chromium innerhalb von
+			// contenteditable unzuverlässig dargestellt (Grundlinie/Caret).
+			const chip = el('span', { className: 'filename-tag' });
+			chip.contentEditable = 'false';
+			chip.setAttribute('data-var', token);
+			chip.title = `{${token}}`;
+			const inner = el('span', { className: 'filename-tag-inner' });
+			inner.appendChild(el('i', { className: `codicon codicon-${config.iconFor(token)}` }));
+			inner.appendChild(el('span', { text: config.labelFor(token) }));
+			chip.appendChild(inner);
+			chip.addEventListener('click', () => {
+				// Klick entfernt das Tag.
+				chip.remove();
+				commit(true);
+			});
+			return chip;
+		}
+
+		/** Baut den Feldinhalt aus der gespeicherten Vorlage auf. @param {string} template */
+		function build(template) {
+			field.innerHTML = '';
+			const pattern = /\{([^{}]+)\}/g;
+			let lastIndex = 0;
+			let match;
+			while ((match = pattern.exec(template)) !== null) {
+				if (match.index > lastIndex) {
+					field.appendChild(document.createTextNode(template.slice(lastIndex, match.index)));
+				}
+				field.appendChild(createChip(match[1]));
+				lastIndex = match.index + match[0].length;
+			}
+			if (lastIndex < template.length) {
+				field.appendChild(document.createTextNode(template.slice(lastIndex)));
+			}
+			refreshEmptyState();
+		}
+
+		/** Liest den Feldinhalt zurück in die Vorlagen-Syntax. */
+		function serialize() {
+			// Zeilenumbrüche und geschweifte Klammern haben im *Text* nichts
+			// verloren (Klammern würden mit der Vorlagen-Syntax kollidieren) —
+			// nur je Textteil bereinigen, NICHT das Gesamtergebnis: dort würden
+			// sonst auch die Klammern der {…}-Tags selbst entfernt und die Tags
+			// beim nächsten Neuaufbau des Felds zu blankem Text zerfallen.
+			const cleanText = (text) => (text || '').replace(/[\r\n{}]/g, '');
+			let result = '';
+			field.childNodes.forEach((node) => {
+				if (node.nodeType === Node.TEXT_NODE) {
+					result += cleanText(node.textContent);
+				} else if (node instanceof HTMLElement && node.dataset.var) {
+					result += `{${node.dataset.var}}`;
+				} else if (node instanceof HTMLElement) {
+					// z. B. aus einem Paste stammende Elemente: nur der Text zählt.
+					result += cleanText(node.textContent);
+				}
+			});
+			return result;
+		}
+
+		function refreshEmptyState() {
+			// Ein geleertes contenteditable behält oft ein <br> zurück — dann
+			// gilt das Feld trotzdem als leer (Platzhalter anzeigen).
+			const empty = (field.textContent || '') === '' && !field.querySelector('[data-var]');
+			if (empty && field.childNodes.length > 0) {
+				field.innerHTML = '';
+			}
+			field.classList.toggle('tag-field-empty', empty);
+		}
+
+		/** @param {boolean} immediate */
+		function commit(immediate) {
+			refreshEmptyState();
+			config.onChange(serialize(), immediate);
+		}
+
+		field.addEventListener('input', () => commit(false));
+		field.addEventListener('blur', () => commit(true));
+		field.addEventListener('keydown', (event) => {
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				field.blur();
+			}
+		});
+		field.addEventListener('paste', (event) => {
+			// Nur reinen Text übernehmen (ohne Formatierung/Zeilenumbrüche).
+			event.preventDefault();
+			const text = (event.clipboardData ? event.clipboardData.getData('text/plain') : '').replace(/[\r\n{}]/g, '');
+			document.execCommand('insertText', false, text);
+		});
+
+		/** Fügt eine Variable an der aktuellen Cursor-Position ein (sonst am Ende). @param {string} token */
+		function insertVariable(token) {
+			const chip = createChip(token);
+			const selection = window.getSelection();
+			if (selection && selection.rangeCount > 0 && field.contains(selection.anchorNode)) {
+				const range = selection.getRangeAt(0);
+				range.deleteContents();
+				range.insertNode(chip);
+				range.setStartAfter(chip);
+				range.collapse(true);
+				selection.removeAllRanges();
+				selection.addRange(range);
+			} else {
+				field.appendChild(chip);
+			}
+			commit(true);
+		}
+
+		build(config.value || '');
+		return { element: field, insertVariable };
+	}
+
 	window.DatenschmiedeCommon = {
 		el,
 		bindText,
@@ -418,5 +646,8 @@
 		buildColGroup,
 		attachColumnResizeHandle,
 		fixColumnWidths,
+		showFloatingMenu,
+		dismissFloatingMenu,
+		renderTagField,
 	};
 })();

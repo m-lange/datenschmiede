@@ -9,7 +9,7 @@ funktioniert.
 """
 
 [output]
-file_name = "customers_column:id_timestamp"
+file_name = "customers_{time}_{records}"
 format = "csv"
 
 [output.csv]

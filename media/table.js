@@ -29,6 +29,8 @@
 		buildColGroup,
 		attachColumnResizeHandle,
 		fixColumnWidths,
+		showFloatingMenu,
+		renderTagField,
 	} = window.DatenschmiedeCommon;
 
 	const COLUMN_TYPES = [
@@ -153,8 +155,56 @@
 		return schema ? `${schema}.${name}` : name;
 	}
 
+	// ---------------------------------------------------------------------
+	// Anti-Flacker: Options-Broadcasts vom Extension-Host (nach jeder
+	// Datei-Änderung im Workspace) lösen kein sofortiges Neuzeichnen mehr
+	// aus. Unveränderte Listen werden komplett ignoriert; bei echten
+	// Änderungen wird das Neuzeichnen aufgeschoben, solange gerade ein
+	// Eingabefeld fokussiert ist — sonst verlöre das Feld bei jedem
+	// Broadcast Fokus und Cursor (das frühere „Flackern“).
+	// ---------------------------------------------------------------------
+
+	let pendingRender = false;
+	/** Zuletzt verarbeitete Auswahllisten (JSON), um unveränderte Broadcasts zu ignorieren. */
+	let lastOptionsJson = '';
+
+	function isEditing() {
+		const active = document.activeElement;
+		return !!(
+			active &&
+			active !== document.body &&
+			(active.tagName === 'INPUT' ||
+				active.tagName === 'TEXTAREA' ||
+				active.tagName === 'SELECT' ||
+				/** @type {HTMLElement} */ (active).isContentEditable)
+		);
+	}
+
+	/** Zeichnet sofort neu — oder erst, sobald kein Eingabefeld mehr fokussiert ist. */
+	function renderSoon() {
+		if (isEditing() || closeParamDialog) {
+			pendingRender = true;
+			return;
+		}
+		render();
+	}
+
+	document.addEventListener('focusout', () => {
+		if (!pendingRender) {
+			return;
+		}
+		// Kurz warten: bei einem Fokuswechsel zwischen zwei Feldern ist nach
+		// focusout sofort wieder ein Feld fokussiert — dann weiter aufschieben.
+		window.setTimeout(() => {
+			if (pendingRender && !isEditing() && !closeParamDialog) {
+				render();
+			}
+		}, 100);
+	});
+
 	function render() {
 		app.innerHTML = '';
+		pendingRender = false;
 		pendingColumnSizing = null;
 		if (!strings) {
 			return;
@@ -316,7 +366,21 @@
 		nameField.appendChild(el('label', { text: strings.outputFileNameLabel }));
 
 		const row = el('div', { className: 'filename-row' });
-		const tagField = renderFileNameTagField();
+		const tagField = renderTagField({
+			value: state.output.fileName || '',
+			placeholder: strings.outputFileNamePlaceholder,
+			ariaLabel: strings.outputFileNameLabel,
+			labelFor: variableLabel,
+			iconFor: (token) => (token.startsWith('column:') ? 'symbol-field' : 'symbol-variable'),
+			onChange: (value, immediate) => {
+				state.output.fileName = value;
+				if (immediate) {
+					postEdit();
+				} else {
+					postEditDebounced();
+				}
+			},
+		});
 		row.appendChild(tagField.element);
 		row.appendChild(el('span', { className: 'filename-ext', text: `.${(state.output.format || 'csv').toLowerCase()}` }));
 
@@ -483,234 +547,31 @@
 	}
 
 	/**
-	 * Dateiname als Tag-Feld (Power-Automate-artig): fester Text ist direkt
-	 * editierbar, dynamische `{…}`-Variablen erscheinen als atomare Tags —
-	 * per Backspace/Entfernen wie ein Zeichen löschbar, ein Klick auf ein Tag
-	 * entfernt es. Serialisiert wird zurück in die Vorlagen-Syntax
-	 * (`kunden_{date}`), die der Generator-Lauf auflöst.
-	 */
-	function renderFileNameTagField() {
-		const field = el('div', { className: 'text-input tag-field' });
-		field.contentEditable = 'true';
-		field.spellcheck = false;
-		field.setAttribute('role', 'textbox');
-		field.setAttribute('aria-label', strings.outputFileNameLabel);
-		field.setAttribute('data-placeholder', strings.outputFileNamePlaceholder);
-
-		/** @param {string} token */
-		function createChip(token) {
-			// Äußeres Element bewusst inline-block mit einem inline-flex-Kind
-			// (.filename-tag-inner): ein atomarer Inline-Baustein direkt mit
-			// display:inline-flex wird von Chromium innerhalb von
-			// contenteditable unzuverlässig dargestellt (Grundlinie/Caret).
-			const chip = el('span', { className: 'filename-tag' });
-			chip.contentEditable = 'false';
-			chip.setAttribute('data-var', token);
-			chip.title = `{${token}}`;
-			const inner = el('span', { className: 'filename-tag-inner' });
-			inner.appendChild(
-				el('i', {
-					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'}`,
-				}),
-			);
-			inner.appendChild(el('span', { text: variableLabel(token) }));
-			chip.appendChild(inner);
-			chip.addEventListener('click', () => {
-				// Klick entfernt das Tag (siehe outputFileNameHint).
-				chip.remove();
-				commit();
-			});
-			return chip;
-		}
-
-		/** Baut den Feldinhalt aus der gespeicherten Vorlage auf. @param {string} template */
-		function build(template) {
-			field.innerHTML = '';
-			const pattern = /\{([^{}]+)\}/g;
-			let lastIndex = 0;
-			let match;
-			while ((match = pattern.exec(template)) !== null) {
-				if (match.index > lastIndex) {
-					field.appendChild(document.createTextNode(template.slice(lastIndex, match.index)));
-				}
-				field.appendChild(createChip(match[1]));
-				lastIndex = match.index + match[0].length;
-			}
-			if (lastIndex < template.length) {
-				field.appendChild(document.createTextNode(template.slice(lastIndex)));
-			}
-			refreshEmptyState();
-		}
-
-		/** Liest den Feldinhalt zurück in die Vorlagen-Syntax. */
-		function serialize() {
-			// Zeilenumbrüche und geschweifte Klammern haben im *Text* nichts
-			// verloren (Klammern würden mit der Vorlagen-Syntax kollidieren) —
-			// nur je Textteil bereinigen, NICHT das Gesamtergebnis: dort würden
-			// sonst auch die Klammern der {…}-Tags selbst entfernt und die Tags
-			// beim nächsten Neuaufbau des Felds zu blankem Text zerfallen.
-			const cleanText = (text) => (text || '').replace(/[\r\n{}]/g, '');
-			let result = '';
-			field.childNodes.forEach((node) => {
-				if (node.nodeType === Node.TEXT_NODE) {
-					result += cleanText(node.textContent);
-				} else if (node instanceof HTMLElement && node.dataset.var) {
-					result += `{${node.dataset.var}}`;
-				} else if (node instanceof HTMLElement) {
-					// z. B. aus einem Paste stammende Elemente: nur der Text zählt.
-					result += cleanText(node.textContent);
-				}
-			});
-			return result;
-		}
-
-		function refreshEmptyState() {
-			// Ein geleertes contenteditable behält oft ein <br> zurück — dann
-			// gilt das Feld trotzdem als leer (Platzhalter anzeigen).
-			const empty = (field.textContent || '') === '' && !field.querySelector('[data-var]');
-			if (empty && field.childNodes.length > 0) {
-				field.innerHTML = '';
-			}
-			field.classList.toggle('tag-field-empty', empty);
-		}
-
-		function commit() {
-			state.output.fileName = serialize();
-			refreshEmptyState();
-			postEditDebounced();
-		}
-
-		field.addEventListener('input', commit);
-		field.addEventListener('blur', () => {
-			state.output.fileName = serialize();
-			postEdit();
-		});
-		field.addEventListener('keydown', (event) => {
-			if (event.key === 'Enter') {
-				event.preventDefault();
-				field.blur();
-			}
-		});
-		field.addEventListener('paste', (event) => {
-			// Nur reinen Text übernehmen (ohne Formatierung/Zeilenumbrüche).
-			event.preventDefault();
-			const text = (event.clipboardData ? event.clipboardData.getData('text/plain') : '').replace(/[\r\n{}]/g, '');
-			document.execCommand('insertText', false, text);
-		});
-
-		/** Fügt eine Variable an der aktuellen Cursor-Position ein (sonst am Ende). @param {string} token */
-		function insertVariable(token) {
-			const chip = createChip(token);
-			const selection = window.getSelection();
-			if (selection && selection.rangeCount > 0 && field.contains(selection.anchorNode)) {
-				const range = selection.getRangeAt(0);
-				range.deleteContents();
-				range.insertNode(chip);
-				range.setStartAfter(chip);
-				range.collapse(true);
-				selection.removeAllRanges();
-				selection.addRange(range);
-			} else {
-				field.appendChild(chip);
-			}
-			state.output.fileName = serialize();
-			refreshEmptyState();
-			postEdit();
-		}
-
-		build(state.output.fileName || '');
-		return { element: field, insertVariable };
-	}
-
-	/** Räumt das aktuell offene Variablen-/Kontextmenü ab (höchstens eines gleichzeitig). @type {(() => void) | null} */
-	let closeFloatingMenu = null;
-
-	function dismissFloatingMenu() {
-		if (closeFloatingMenu) {
-			closeFloatingMenu();
-		}
-	}
-
-	/**
-	 * Menü „Dynamischen Wert einfügen“: eingebaute Variablen plus die Spalten
-	 * dieser Tabelle (Wert aus dem ersten generierten Datensatz). Gleicher
-	 * Aufbau wie das Namensraum-Kontextmenü in project.js (Webviews haben
-	 * kein natives VS-Code-Menü).
+	 * Menü „Dynamischen Wert einfügen“ des Dateinamen-Felds: eingebaute
+	 * Variablen plus die Spalten dieser Tabelle (Wert aus dem ersten
+	 * generierten Datensatz) — auf Basis des gemeinsamen schwebenden Menüs
+	 * (siehe showFloatingMenu in common.js).
 	 * @param {number} x
 	 * @param {number} y
 	 * @param {(token: string) => void} onPick
 	 */
 	function showVariableMenu(x, y, onPick) {
-		dismissFloatingMenu();
-
-		const menu = el('div', { className: 'context-menu variable-menu' });
-		menu.setAttribute('role', 'menu');
-		menu.tabIndex = -1;
-
-		/** @param {string} label @param {string} token */
-		const addItem = (label, token) => {
-			const item = /** @type {HTMLButtonElement} */ (el('button', { className: 'context-menu-item' }));
-			item.type = 'button';
-			item.setAttribute('role', 'menuitem');
-			item.appendChild(
-				el('i', {
-					className: `codicon ${token.startsWith('column:') ? 'codicon-symbol-field' : 'codicon-symbol-variable'} menu-item-icon`,
-				}),
-			);
-			item.appendChild(el('span', { text: label }));
-			item.addEventListener('click', () => {
-				dismissFloatingMenu();
-				onPick(token);
-			});
-			menu.appendChild(item);
-		};
-
-		menu.appendChild(el('div', { className: 'context-menu-label', text: strings.outputVariableGroupLabel }));
+		/** @type {any[]} */
+		const entries = [{ kind: 'label', text: strings.outputVariableGroupLabel }];
 		for (const variable of FILE_NAME_VARIABLES) {
-			addItem(variableLabel(variable), variable);
+			entries.push({ kind: 'item', text: variableLabel(variable), icon: 'symbol-variable', onPick: () => onPick(variable) });
 		}
-
 		const columnNames = state.columns.map((c) => (c.name || '').trim()).filter((n) => n.length > 0);
 		if (columnNames.length > 0) {
-			menu.appendChild(el('div', { className: 'context-menu-separator' }));
-			menu.appendChild(el('div', { className: 'context-menu-label', text: strings.outputColumnGroupLabel }));
+			entries.push({ kind: 'separator' });
+			entries.push({ kind: 'label', text: strings.outputColumnGroupLabel });
 			for (const name of columnNames) {
-				addItem(name, `column:${name}`);
+				entries.push({ kind: 'item', text: name, icon: 'symbol-field', onPick: () => onPick(`column:${name}`) });
 			}
 		}
-
-		document.body.appendChild(menu);
-		const rect = menu.getBoundingClientRect();
-		menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - rect.width - 4))}px`;
-		menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - rect.height - 4))}px`;
-		menu.focus();
-
-		/** @param {MouseEvent} event */
-		const onGlobalPointerDown = (event) => {
-			if (!(event.target instanceof Node) || !menu.contains(event.target)) {
-				dismissFloatingMenu();
-			}
-		};
-		/** @param {KeyboardEvent} event */
-		const onGlobalKeyDown = (event) => {
-			if (event.key === 'Escape') {
-				event.stopPropagation();
-				dismissFloatingMenu();
-			}
-		};
-		const onWindowBlur = () => dismissFloatingMenu();
-		document.addEventListener('mousedown', onGlobalPointerDown, true);
-		document.addEventListener('keydown', onGlobalKeyDown, true);
-		window.addEventListener('blur', onWindowBlur);
-
-		closeFloatingMenu = () => {
-			closeFloatingMenu = null;
-			document.removeEventListener('mousedown', onGlobalPointerDown, true);
-			document.removeEventListener('keydown', onGlobalKeyDown, true);
-			window.removeEventListener('blur', onWindowBlur);
-			menu.remove();
-		};
+		showFloatingMenu(x, y, entries);
 	}
+
 
 	// ---------------------------------------------------------------------
 	// Generatoren: Anzeige-Text + Warnungs-Prüfung (kleines Gegenstück zu
@@ -792,7 +653,11 @@
 	function generatorWarning(column) {
 		const config = column.generator;
 		if (!config || !config.id) {
-			return null;
+			// Jede Spalte soll einen Generator ausgewählt und konfiguriert
+			// haben — dieselbe Regel erzeugt die Warnung in der Problems-
+			// Ansicht. FK-Spalten sind ausgenommen: sie verwenden implizit
+			// immer den Fremdschlüssel-Generator.
+			return column.fk ? null : strings.genWarnNoGenerator;
 		}
 		const option = findGeneratorOption(config.id);
 		if (!option) {
@@ -906,6 +771,7 @@
 		addBtn.appendChild(document.createTextNode(strings.addColumnButton));
 		addBtn.addEventListener('click', addColumn);
 		toolbar.appendChild(addBtn);
+		toolbar.appendChild(renderPreviewButton());
 		section.appendChild(toolbar);
 
 		if (state.columns.length === 0) {
@@ -1547,6 +1413,10 @@
 			}
 			postEdit();
 			onChanged();
+			// Ein während des Dialogs aufgeschobenes Neuzeichnen jetzt nachholen.
+			if (pendingRender && !isEditing()) {
+				render();
+			}
 		};
 
 		// Erstes Eingabefeld fokussieren, damit sich der Dialog sofort per
@@ -1623,6 +1493,126 @@
 			strings.fkColumnEmptyOption,
 			strings.fkColumnNotFoundSuffix,
 		);
+	}
+
+	// ---------------------------------------------------------------------
+	// Vorschau: erzeugt über den Extension-Host (Python-Läufer) 20
+	// Datensätze mit der aktuellen Konfiguration — inklusive aller (auch
+	// per Auge-Umschalter ausgeblendeter) Spalten — und zeigt sie in einer
+	// Tabelle im Dialog.
+	// ---------------------------------------------------------------------
+
+	/** `true`, solange eine Vorschau-Generierung läuft (Knopf zeigt dann einen Spinner). */
+	let previewRunning = false;
+	/** @type {HTMLButtonElement | null} Vorschau-Knopf des aktuellen Renderings, um den Spinner umzuschalten. */
+	let previewButton = null;
+
+	function renderPreviewButton() {
+		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
+		btn.type = 'button';
+		btn.appendChild(el('i', { className: 'codicon codicon-play' }));
+		btn.appendChild(document.createTextNode(strings.previewButton));
+		btn.addEventListener('click', () => {
+			if (previewRunning) {
+				return;
+			}
+			previewRunning = true;
+			refreshPreviewButton();
+			vscode.postMessage({ type: 'preview' });
+		});
+		previewButton = btn;
+		refreshPreviewButton();
+		return btn;
+	}
+
+	function refreshPreviewButton() {
+		if (!previewButton) {
+			return;
+		}
+		previewButton.disabled = previewRunning;
+		const icon = previewButton.querySelector('.codicon');
+		if (icon) {
+			icon.className = previewRunning ? 'codicon codicon-loading codicon-modifier-spin' : 'codicon codicon-play';
+		}
+	}
+
+	/** @type {(() => void) | null} */
+	let closePreviewDialog = null;
+
+	/**
+	 * Zeigt das Vorschau-Ergebnis als Tabelle im Dialog (gleiches Modal-Muster
+	 * wie der Parameter-Dialog).
+	 * @param {string[]} columns
+	 * @param {string[][]} rows
+	 */
+	function showPreviewDialog(columns, rows) {
+		if (closePreviewDialog) {
+			closePreviewDialog();
+		}
+
+		const overlay = el('div', { className: 'dialog-overlay' });
+		const dialog = el('div', { className: 'param-dialog preview-dialog card' });
+		dialog.setAttribute('role', 'dialog');
+
+		const titleRow = el('div', { className: 'param-dialog-title' });
+		const heading = el('h3');
+		heading.appendChild(el('i', { className: 'codicon codicon-table param-dialog-icon' }));
+		heading.appendChild(document.createTextNode(strings.previewDialogTitle.replace('{0}', String(rows.length))));
+		titleRow.appendChild(heading);
+		const closeBtn = el('button', { className: 'icon-button param-dialog-close' });
+		closeBtn.type = 'button';
+		closeBtn.title = strings.previewCloseLabel;
+		closeBtn.setAttribute('aria-label', strings.previewCloseLabel);
+		closeBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
+		closeBtn.addEventListener('click', () => closePreviewDialog && closePreviewDialog());
+		titleRow.appendChild(closeBtn);
+		dialog.appendChild(titleRow);
+
+		const wrap = el('div', { className: 'columns-table-wrap preview-table-wrap' });
+		const table = el('table', { className: 'columns-table preview-table' });
+		const thead = el('thead');
+		const headRow = el('tr');
+		headRow.appendChild(el('th', { className: 'col-num' }));
+		for (const column of columns) {
+			headRow.appendChild(el('th', { text: column }));
+		}
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+		const tbody = el('tbody');
+		rows.forEach((row, index) => {
+			const tr = el('tr');
+			tr.appendChild(el('td', { className: 'col-num', text: String(index + 1) }));
+			for (const value of row) {
+				tr.appendChild(el('td', { className: 'preview-cell', text: value }));
+			}
+			tbody.appendChild(tr);
+		});
+		table.appendChild(tbody);
+		wrap.appendChild(table);
+		dialog.appendChild(wrap);
+
+		overlay.appendChild(dialog);
+		document.body.appendChild(overlay);
+
+		overlay.addEventListener('mousedown', (event) => {
+			if (event.target === overlay && closePreviewDialog) {
+				closePreviewDialog();
+			}
+		});
+		/** @param {KeyboardEvent} event */
+		const onKeyDown = (event) => {
+			if (event.key === 'Escape' && closePreviewDialog) {
+				event.stopPropagation();
+				closePreviewDialog();
+			}
+		};
+		document.addEventListener('keydown', onKeyDown, true);
+
+		closePreviewDialog = () => {
+			closePreviewDialog = null;
+			document.removeEventListener('keydown', onKeyDown, true);
+			overlay.remove();
+		};
 	}
 
 	function addColumn() {
@@ -1754,6 +1744,7 @@
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
 				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
 				lookupOptions = Array.isArray(message.lookupOptions) ? message.lookupOptions : [];
+				lastOptionsJson = JSON.stringify([message.tableOptions, message.generatorOptions, message.lookupOptions]);
 				columnWidths = message.columnWidths && typeof message.columnWidths === 'object' ? message.columnWidths : {};
 				parseError = 'parseError' in message ? message.parseError : null;
 				if ('table' in message) {
@@ -1770,15 +1761,37 @@
 				parseError = message.message;
 				render();
 				break;
-			case 'options':
+			case 'options': {
 				// Aktualisierte Auswahllisten (Tabellen/Generatoren/Nachschlage-
-				// listen) nach Datei-Änderungen im Workspace.
+				// listen) nach Datei-Änderungen im Workspace. Unverändert ->
+				// gar nichts tun; geändert -> neu zeichnen, aber erst, wenn
+				// gerade kein Eingabefeld fokussiert ist (siehe renderSoon).
+				const optionsJson = JSON.stringify([message.tableOptions, message.generatorOptions, message.lookupOptions]);
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
 				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
 				lookupOptions = Array.isArray(message.lookupOptions) ? message.lookupOptions : [];
-				if (!parseError) {
-					render();
+				if (optionsJson === lastOptionsJson) {
+					break;
 				}
+				lastOptionsJson = optionsJson;
+				if (!parseError) {
+					renderSoon();
+				}
+				break;
+			}
+			case 'previewResult':
+				previewRunning = false;
+				refreshPreviewButton();
+				showPreviewDialog(
+					Array.isArray(message.columns) ? message.columns : [],
+					Array.isArray(message.rows) ? message.rows : [],
+				);
+				break;
+			case 'previewDone':
+				// Lauf beendet ohne Ergebnis (Fehler wurde vom Extension-Host
+				// als Meldung angezeigt) — nur den Knopf zurücksetzen.
+				previewRunning = false;
+				refreshPreviewButton();
 				break;
 		}
 	});

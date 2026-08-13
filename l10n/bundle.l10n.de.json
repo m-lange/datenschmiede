@@ -66,5 +66,13 @@
 	"Open Output Folder": "Ausgabeordner öffnen",
 	"Test data generated: {0} file(s) in \"{1}\".": "Testdaten generiert: {0} Datei(en) in „{1}“.",
 	"Test data generation failed (exit code {0}). {1}": "Testdaten-Generierung fehlgeschlagen (Exit-Code {0}). {1}",
-	"Column \"{0}.{1}\": generator \"{2}\" was not found.": "Spalte „{0}.{1}“: Generator „{2}“ wurde nicht gefunden."
+	"Column \"{0}.{1}\": generator \"{2}\" was not found.": "Spalte „{0}.{1}“: Generator „{2}“ wurde nicht gefunden.",
+	"Column \"{0}\" has no generator selected — select and configure one.": "Spalte „{0}“ hat keinen Generator ausgewählt — einen Generator auswählen und konfigurieren.",
+	"Circular reference between tables ({0}) — the generation order cannot be resolved.": "Zirkuläre Referenz zwischen Tabellen ({0}) — die Generier-Reihenfolge kann nicht aufgelöst werden.",
+	"Circular reference between columns ({0}) — the generation order cannot be resolved.": "Zirkuläre Referenz zwischen Spalten ({0}) — die Generier-Reihenfolge kann nicht aufgelöst werden.",
+	"This .td file contains invalid TOML — fix it before generating a preview.": "Diese .td-Datei enthält kein gültiges TOML — vor der Vorschau zuerst korrigieren.",
+	"No Python 3.10+ interpreter available for the preview. Install one, then try again.": "Kein Python-3.10+-Interpreter für die Vorschau verfügbar. Einen installieren und erneut versuchen.",
+	"Generating preview…": "Vorschau wird generiert…",
+	"Preview failed: {0}": "Vorschau fehlgeschlagen: {0}",
+	"Preview failed (exit code {0}). {1}": "Vorschau fehlgeschlagen (Exit-Code {0}). {1}"
 }

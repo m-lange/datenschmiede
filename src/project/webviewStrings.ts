@@ -32,6 +32,21 @@ export interface ProjectWebviewStrings {
 	outputFilesPerRecordSuffix: string;
 	outputFilesEmptyText: string;
 
+	outputPathLabel: string;
+	outputPathPlaceholder: string;
+	outputPathHint: string;
+	outputAddVariableButton: string;
+	outputVariableGroupLabel: string;
+	/** Anzeigenamen der `{…}`-Variablen — dieselben Beschriftungen wie im Table Editor (siehe table/webviewStrings.ts). */
+	outputVarDate: string;
+	outputVarTime: string;
+	outputVarDatetime: string;
+	outputVarTimestamp: string;
+	outputVarSchema: string;
+	outputVarTable: string;
+	outputVarRecords: string;
+	outputVarProject: string;
+
 	tablesSearchPlaceholder: string;
 	tablesColHeaderTable: string;
 	tablesColHeaderPath: string;
@@ -99,6 +114,21 @@ const en: ProjectWebviewStrings = {
 	outputFilesPerRecordSuffix: 'per record of {0}',
 	outputFilesEmptyText: 'No tables selected yet — pick tables in the Tables tab.',
 
+	outputPathLabel: 'Output folder',
+	outputPathPlaceholder: 'output',
+	outputPathHint:
+		'Relative to the project file (absolute paths allowed). Combine fixed text with dynamic values — click a tag to remove it. Empty uses "output".',
+	outputAddVariableButton: 'Add dynamic value',
+	outputVariableGroupLabel: 'Variables',
+	outputVarDate: 'Current date',
+	outputVarTime: 'Current time',
+	outputVarDatetime: 'Current date + time',
+	outputVarTimestamp: 'Unix timestamp',
+	outputVarSchema: 'Schema',
+	outputVarTable: 'Table name',
+	outputVarRecords: 'Number of records',
+	outputVarProject: 'Project name',
+
 	tablesSearchPlaceholder: 'Search tables…',
 	tablesColHeaderTable: 'Table',
 	tablesColHeaderPath: 'File',
@@ -156,6 +186,21 @@ const de: ProjectWebviewStrings = {
 	outputFilesColRecords: 'Datensätze',
 	outputFilesPerRecordSuffix: 'je Datensatz von {0}',
 	outputFilesEmptyText: 'Noch keine Tabellen ausgewählt — Auswahl im Tabellen-Tab.',
+
+	outputPathLabel: 'Ausgabeordner',
+	outputPathPlaceholder: 'output',
+	outputPathHint:
+		'Relativ zur Projektdatei (absolute Pfade erlaubt). Fester Text kombiniert mit dynamischen Werten — Klick auf ein Tag entfernt es. Leer verwendet „output“.',
+	outputAddVariableButton: 'Dynamischen Wert einfügen',
+	outputVariableGroupLabel: 'Variablen',
+	outputVarDate: 'Aktuelles Datum',
+	outputVarTime: 'Aktuelle Uhrzeit',
+	outputVarDatetime: 'Aktuelles Datum + Uhrzeit',
+	outputVarTimestamp: 'Unix-Zeitstempel',
+	outputVarSchema: 'Schema',
+	outputVarTable: 'Tabellenname',
+	outputVarRecords: 'Datensatzanzahl',
+	outputVarProject: 'Projektname',
 
 	tablesSearchPlaceholder: 'Tabellen durchsuchen…',
 	tablesColHeaderTable: 'Tabelle',

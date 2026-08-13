@@ -37,9 +37,15 @@ export interface Project {
 	description: string;
 	/** `null`, solange (noch) kein Python-Interpreter verknüpft wurde. */
 	python: PythonLink | null;
+	/**
+	 * Ausgabeordner des Generator-Laufs, relativ zur Projektdatei (absolute
+	 * Pfade erlaubt), als Vorlage mit `{…}`-Variablen (Datum, Zeitstempel,
+	 * Projektname, … — aufgelöst in python/generate.py). Leer -> `output`.
+	 */
+	outputPath: string;
 	tables: ProjectTable[];
 }
 
 export function createEmptyProject(name = ''): Project {
-	return { name, description: '', python: null, tables: [] };
+	return { name, description: '', python: null, outputPath: '', tables: [] };
 }
