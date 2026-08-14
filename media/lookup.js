@@ -250,6 +250,24 @@
 		const toolbar = el('div', { className: 'toolbar' });
 		toolbar.appendChild(renderToolbarButton('codicon-add', strings.addRowButton, addRow));
 		toolbar.appendChild(renderToolbarButton('codicon-split-horizontal', strings.addColumnButton, () => addColumn('')));
+		const evenButton = renderToolbarButton(
+			'codicon-law',
+			strings.distributeEvenlyButton,
+			distributeWeightsEvenly,
+			strings.distributeEvenlyTooltip,
+		);
+		evenButton.disabled = state.rows.length === 0;
+		toolbar.appendChild(evenButton);
+		// Startet deaktiviert; sobald die Summenzeile existiert (Zeilen > 0),
+		// setzt updateTotalRow den Zustand passend zur aktuellen Summe.
+		normalizeButton = renderToolbarButton(
+			'codicon-percentage',
+			strings.normalizeWeightsButton,
+			normalizeWeights,
+			strings.normalizeWeightsTooltip,
+		);
+		normalizeButton.disabled = true;
+		toolbar.appendChild(normalizeButton);
 		section.appendChild(toolbar);
 
 		const wrap = el('div', { className: 'columns-table-wrap' });
@@ -328,10 +346,13 @@
 		return section;
 	}
 
-	/** @param {string} icon @param {string} label @param {() => void} onClick */
-	function renderToolbarButton(icon, label, onClick) {
-		const btn = el('button', { className: 'toolbar-btn' });
+	/** @param {string} icon @param {string} label @param {() => void} onClick @param {string} [title] */
+	function renderToolbarButton(icon, label, onClick, title) {
+		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
+		if (title) {
+			btn.title = title;
+		}
 		btn.appendChild(el('i', { className: `codicon ${icon}` }));
 		btn.appendChild(document.createTextNode(label));
 		btn.addEventListener('click', onClick);
@@ -477,6 +498,8 @@
 
 	/** @type {HTMLElement | null} Gewichtszelle der Summenzeile, von updateTotalRow live aktualisiert. */
 	let totalValueEl = null;
+	/** @type {HTMLButtonElement | null} „Auf 100 % skalieren“-Knopf — von updateTotalRow je nach aktueller Summe (de)aktiviert. */
+	let normalizeButton = null;
 
 	/** Summenzeile unter dem Grid: alle Gewichte zusammen sollen 100 % ergeben. @param {number} columnCount Spaltenzahl ohne Füll-Spalte. */
 	function renderTotalRow(columnCount) {
@@ -508,10 +531,16 @@
 	 * daher bewusst keine isConnected-Prüfung.
 	 */
 	function updateTotalRow() {
+		const total = weightTotal();
+		// Skalieren ist nur mit einer positiven Summe möglich — der Knopf
+		// folgt der Summe live beim Tippen (wie die Summenzeile selbst).
+		if (normalizeButton) {
+			normalizeButton.disabled = state.rows.length === 0 || total <= 0;
+		}
 		if (!totalValueEl) {
 			return;
 		}
-		totalValueEl.textContent = `${formatWeight(weightTotal())} %`;
+		totalValueEl.textContent = `${formatWeight(total)} %`;
 	}
 
 	function addRow() {
@@ -559,6 +588,55 @@
 		for (const row of state.rows) {
 			row.values.splice(index, 1);
 		}
+		postEdit();
+		render();
+	}
+
+	// ---------------------------------------------------------------------
+	// Gewichts-Kommandos der Toolbar
+	// ---------------------------------------------------------------------
+
+	/**
+	 * Verteilt 100 % gleichmäßig auf alle Zeilen. Die Rundungsdifferenz auf
+	 * 2 Nachkommastellen (z. B. 3 × 33,33 = 99,99) übernimmt die letzte
+	 * Zeile, damit die Summe exakt 100 ergibt.
+	 */
+	function distributeWeightsEvenly() {
+		const count = state.rows.length;
+		if (count === 0) {
+			return;
+		}
+		const share = Math.round((100 / count) * 100) / 100;
+		state.rows.forEach((row, index) => {
+			const value = index === count - 1 ? 100 - share * (count - 1) : share;
+			row.weight = formatWeight(value);
+		});
+		postEdit();
+		render();
+	}
+
+	/**
+	 * Skaliert die vorhandenen Gewichte proportional, sodass die Summe exakt
+	 * 100 ergibt — die Verteilung bleibt erhalten. Leere/ungültige Gewichte
+	 * zählen als 0. Die Rundungsdifferenz übernimmt die Zeile mit dem größten
+	 * Gewicht: sie kann die (winzige) Korrektur aufnehmen, ohne negativ zu
+	 * werden.
+	 */
+	function normalizeWeights() {
+		const total = weightTotal();
+		if (state.rows.length === 0 || total <= 0) {
+			return;
+		}
+		const weights = state.rows.map((row) => parseWeight(row.weight) || 0);
+		const scaled = weights.map((weight) => Math.round((weight / total) * 100 * 100) / 100);
+		const diff = 100 - scaled.reduce((sum, value) => sum + value, 0);
+		if (diff !== 0) {
+			const maxIndex = weights.indexOf(Math.max(...weights));
+			scaled[maxIndex] += diff;
+		}
+		state.rows.forEach((row, index) => {
+			row.weight = formatWeight(scaled[index]);
+		});
 		postEdit();
 		render();
 	}

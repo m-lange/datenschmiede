@@ -20,6 +20,12 @@ export interface LookupWebviewStrings {
 
 	addRowButton: string;
 	addColumnButton: string;
+	/** Toolbar-Knopf: 100 % gleichmäßig auf alle Zeilen verteilen. */
+	distributeEvenlyButton: string;
+	distributeEvenlyTooltip: string;
+	/** Toolbar-Knopf: vorhandene Gewichte proportional auf Summe 100 % skalieren. */
+	normalizeWeightsButton: string;
+	normalizeWeightsTooltip: string;
 
 	colHeaderWeight: string;
 	columnNamePlaceholder: string;
@@ -55,6 +61,10 @@ const en: LookupWebviewStrings = {
 
 	addRowButton: 'Add Row',
 	addColumnButton: 'Add Column',
+	distributeEvenlyButton: 'Distribute Evenly',
+	distributeEvenlyTooltip: 'Set all weights to the same value so the total is 100%.',
+	normalizeWeightsButton: 'Scale to 100%',
+	normalizeWeightsTooltip: 'Rescale the current weights proportionally so the total is 100%.',
 
 	colHeaderWeight: 'Weight (%)',
 	columnNamePlaceholder: 'Column name',
@@ -90,6 +100,10 @@ const de: LookupWebviewStrings = {
 
 	addRowButton: 'Zeile hinzufügen',
 	addColumnButton: 'Spalte hinzufügen',
+	distributeEvenlyButton: 'Gleichmäßig verteilen',
+	distributeEvenlyTooltip: 'Alle Gewichte auf denselben Wert setzen, sodass die Summe 100 % ergibt.',
+	normalizeWeightsButton: 'Auf 100 % skalieren',
+	normalizeWeightsTooltip: 'Vorhandene Gewichte proportional umrechnen, sodass die Summe 100 % ergibt.',
 
 	colHeaderWeight: 'Gewicht (%)',
 	columnNamePlaceholder: 'Spaltenname',

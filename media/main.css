@@ -368,8 +368,13 @@ textarea.md-editor:not([hidden]) {
 	cursor: pointer;
 }
 
-.toolbar-btn:hover {
+.toolbar-btn:hover:not(:disabled) {
 	background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
+}
+
+.toolbar-btn:disabled {
+	opacity: 0.45;
+	cursor: default;
 }
 
 .toolbar-btn:focus-visible {
