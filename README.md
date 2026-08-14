@@ -17,15 +17,6 @@ Rechtsklick auf den Tab → **„Reopen Editor With…“** als Text.
 | `.tdgen` | Ein benutzerdefinierter Generator (Python, als Notebook) | **Datenschmiede: Neuen Generator erstellen…** |
 | `.tdproject` | Ein Testdatenprojekt (Tabellenauswahl, Anzahlen, Interpreter, Ausgabeordner) | **Datenschmiede: Neues Testdatenprojekt erstellen…** |
 
-Alle Befehle sind über die Command Palette und den Rechtsklick im Explorer
-erreichbar. Jeder Dateityp hat ein eigenes Datei-Icon (Explorer, Tabs); die
-Oberfläche ist auf **Deutsch und Englisch** lokalisiert — passend zur
-Anzeigesprache von VS Code. Die Optik lehnt sich an
-[Oracle SQL Developer for VS Code](https://marketplace.visualstudio.com/items?itemName=Oracle.sql-developer)
-an (Tabs, dichtes Grid mit Zeilennummern, randlose Toolbar-Buttons), ist
-aber komplett über native VS-Code-Theme-Variablen umgesetzt
-(Light/Dark/High-Contrast).
-
 **Referenzen über logische Namen**: Tabellen werden als `schema.name`
 referenziert, Nachschlagelisten über ihren Namen, Generatoren als
 `custom:<name>` — nie über Dateipfade. Dateien dürfen also umbenannt und

@@ -53,4 +53,4 @@ records = 80000
 
 [[tables]]
 path = "tables/shipments.td"
-records = 1
+records = "1..3"

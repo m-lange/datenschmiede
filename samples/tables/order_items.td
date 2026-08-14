@@ -72,10 +72,11 @@ type = "integer"
 pk = false
 fk = false
 description = "Bestellmenge — **Random Int** `1 … 5`"
-generator = "random-int"
+generator = "random-float"
 [columns.generator_params]
-min = "1"
-max = "5"
+min = "0"
+max = "1000"
+decimals = "0"
 
 [[columns]]
 name = "line_note"
