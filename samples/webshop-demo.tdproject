@@ -37,19 +37,19 @@ output_path = "output/webshop_{date}"
 
 [[tables]]
 path = "tables/customers.td"
-records = 25000
+records = 100
 
 [[tables]]
 path = "tables/order_items.td"
-records = "1..4"
+records = "1..10"
 
 [[tables]]
 path = "tables/orders.td"
-records = "1..5"
+records = "1..50"
 
 [[tables]]
 path = "tables/products.td"
-records = 80000
+records = 500
 
 [[tables]]
 path = "tables/shipments.td"
