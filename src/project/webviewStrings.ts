@@ -8,6 +8,16 @@
 export interface ProjectWebviewStrings {
 	tabOverview: string;
 	tabTables: string;
+	tabDiagram: string;
+
+	/** Leerer Diagramm-Tab — noch keine Tabellen ausgewählt. */
+	diagramEmptyText: string;
+	/** Hinweis rechts in der Diagramm-Legende: Klick auf einen Kasten öffnet die `.td`-Datei. */
+	diagramOpenHint: string;
+	diagramLegendPk: string;
+	diagramLegendFk: string;
+	/** Tooltip des Datensatz-Zählers im Kasten-Kopf. */
+	diagramRecordsTitle: string;
 
 	fieldNameLabel: string;
 	fieldNamePlaceholder: string;
@@ -91,6 +101,13 @@ export interface ProjectWebviewStrings {
 const en: ProjectWebviewStrings = {
 	tabOverview: 'Overview',
 	tabTables: 'Tables',
+	tabDiagram: 'Diagram',
+
+	diagramEmptyText: 'No tables selected yet — pick tables in the Tables tab.',
+	diagramOpenHint: 'Click a table to open its definition',
+	diagramLegendPk: 'Primary key',
+	diagramLegendFk: 'Foreign key',
+	diagramRecordsTitle: 'Records to generate',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'e.g. Sales Reporting Demo',
@@ -165,6 +182,13 @@ const en: ProjectWebviewStrings = {
 const de: ProjectWebviewStrings = {
 	tabOverview: 'Übersicht',
 	tabTables: 'Tabellen',
+	tabDiagram: 'Diagramm',
+
+	diagramEmptyText: 'Noch keine Tabellen ausgewählt — Auswahl im Tabellen-Tab.',
+	diagramOpenHint: 'Klick auf eine Tabelle öffnet ihre Definition',
+	diagramLegendPk: 'Primärschlüssel',
+	diagramLegendFk: 'Fremdschlüssel',
+	diagramRecordsTitle: 'Zu erzeugende Datensätze',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'z. B. Demo Vertriebsauswertung',

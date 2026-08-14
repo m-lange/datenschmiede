@@ -1855,3 +1855,233 @@ body.vscode-high-contrast-light .py-dec {
 	word-break: break-word;
 	color: var(--vscode-descriptionForeground);
 }
+
+/* ---------- Projekt-Editor: ER-Diagramm (Diagramm-Tab) ---------- */
+/* Rein lesendes SVG (siehe media/diagram.js) — alle Farben über Theme-
+   Variablen, damit helle, dunkle und High-Contrast-Themes gleichermaßen
+   funktionieren. Die Schriftgrößen hier müssen zu den FONT_*-Konstanten in
+   diagram.js passen (Textbreiten werden dort mit denselben Größen gemessen). */
+
+.er-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.er-legend {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.er-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.er-legend .codicon {
+	font-size: 14px;
+}
+
+.er-legend-pk {
+	color: var(--vscode-charts-yellow, #d4a72c);
+}
+
+.er-legend-fk {
+	color: var(--vscode-charts-blue, #3794ff);
+}
+
+.er-legend-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	font-style: italic;
+}
+
+/* Nur horizontal scrollen — vertikal übernimmt der Tab-Inhalt (.tab-content). */
+.er-scroll {
+	overflow-x: auto;
+	padding-bottom: 8px;
+}
+
+.er-svg {
+	display: block;
+	font-family: var(--vscode-font-family);
+}
+
+/* --- Kästen --- */
+
+.er-table {
+	cursor: pointer;
+	transition: opacity 120ms ease;
+	filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.14));
+}
+
+body.vscode-dark .er-table,
+body.vscode-high-contrast .er-table {
+	filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
+}
+
+.er-table.er-dim {
+	opacity: 0.4;
+}
+
+.er-table:focus-visible {
+	outline: none;
+}
+
+.er-table:focus-visible .er-box,
+.er-table:hover .er-box {
+	stroke: var(--vscode-focusBorder);
+}
+
+.er-box {
+	fill: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+	stroke: var(--vscode-widget-border, var(--vscode-panel-border));
+	stroke-width: 1;
+	transition: stroke 120ms ease;
+}
+
+/* Kopfzeile: leicht vom Kasten abgesetzt (transparente Tönung über dem
+   Kasten-Hintergrund, funktioniert dadurch in jedem Theme). */
+.er-head {
+	fill: color-mix(in srgb, var(--vscode-editor-foreground) 5%, transparent);
+}
+
+/* Akzentstreifen unter dem Kopf + Schema-Text: eine Farbe je oberstem
+   Schema-Segment, aus der Theme-eigenen Chart-Palette. */
+.er-accent-0 { fill: var(--vscode-charts-blue, #3794ff); }
+.er-accent-1 { fill: var(--vscode-charts-purple, #b180d7); }
+.er-accent-2 { fill: var(--vscode-charts-orange, #d18616); }
+.er-accent-3 { fill: var(--vscode-charts-green, #89d185); }
+.er-accent-4 { fill: var(--vscode-charts-red, #f14c4c); }
+.er-accent-5 { fill: var(--vscode-charts-yellow, #cca700); }
+
+.er-schema {
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.6px;
+}
+
+.er-accent-text-0 { fill: var(--vscode-charts-blue, #3794ff); }
+.er-accent-text-1 { fill: var(--vscode-charts-purple, #b180d7); }
+.er-accent-text-2 { fill: var(--vscode-charts-orange, #d18616); }
+.er-accent-text-3 { fill: var(--vscode-charts-green, #89d185); }
+.er-accent-text-4 { fill: var(--vscode-charts-red, #f14c4c); }
+.er-accent-text-5 { fill: var(--vscode-charts-yellow, #cca700); }
+
+.er-name {
+	font-size: 13px;
+	font-weight: 600;
+	fill: var(--vscode-editor-foreground);
+}
+
+/* Datensatz-Zähler rechts im Kopf — dieselbe Optik wie VS-Code-Badges. */
+.er-pill {
+	fill: var(--vscode-badge-background);
+}
+
+.er-pill-text {
+	font-size: 11px;
+	font-weight: 600;
+	fill: var(--vscode-badge-foreground);
+}
+
+/* --- Spaltenzeilen --- */
+
+.er-row-alt {
+	fill: color-mix(in srgb, var(--vscode-editor-foreground) 4%, transparent);
+}
+
+.er-col-name {
+	font-size: 12px;
+	fill: var(--vscode-editor-foreground);
+}
+
+.er-col-name.er-col-pk {
+	font-weight: 600;
+}
+
+.er-col-type {
+	font-size: 11px;
+	fill: var(--vscode-descriptionForeground);
+}
+
+.er-col-hidden {
+	opacity: 0.55;
+}
+
+/* PK-/FK-Icons in den Zeilen: Codicon-Glyphen als SVG-Text (Zeichen kommen
+   zur Laufzeit aus codicon.css, siehe codiconChar in diagram.js). */
+.er-col-icon {
+	font-family: codicon;
+	font-size: 12px;
+}
+
+.er-icon-pk {
+	fill: var(--vscode-charts-yellow, #d4a72c);
+}
+
+.er-icon-fk {
+	fill: var(--vscode-charts-blue, #3794ff);
+}
+
+/* --- Kanten --- */
+
+.er-edge {
+	fill: none;
+	stroke: var(--vscode-charts-lines, var(--vscode-descriptionForeground));
+	stroke-width: 1.6;
+	opacity: 0.75;
+	transition: stroke 120ms ease, opacity 120ms ease, stroke-width 120ms ease;
+}
+
+/* Unsichtbare, breite Hover-Fläche über der dünnen Kante (siehe diagram.js). */
+.er-edge-hit {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 12;
+	pointer-events: stroke;
+}
+
+.er-edge-group.er-hot .er-edge {
+	stroke: var(--vscode-focusBorder);
+	stroke-width: 2;
+	opacity: 1;
+}
+
+.er-edge-group.er-dim {
+	opacity: 0.25;
+}
+
+.er-edge-group {
+	transition: opacity 120ms ease;
+}
+
+/* Kardinalität an der Kante ("5", "1..3") — mit Halo in Hintergrundfarbe,
+   damit sie auch über kreuzenden Kanten lesbar bleibt. */
+.er-edge-label {
+	font-size: 10px;
+	font-weight: 600;
+	fill: var(--vscode-descriptionForeground);
+	paint-order: stroke;
+	stroke: var(--vscode-editor-background);
+	stroke-width: 3px;
+}
+
+.er-edge-group.er-hot .er-edge-label {
+	fill: var(--vscode-focusBorder);
+}
+
+/* Pfeilspitzen passend zur Kanten- bzw. Hervorhebungsfarbe. */
+#er-arrow path {
+	fill: var(--vscode-charts-lines, var(--vscode-descriptionForeground));
+}
+
+#er-arrow-hot path {
+	fill: var(--vscode-focusBorder);
+}

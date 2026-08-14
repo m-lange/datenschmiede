@@ -40,6 +40,7 @@
 	/** @typedef {ProjectPickerGroupNode | ProjectPickerTableNode} ProjectPickerNode */
 	/** @typedef {{path:string,label:string,resolved:boolean,ok:boolean}} PythonStatus */
 	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,estimatedMin?:number,estimatedMax?:number,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
+	/** @typedef {import('../src/project/diagram').ProjectDiagram} ProjectDiagram */
 	/** @typedef {import('../src/project/webviewStrings').ProjectWebviewStrings} ProjectWebviewStrings */
 
 	/** @type {ProjectWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
@@ -48,12 +49,14 @@
 	let project = { name: '', description: '', python: null, outputPath: '', tables: [] };
 	/** @type {string | null} */
 	let parseError = null;
-	/** @type {'overview' | 'tables'} */
+	/** @type {'overview' | 'tables' | 'diagram'} */
 	let activeTab = 'overview';
 	/** @type {ProjectPickerNode[]} */
 	let pickerTree = [];
 	/** @type {OutputFileRow[]} Ausgabedateien-Übersicht (eine Zeile je ausgewählter Tabelle), kommt vom Extension-Host. */
 	let outputFiles = [];
+	/** @type {ProjectDiagram | null} ER-Diagramm der ausgewählten Tabellen (siehe src/project/diagram.ts), kommt vom Extension-Host. */
+	let diagram = null;
 	/** @type {PythonStatus | null} */
 	let pythonStatus = null;
 	/** Aktueller Suchtext für den Tabellen-Tab (rein clientseitig, kein Extension-Host-Roundtrip nötig). */
@@ -175,7 +178,9 @@
 			return;
 		}
 		app.appendChild(renderTabs());
-		content.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderTablesTab());
+		content.appendChild(
+			activeTab === 'overview' ? renderOverviewTab() : activeTab === 'tables' ? renderTablesTab() : renderDiagramTab(),
+		);
 		app.appendChild(content);
 
 		// Erst jetzt (Baum-Tabelle hängt im echten DOM) lässt sich die
@@ -194,10 +199,11 @@
 		bar.setAttribute('role', 'tablist');
 		bar.appendChild(renderTabButton('overview', strings.tabOverview));
 		bar.appendChild(renderTabButton('tables', `${strings.tabTables} (${countCheckedTables(pickerTree)})`));
+		bar.appendChild(renderTabButton('diagram', strings.tabDiagram));
 		return bar;
 	}
 
-	/** @param {'overview'|'tables'} tab */
+	/** @param {'overview'|'tables'|'diagram'} tab */
 	function renderTabButton(tab, label) {
 		const btn = el('button', { className: 'tab' + (activeTab === tab ? ' active' : ''), text: label });
 		btn.type = 'button';
@@ -1210,6 +1216,33 @@
 	}
 
 	// ---------------------------------------------------------------------
+	// Tab "Diagramm": rein lesendes ER-Diagramm der ausgewählten Tabellen
+	// (automatisches Layout und SVG-Rendering in media/diagram.js)
+	// ---------------------------------------------------------------------
+
+	function renderDiagramTab() {
+		const section = el('section', { className: 'tab-panel diagram-section' });
+
+		if (!diagram || diagram.tables.length === 0) {
+			const empty = el('div', { className: 'empty-state' });
+			empty.appendChild(el('i', { className: 'codicon codicon-type-hierarchy-sub' }));
+			empty.appendChild(el('p', { text: strings.diagramEmptyText }));
+			section.appendChild(empty);
+			return section;
+		}
+
+		// eslint-disable-next-line no-undef
+		section.appendChild(
+			window.DatenschmiedeDiagram.renderErDiagram(diagram, {
+				strings,
+				formatNumber: formatRecordsNumber,
+				onOpenTable: (path) => vscode.postMessage({ type: 'openTable', path }),
+			}),
+		);
+		return section;
+	}
+
+	// ---------------------------------------------------------------------
 	// Nachrichten vom Extension-Host
 	// ---------------------------------------------------------------------
 
@@ -1220,7 +1253,8 @@
 				strings = message.strings;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
-				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles]);
+				diagram = message.diagram || null;
+				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles, message.diagram]);
 				pythonStatus = message.pythonStatus || null;
 				treeIcons = message.icons || null;
 				columnWidths = message.columnWidths && typeof message.columnWidths === 'object' ? message.columnWidths : {};
@@ -1235,7 +1269,8 @@
 				project = message.project;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
-				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles]);
+				diagram = message.diagram || null;
+				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles, message.diagram]);
 				pythonStatus = message.pythonStatus || null;
 				render();
 				break;
@@ -1248,10 +1283,13 @@
 				// unverändert -> ignorieren, geändert -> aufgeschoben neu
 				// zeichnen (siehe renderSoon) — sonst verlöre z. B. das
 				// Datensätze-Feld beim Tippen Fokus und Cursor.
-				const broadcastJson = JSON.stringify([message.pickerTree, message.outputFiles]);
+				const broadcastJson = JSON.stringify([message.pickerTree, message.outputFiles, message.diagram]);
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				if (Array.isArray(message.outputFiles)) {
 					outputFiles = message.outputFiles;
+				}
+				if (message.diagram) {
+					diagram = message.diagram;
 				}
 				if (broadcastJson === lastBroadcastJson) {
 					break;

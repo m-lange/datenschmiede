@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { Project, ProjectTable } from './model';
+import { buildProjectDiagram } from './diagram';
 import { parseProjectText, serializeProject } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
@@ -342,12 +343,14 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
+				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles);
 				const pythonStatus = state.project.python ? await this.resolvePythonStatus(state.project.python, false) : null;
 				void webviewPanel.webview.postMessage({
 					type: 'update',
 					project: state.project,
 					pickerTree,
 					outputFiles,
+					diagram,
 					pythonStatus,
 				});
 			} else {
@@ -382,6 +385,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					const pickerTree =
 						'project' in state ? buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators) : [];
 					const outputFiles = 'project' in state ? buildOutputFiles(state.project, this.cachedEntries) : [];
+					const diagram =
+						'project' in state ? buildProjectDiagram(state.project, this.cachedEntries, outputFiles) : null;
 					const pythonStatus =
 						'project' in state && state.project.python ? await this.resolvePythonStatus(state.project.python, true) : null;
 					const columnWidths = this.context.globalState.get<Record<string, number>>(COLUMN_WIDTHS_STATE_KEY, {});
@@ -390,6 +395,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						strings,
 						pickerTree,
 						outputFiles,
+						diagram,
 						pythonStatus,
 						icons,
 						columnWidths,
@@ -692,7 +698,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
-				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles });
+				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles);
+				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles, diagram });
 			}
 		}
 	}
@@ -703,6 +710,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', ...segments));
 
 		const commonScriptUri = mediaUri('common.js');
+		const diagramScriptUri = mediaUri('diagram.js');
 		const scriptUri = mediaUri('project.js');
 		const styleUri = mediaUri('main.css');
 		const codiconCssUri = mediaUri('codicon.css');
@@ -724,6 +732,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 <body>
 	<div id="app"></div>
 	<script nonce="${nonce}" src="${commonScriptUri}"></script>
+	<script nonce="${nonce}" src="${diagramScriptUri}"></script>
 	<script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
