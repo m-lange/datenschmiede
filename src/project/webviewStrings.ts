@@ -105,7 +105,7 @@ export interface ProjectWebviewStrings {
 const en: ProjectWebviewStrings = {
 	tabOverview: 'Overview',
 	tabTables: 'Tables',
-	tabDiagram: 'Diagram',
+	tabDiagram: 'ER Diagram',
 
 	diagramEmptyText: 'No tables selected yet — pick tables in the Tables tab.',
 	diagramOpenHint: 'Click a table to open its definition',
@@ -188,7 +188,7 @@ const en: ProjectWebviewStrings = {
 const de: ProjectWebviewStrings = {
 	tabOverview: 'Übersicht',
 	tabTables: 'Tabellen',
-	tabDiagram: 'Diagramm',
+	tabDiagram: 'ER-Diagramm',
 
 	diagramEmptyText: 'Noch keine Tabellen ausgewählt — Auswahl im Tabellen-Tab.',
 	diagramOpenHint: 'Klick auf eine Tabelle öffnet ihre Definition',

@@ -17,9 +17,9 @@ import { Table, logicalTableName } from '../table/model';
 
 /**
  * Eine Spalte im Diagramm-Kasten — nur die fürs Zeichnen nötigen Felder.
- * Gezeigt werden ausschließlich Beziehungs-Spalten: FK-Spalten und die von
- * einer Kante referenzierten Ziel-Spalten (meist PKs) — nicht alle Spalten
- * der Tabelle (siehe buildProjectDiagram).
+ * Gezeigt werden ausschließlich Schlüssel-Spalten: jede PK- und jede
+ * FK-Spalte sowie von einer Kante referenzierte Ziel-Spalten — nicht alle
+ * Spalten der Tabelle (siehe buildProjectDiagram).
  */
 export interface DiagramColumn {
 	name: string;
@@ -111,11 +111,11 @@ interface DiagramRecordsRow {
  * deren beide Enden im Diagramm liegen. Selbst-Referenzen werden wie überall
  * übersprungen (die meldet bereits die FK-Validierung).
  *
- * Je Kasten erscheinen nur die Beziehungs-Spalten — jede FK-Spalte mit einer
- * gezeichneten Kante und jede von einer Kante referenzierte Ziel-Spalte —
- * statt aller Spalten der Tabelle: das hält die Kästen kompakt, und jede
- * Kante bleibt trotzdem spaltengenau verankert. Tabellen ohne Beziehungen
- * (isolierte primäre) erscheinen als reiner Kopf-Kasten.
+ * Je Kasten erscheinen nur die Schlüssel-Spalten — jede PK- und jede
+ * FK-Spalte sowie jede von einer Kante referenzierte Ziel-Spalte — statt
+ * aller Spalten der Tabelle: das hält die Kästen kompakt, und jede Kante
+ * bleibt trotzdem spaltengenau verankert. Tabellen ganz ohne Schlüssel
+ * erscheinen als reiner Kopf-Kasten.
  */
 export function buildProjectDiagram(
 	project: Project,
@@ -206,7 +206,10 @@ export function buildProjectDiagram(
 			schema: item.table.schema.trim(),
 			name: item.table.name.trim() || item.path,
 			columns: item.table.columns
-				.filter((column) => used?.has(column.name.trim()) ?? false)
+				.filter((column) => {
+					const name = column.name.trim();
+					return name.length > 0 && (column.pk || column.fk || (used?.has(name) ?? false));
+				})
 				.map((column) => ({
 					name: column.name.trim(),
 					type: column.type.trim(),
