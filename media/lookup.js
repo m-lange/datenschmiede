@@ -1,16 +1,16 @@
 // @ts-check
-// Webview-Skript für den Lookup-Listen-Editor (.lkp). Bewusst als
-// eigenständiges, unkompiliertes Skript gehalten (kein Bundling nötig, keine
-// Abhängigkeiten) — gleiche Mechanik wie table.js.
+// Webview script for the lookup list editor (.lkp). Deliberately kept as a
+// standalone, uncompiled script (no bundling needed, no dependencies) — the
+// same mechanism as table.js.
 //
-// Aufbau analog zum Table Editor: Tabs "Übersicht" (Name/Beschreibung plus
-// Verteilungs-Diagramm) und "Werte" (Grid). Im Grid ist jede Wertespalte über
-// ihre Kopfzelle direkt umbenennbar; die Phantom-Kopfzelle "+ Neue Spalte"
-// legt beim Tippen eine neue Spalte an. Die Gewichtsspalte ist fest immer die
-// letzte Spalte; die Gewichte sind frei wählbar (auch über 100 % in Summe) —
-// die Summenzeile unter dem Grid zeigt den aktuellen Gesamtwert rein
-// informativ an, ohne Prüfung. Nur ein einzelnes leeres/ungültiges Gewicht
-// wird rot markiert (und in der Problems-Ansicht gemeldet).
+// Its structure mirrors the table editor: an "Overview" tab (name/description
+// plus the distribution chart) and a "Values" tab (the grid). In the grid each
+// value column can be renamed directly through its header cell; the phantom
+// header cell "+ New column" creates a new column as soon as you type. The
+// weight column is always the last column; the weights are free to choose (they
+// may even sum to more than 100 %) — the total row below the grid shows the
+// current sum for information only, without validating it. Only an individual
+// empty or invalid weight is marked red (and reported in the Problems view).
 (function () {
 	'use strict';
 
@@ -18,8 +18,8 @@
 	// eslint-disable-next-line no-undef
 	const vscode = acquireVsCodeApi();
 
-	// Gemeinsame, zustandslose Bausteine aus common.js (vor diesem Skript
-	// eingebunden, siehe getHtml in lookup/editorProvider.ts).
+	// Shared, stateless building blocks from common.js (loaded before this
+	// script, see getHtml in lookup/editorProvider.ts).
 	// eslint-disable-next-line no-undef
 	const {
 		el,
@@ -38,7 +38,7 @@
 	/** @typedef {{name:string,description:string,columns:string[],rows:LookupRow[]}} LookupList */
 	/** @typedef {import('../src/lookup/webviewStrings').LookupWebviewStrings} LookupWebviewStrings */
 
-	/** @type {LookupWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
+	/** @type {LookupWebviewStrings | null} the strings arrive once via the 'init' message from the extension host */
 	let strings = null;
 	/** @type {LookupList} */
 	let state = { name: '', description: '', columns: [], rows: [] };
@@ -46,9 +46,9 @@
 	let parseError = null;
 	/** @type {'overview' | 'values'} */
 	let activeTab = 'values';
-	/** @type {Record<string, number>} von Hand gezogene Spaltenbreiten, geräteweit gemerkt (siehe table.js für Details) */
+	/** @type {Record<string, number>} manually dragged column widths, remembered per machine (see table.js for details) */
 	let columnWidths = {};
-	/** @type {(() => void) | null} von renderValuesTab gesetzt: berechnet die finalen Spaltenbreiten, sobald die Tabelle im DOM hängt (siehe render()). */
+	/** @type {(() => void) | null} set by renderValuesTab: computes the final column widths once the table is in the DOM (see render()). */
 	let pendingColumnSizing = null;
 
 	const VALUE_COLUMN_MIN_WIDTH = 140;
@@ -63,11 +63,11 @@
 	const postEditDebounced = debounce(postEdit, 250);
 
 	// ---------------------------------------------------------------------
-	// Gewichte: Kopie der vscode-freien Helfer aus src/lookup/model.ts —
-	// die Webview kommt ohne Modul-Bundling aus und kann sie nicht importieren.
+	// Weights: a copy of the vscode-free helpers from src/lookup/model.ts — the
+	// webview works without module bundling and cannot import them.
 	// ---------------------------------------------------------------------
 
-	/** @param {string} raw @returns {number | null} */
+	/** Parses a weight; `null` for empty or invalid input. @param {string} raw @returns {number | null} */
 	function parseWeight(raw) {
 		const text = (raw || '').trim().replace(',', '.');
 		if (!/^\d+(\.\d+)?$/.test(text)) {
@@ -81,12 +81,12 @@
 		return state.rows.reduce((sum, row) => sum + (parseWeight(row.weight) || 0), 0);
 	}
 
-	/** Auf 2 Nachkommastellen gerundet, ohne überflüssige Nullen. @param {number} value */
+	/** Rounded to 2 decimal places, without trailing zeros. @param {number} value */
 	function formatWeight(value) {
 		return String(Math.round(value * 100) / 100);
 	}
 
-	/** Kleiner {0}-Platzhalter-Ersatz für die Webview-Strings. @param {string} template @param {...(string|number)} args */
+	/** Small {0} placeholder substitution for the webview strings. @param {string} template @param {...(string|number)} args */
 	function format(template, ...args) {
 		return template.replace(/\{(\d+)\}/g, (match, index) => {
 			const value = args[Number(index)];
@@ -100,8 +100,8 @@
 		if (!strings) {
 			return;
 		}
-		// Tab-Leiste und Inhalt getrennt: die Leiste bleibt oben stehen,
-		// gescrollt wird nur der Inhaltsbereich (.tab-content, siehe main.css).
+		// Tab bar and content are separate: the bar stays at the top, only the
+		// content area scrolls (.tab-content, see main.css).
 		const content = el('div', { className: 'tab-content' });
 		if (parseError) {
 			content.appendChild(renderErrorState(strings, parseError));
@@ -112,15 +112,15 @@
 		content.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderValuesTab());
 		app.appendChild(content);
 
-		// Erst jetzt (Tabelle hängt im echten DOM) lässt sich die tatsächlich
-		// benötigte Breite je Spalte messen — siehe renderValuesTab.
+		// Only now (with the table in the real DOM) can the width actually
+		// needed per column be measured — see renderValuesTab.
 		if (pendingColumnSizing) {
 			pendingColumnSizing();
 		}
 	}
 
 	// ---------------------------------------------------------------------
-	// Kopfbereich: Tabs
+	// Header area: tabs
 	// ---------------------------------------------------------------------
 
 	function renderTabs() {
@@ -147,7 +147,7 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Übersicht": Name / Beschreibung + Verteilungs-Diagramm
+	// "Overview" tab: name / description + distribution chart
 	// ---------------------------------------------------------------------
 
 	function renderOverviewTab() {
@@ -163,7 +163,7 @@
 				(v) => {
 					state.name = v;
 				},
-				// Große Titel-Schrift wie im Generator-Editor.
+				// Large title font as in the generator editor.
 				'title-input',
 			),
 		);
@@ -174,7 +174,7 @@
 		return wrap;
 	}
 
-	/** Dünner Umschlag um das gemeinsame Textfeld (common.js), mit den Commit-Funktionen dieses Editors. */
+	/** Thin wrapper around the shared text field (common.js), using this editor's commit functions. */
 	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
 		return renderTextFieldCommon(id, labelText, value, placeholder, onChange, postEditDebounced, postEdit, extraClass);
 	}
@@ -193,12 +193,12 @@
 	}
 
 	/**
-	 * Verteilungs-Diagramm: ein horizontaler Balken je Wertezeile (in
-	 * Zeilen-Reihenfolge, damit sich Diagramm und Grid direkt zuordnen
-	 * lassen), beschriftet mit dem Wert der ersten Spalte und dem Gewicht am
-	 * Balkenende. Eine Serie -> eine Farbe (Listen-Grün, je Theme-Helligkeit
-	 * eine Variante, siehe main.css) und keine Legende; die Balkenlänge ist
-	 * relativ zum größten Gewicht skaliert, die exakten Werte stehen daneben.
+	 * Distribution chart: one horizontal bar per value row (in row order, so
+	 * chart and grid map onto each other directly), labelled with the first
+	 * column's value and the weight at the end of the bar. One series -> one
+	 * colour (list green, with a variant per theme brightness, see main.css)
+	 * and no legend; bar length is scaled relative to the largest weight, with
+	 * the exact values printed next to it.
 	 */
 	function renderChartCard() {
 		const card = el('div', { className: 'card chart-card' });
@@ -241,7 +241,7 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Werte": Toolbar + Grid
+	// "Values" tab: toolbar + grid
 	// ---------------------------------------------------------------------
 
 	function renderValuesTab() {
@@ -258,8 +258,8 @@
 		);
 		evenButton.disabled = state.rows.length === 0;
 		toolbar.appendChild(evenButton);
-		// Startet deaktiviert; sobald die Summenzeile existiert (Zeilen > 0),
-		// setzt updateTotalRow den Zustand passend zur aktuellen Summe.
+		// Starts disabled; once the total row exists (rows > 0), updateTotalRow
+		// sets the state according to the current sum.
 		normalizeButton = renderToolbarButton(
 			'codicon-percentage',
 			strings.normalizeWeightsButton,
@@ -273,8 +273,8 @@
 		const wrap = el('div', { className: 'columns-table-wrap' });
 		const table = el('table', { className: 'columns-table lookup-table' });
 
-		// Feste Spaltenreihenfolge für buildColGroup: Wertespalten dynamisch
-		// (v0..vn), dahinter Phantom-Spalte, Gewichtsspalte, Aktionen.
+		// Fixed column order for buildColGroup: value columns dynamically
+		// (v0..vn), followed by the phantom column, weight column and actions.
 		const valueKeys = state.columns.map((_, index) => `v${index}`);
 		const order = ['num', ...valueKeys, 'newcol', 'weight', 'actions'];
 		const { colgroup, cols } = buildColGroup(order, columnWidths);
@@ -339,14 +339,14 @@
 		wrap.appendChild(table);
 		section.appendChild(wrap);
 
-		// Siehe renderColumnsTab in table.js: erst im echten DOM messen, dann
-		// auf table-layout: fixed umschalten.
+		// See renderColumnsTab in table.js: measure in the real DOM first, then
+		// switch to table-layout: fixed.
 		pendingColumnSizing = () => fixColumnWidths(table, resizable, resizableHeaders, cols, columnWidths);
 
 		return section;
 	}
 
-	/** @param {string} icon @param {string} label @param {() => void} onClick @param {string} [title] */
+	/** Toolbar button with a codicon and a label. @param {string} icon @param {string} label @param {() => void} onClick @param {string} [title] */
 	function renderToolbarButton(icon, label, onClick, title) {
 		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
@@ -359,7 +359,7 @@
 		return btn;
 	}
 
-	/** Kopfzelle einer Wertespalte: Eingabefeld zum Umbenennen plus „Spalte entfernen“. @param {number} index */
+	/** Header cell of a value column: rename input plus "remove column". @param {number} index */
 	function renderColumnHeader(index) {
 		const th = el('th', { className: 'col-value-header' });
 		const cell = el('div', { className: 'header-cell' });
@@ -393,9 +393,9 @@
 	}
 
 	/**
-	 * Phantom-Kopfzelle „+ Neue Spalte“: der erste Tastendruck legt eine echte
-	 * Spalte mit dem getippten Text an und setzt den Fokus in deren (neue)
-	 * Kopfzelle, sodass sich das Tippen nahtlos fortsetzt.
+	 * Phantom header cell "+ New column": the first keystroke creates a real
+	 * column with the typed text and moves focus into that (new) header cell, so
+	 * typing continues seamlessly.
 	 */
 	function renderNewColumnHeader() {
 		const th = el('th', { className: 'col-new-column' });
@@ -415,6 +415,7 @@
 	}
 
 	/**
+	 * One value row of the grid: row number, value cells, weight and actions.
 	 * @param {LookupRow} row
 	 * @param {number} index
 	 */
@@ -442,7 +443,7 @@
 			tr.appendChild(td);
 		});
 
-		// Leere Zelle unter der Phantom-Spalte „+ Neue Spalte“.
+		// Empty cell below the "+ New column" phantom column.
 		tr.appendChild(el('td', { className: 'col-new-column' }));
 
 		const weightTd = el('td', { className: 'col-weight' });
@@ -463,8 +464,8 @@
 				parseWeight(row.weight) === null,
 			);
 		};
-		// Die Eingabe wird nie verändert (kein Ausgleich, kein Begrenzen) —
-		// was hier steht, ist die Wahrheit; nur die Summenzeile rechnet mit.
+		// The input is never modified (no balancing, no clamping) — whatever is
+		// entered here is the truth; only the total row does any arithmetic.
 		bindText(
 			weightInput,
 			(v) => {
@@ -496,19 +497,19 @@
 		return tr;
 	}
 
-	/** @type {HTMLElement | null} Gewichtszelle der Summenzeile, von updateTotalRow live aktualisiert. */
+	/** @type {HTMLElement | null} Weight cell of the total row, updated live by updateTotalRow. */
 	let totalValueEl = null;
-	/** @type {HTMLButtonElement | null} „Auf 100 % skalieren“-Knopf — von updateTotalRow je nach aktueller Summe (de)aktiviert. */
+	/** @type {HTMLButtonElement | null} The "scale to 100 %" button — enabled/disabled by updateTotalRow depending on the current sum. */
 	let normalizeButton = null;
 
-	/** Summenzeile unter dem Grid: alle Gewichte zusammen sollen 100 % ergeben. @param {number} columnCount Spaltenzahl ohne Füll-Spalte. */
+	/** Total row below the grid: all weights together are meant to add up to 100 %. @param {number} columnCount Column count excluding the filler column. */
 	function renderTotalRow(columnCount) {
 		const tfoot = el('tfoot');
 		const tr = el('tr', { className: 'total-row' });
 
-		// Beschriftung über Zeilennummern-, Werte- und Phantom-Spalte hinweg,
-		// rechtsbündig direkt vor der Gewichtsspalte (columnCount enthält
-		// num + Wertespalten + Phantom + Gewicht + Aktionen).
+		// The label spans the row number, value and phantom columns, right
+		// aligned directly before the weight column (columnCount contains
+		// num + value columns + phantom + weight + actions).
 		const labelTd = el('td', { className: 'total-label', text: strings.totalLabel });
 		labelTd.colSpan = columnCount - 2;
 		tr.appendChild(labelTd);
@@ -524,16 +525,16 @@
 	}
 
 	/**
-	 * Aktualisiert die Summenzeile direkt beim Tippen, ohne das Grid neu zu
-	 * bauen — rein informativ, ohne jede Prüfung: die Gewichte dürfen in
-	 * Summe beliebig von 100 % abweichen. Wird auch von renderTotalRow selbst
-	 * (noch vor dem Einhängen ins DOM) für die Erstbefüllung aufgerufen —
-	 * daher bewusst keine isConnected-Prüfung.
+	 * Updates the total row while typing, without rebuilding the grid — purely
+	 * informational, without any validation: the weights may deviate from 100 %
+	 * by any amount. renderTotalRow itself also calls this (before the row is
+	 * attached to the DOM) for the initial fill — hence deliberately no
+	 * isConnected check.
 	 */
 	function updateTotalRow() {
 		const total = weightTotal();
-		// Skalieren ist nur mit einer positiven Summe möglich — der Knopf
-		// folgt der Summe live beim Tippen (wie die Summenzeile selbst).
+		// Scaling is only possible with a positive sum — the button follows the
+		// sum live while typing (like the total row itself).
 		if (normalizeButton) {
 			normalizeButton.disabled = state.rows.length === 0 || total <= 0;
 		}
@@ -554,7 +555,7 @@
 		}
 	}
 
-	/** @param {number} index */
+	/** Deletes one value row. @param {number} index */
 	function removeRow(index) {
 		state.rows.splice(index, 1);
 		postEdit();
@@ -562,9 +563,9 @@
 	}
 
 	/**
-	 * Legt eine neue Wertespalte an (Toolbar-Knopf mit leerem Namen bzw.
-	 * Phantom-Kopfzelle mit dem bereits getippten Text) und fokussiert ihre
-	 * Kopfzelle, Cursor ans Ende.
+	 * Creates a new value column (toolbar button with an empty name, or phantom
+	 * header cell with the text already typed) and focuses its header cell with
+	 * the cursor at the end.
 	 * @param {string} initialName
 	 */
 	function addColumn(initialName) {
@@ -582,7 +583,7 @@
 		}
 	}
 
-	/** @param {number} index */
+	/** Deletes one value column, including its cells in every row. @param {number} index */
 	function removeColumn(index) {
 		state.columns.splice(index, 1);
 		for (const row of state.rows) {
@@ -593,13 +594,13 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Gewichts-Kommandos der Toolbar
+	// Weight commands of the toolbar
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Verteilt 100 % gleichmäßig auf alle Zeilen. Die Rundungsdifferenz auf
-	 * 2 Nachkommastellen (z. B. 3 × 33,33 = 99,99) übernimmt die letzte
-	 * Zeile, damit die Summe exakt 100 ergibt.
+	 * Distributes 100 % evenly across all rows. The rounding difference at 2
+	 * decimal places (e.g. 3 × 33.33 = 99.99) is absorbed by the last row so
+	 * the sum is exactly 100.
 	 */
 	function distributeWeightsEvenly() {
 		const count = state.rows.length;
@@ -616,11 +617,10 @@
 	}
 
 	/**
-	 * Skaliert die vorhandenen Gewichte proportional, sodass die Summe exakt
-	 * 100 ergibt — die Verteilung bleibt erhalten. Leere/ungültige Gewichte
-	 * zählen als 0. Die Rundungsdifferenz übernimmt die Zeile mit dem größten
-	 * Gewicht: sie kann die (winzige) Korrektur aufnehmen, ohne negativ zu
-	 * werden.
+	 * Scales the existing weights proportionally so the sum is exactly 100 —
+	 * the distribution is preserved. Empty or invalid weights count as 0. The
+	 * rounding difference is absorbed by the row with the largest weight: it can
+	 * take the (tiny) correction without going negative.
 	 */
 	function normalizeWeights() {
 		const total = weightTotal();
@@ -642,7 +642,7 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Nachrichten vom Extension-Host
+	// Messages from the extension host
 	// ---------------------------------------------------------------------
 
 	window.addEventListener('message', (event) => {

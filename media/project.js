@@ -1,13 +1,13 @@
 // @ts-check
-// Webview-Skript für den Projekt-Editor (.tdproject). Gegenstück zu table.js:
-// gleicher Aufbau (Tabs, Karten, Markdown-Beschreibungsfeld), aber für das
-// Projekt-Modell statt der Tabelle. Teilt sich die zustandslosen Bausteine
-// mit table.js über common.js (vor diesem Skript eingebunden, siehe getHtml
-// in project/editorProvider.ts).
+// Webview script for the project editor (.tdproject). The counterpart to
+// table.js: same structure (tabs, cards, markdown description field) but for
+// the project model instead of a table. It shares the stateless building blocks
+// with table.js via common.js (loaded before this script, see getHtml in
+// project/editorProvider.ts).
 //
-// Der Tabellen-Tab enthält die komplette Tabellenauswahl direkt hier als
-// Baum-Tabelle (nach Schema-Namensräumen gruppiert, mit Checkboxen) — anders
-// als zuvor keine separate Ansicht in der Explorer-Seitenleiste mehr.
+// The tables tab hosts the complete table picker right here as a tree table
+// (grouped by schema namespaces, with checkboxes) — unlike before, no separate
+// view in the explorer sidebar.
 (function () {
 	'use strict';
 
@@ -43,7 +43,7 @@
 	/** @typedef {import('../src/project/diagram').ProjectDiagram} ProjectDiagram */
 	/** @typedef {import('../src/project/webviewStrings').ProjectWebviewStrings} ProjectWebviewStrings */
 
-	/** @type {ProjectWebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
+	/** @type {ProjectWebviewStrings | null} the strings arrive once via the 'init' message from the extension host */
 	let strings = null;
 	/** @type {Project} */
 	let project = { name: '', description: '', python: null, outputPath: '', tables: [] };
@@ -53,59 +53,59 @@
 	let activeTab = 'overview';
 	/** @type {ProjectPickerNode[]} */
 	let pickerTree = [];
-	/** @type {OutputFileRow[]} Ausgabedateien-Übersicht (eine Zeile je ausgewählter Tabelle), kommt vom Extension-Host. */
+	/** @type {OutputFileRow[]} Output files overview (one row per selected table), supplied by the extension host. */
 	let outputFiles = [];
-	/** @type {ProjectDiagram | null} ER-Diagramm der ausgewählten Tabellen (siehe src/project/diagram.ts), kommt vom Extension-Host. */
+	/** @type {ProjectDiagram | null} ER diagram of the selected tables (see src/project/diagram.ts), supplied by the extension host. */
 	let diagram = null;
 	/** @type {PythonStatus | null} */
 	let pythonStatus = null;
-	/** Aktueller Suchtext für den Tabellen-Tab (rein clientseitig, kein Extension-Host-Roundtrip nötig). */
+	/** Current search text of the tables tab (purely client-side, no extension host round trip needed). */
 	let tablesFilterText = '';
 	/**
-	 * Von Hand gezogene Spaltenbreiten im Auswahlbaum (px), je Spalten-Schlüssel
-	 * — dasselbe Muster wie columnWidths in table.js, aber geräteweit unter
-	 * einem eigenen Schlüssel gemerkt (siehe project/editorProvider.ts).
+	 * Manually dragged column widths in the picker tree (px), per column key —
+	 * the same pattern as columnWidths in table.js, but remembered per machine
+	 * under its own key (see project/editorProvider.ts).
 	 * @type {Record<string, number>}
 	 */
 	let columnWidths = {};
-	/** @type {(() => void) | null} von renderTablesTree gesetzt: berechnet die finalen Spaltenbreiten, sobald die Tabelle im DOM hängt (siehe render()). */
+	/** @type {(() => void) | null} set by renderTablesTree: computes the final column widths once the table is in the DOM (see render()). */
 	let pendingColumnSizing = null;
 	/**
-	 * Namensraum-Icon plus die drei Zeilen-Icon-Varianten (normal/gesperrt/
-	 * ungültig) als Webview-URI-Paare (hell/dunkel) — kommen einmalig per
-	 * 'init'-Message vom Extension-Host (siehe project/editorProvider.ts,
-	 * dieselben SVGs wie das Datei-Icon im Explorer).
+	 * Namespace icon plus the three row icon variants (normal/locked/invalid) as
+	 * webview URI pairs (light/dark) — they arrive once via the 'init' message
+	 * from the extension host (see project/editorProvider.ts, the same SVGs as
+	 * the file icon in the explorer).
 	 * @type {{normal:{dark:string,light:string},required:{dark:string,light:string},invalid:{dark:string,light:string},namespace:{dark:string,light:string}} | null}
 	 */
 	let treeIcons = null;
-	/** Eingeklappte Namensraum-Gruppen (Pfad aus den Punkt-getrennten Schema-Segmenten, z. B. "ag.cor") — rein clientseitig, nicht persistiert. @type {Set<string>} */
+	/** Collapsed namespace groups (path made of the dot-separated schema segments, e.g. "ag.cor") — purely client-side, not persisted. @type {Set<string>} */
 	const collapsedGroups = new Set();
 
-	/** Größenziehbare Spalten des Auswahlbaums mit ihrer Mindestbreite (px). */
+	/** Resizable columns of the picker tree with their minimum width (px). */
 	const RESIZABLE_COLUMNS = [
 		{ key: 'name', minWidth: 220 },
 		{ key: 'path', minWidth: 200 },
 		{ key: 'records', minWidth: 200 },
 	];
-	/** Feste Spaltenreihenfolge des Auswahlbaums, für buildColGroup (siehe common.js). Die Checkbox sitzt in der Namensspalte in der Baumzeile selbst (siehe renderTableRow), nicht in einer eigenen Spalte. */
+	/** Fixed column order of the picker tree, for buildColGroup (see common.js). The checkbox lives inside the name column of the tree row itself (see renderTableRow), not in a column of its own. */
 	const COLUMN_ORDER = ['name', 'path', 'records', 'actions'];
-	/** Einrückung je Baumtiefe (px) — Platz für einen Klapp-Pfeil (16px) plus Abstand (4px), siehe renderGroupRow/renderTableRow. */
+	/** Indentation per tree level (px) — room for a twistie (16px) plus spacing (4px), see renderGroupRow/renderTableRow. */
 	const INDENT_UNIT = 20;
 
-	/** Tausendertrennzeichen für die Datensätze-Spalte, passend zur Webview-Sprache (siehe <html lang> in project/editorProvider.ts#getHtml). */
+	/** Thousands separator for the records column, matching the webview language (see <html lang> in project/editorProvider.ts#getHtml). */
 	const recordsNumberFormat = new Intl.NumberFormat(document.documentElement.lang === 'de' ? 'de-DE' : 'en-US');
 
-	/** @param {number} n */
+	/** Formats a number with the webview language's thousands separator. @param {number} n */
 	function formatRecordsNumber(n) {
 		return recordsNumberFormat.format(n);
 	}
 
-	/** Entfernt alles außer Ziffern — robust gegen Tausendertrennzeichen jeder Sprache (Punkt, Komma, schmales Leerzeichen, …). @param {string} value */
+	/** Strips everything except digits — robust against any language's thousands separator (dot, comma, narrow space, …). @param {string} value */
 	function digitsOnly(value) {
 		return value.replace(/[^0-9]/g, '');
 	}
 
-	/** Anzahl Nicht-Ziffern-Zeichen vor `pos` in `str` — für den Cursor-Ausgleich beim Live-Bereinigen der Eingabe. @param {string} str @param {number} pos */
+	/** Number of non-digit characters before `pos` in `str` — used to adjust the cursor while cleaning the input live. @param {string} str @param {number} pos */
 	function countNonDigitsBefore(str, pos) {
 		let count = 0;
 		for (let i = 0; i < pos && i < str.length; i++) {
@@ -116,9 +116,9 @@
 		return count;
 	}
 
-	// Kardinalität für referenzierte Tabellen ("5" oder "1..3") — kleines
-	// Gegenstück zu src/table/cardinality.ts für die sofortige Eingabe-Rückmeldung.
-	/** @param {string} raw */
+	// Cardinality for referenced tables ("5" or "1..3") — a small counterpart to
+	// src/table/cardinality.ts for immediate input feedback.
+	/** Parses a cardinality; `null` for malformed input. @param {string} raw */
 	function parseCardinality(raw) {
 		const match = /^\s*(\d+)\s*(?:\.\.\s*(\d+)\s*)?$/.exec(raw || '');
 		if (!match) {
@@ -133,9 +133,9 @@
 	}
 
 	/**
-	 * Anzeige-Text eines gespeicherten `records`-Werts: eine reine Zahl mit
-	 * Tausendertrennzeichen, alles andere (Bereich "1..3", ungültiger Rest)
-	 * unverändert. @param {string} raw
+	 * Display text of a stored `records` value: a plain number with thousands
+	 * separators, everything else (a range "1..3", invalid input) unchanged.
+	 * @param {string} raw
 	 */
 	function formatRecordsDisplay(raw) {
 		return /^\d+$/.test(raw) ? formatRecordsNumber(Number(raw)) : raw;
@@ -150,14 +150,14 @@
 	const postEditDebounced = debounce(postEdit, 250);
 
 	// ---------------------------------------------------------------------
-	// Anti-Flacker: Baum-/Übersichts-Broadcasts vom Extension-Host (nach
-	// Datei-Änderungen im Workspace) lösen kein sofortiges Neuzeichnen mehr
-	// aus — unverändert wird ignoriert, bei echten Änderungen wird das
-	// Neuzeichnen aufgeschoben, solange ein Eingabefeld fokussiert ist.
-	// Mechanik siehe createDeferredRenderer in common.js.
+	// Anti-flicker: tree/overview broadcasts from the extension host (after file
+	// changes in the workspace) no longer trigger an immediate re-render —
+	// unchanged payloads are ignored, and for real changes the re-render is
+	// deferred while an input has focus. For the mechanism see
+	// createDeferredRenderer in common.js.
 	// ---------------------------------------------------------------------
 
-	/** Zuletzt verarbeiteter Baum-/Übersichts-Stand (JSON), um unveränderte Broadcasts zu ignorieren. */
+	/** Last processed tree/overview state (JSON), used to ignore unchanged broadcasts. */
 	let lastBroadcastJson = '';
 
 	const deferredRender = createDeferredRenderer(() => render());
@@ -169,8 +169,8 @@
 		if (!strings) {
 			return;
 		}
-		// Tab-Leiste und Inhalt getrennt: die Leiste bleibt oben stehen,
-		// gescrollt wird nur der Inhaltsbereich (.tab-content, siehe main.css).
+		// Tab bar and content are separate: the bar stays at the top, only the
+		// content area scrolls (.tab-content, see main.css).
 		const content = el('div', { className: 'tab-content' });
 		if (parseError) {
 			content.appendChild(renderErrorState(strings, parseError));
@@ -183,15 +183,15 @@
 		);
 		app.appendChild(content);
 
-		// Erst jetzt (Baum-Tabelle hängt im echten DOM) lässt sich die
-		// tatsächlich benötigte Breite je Spalte messen — siehe renderTablesTree.
+		// Only now (with the tree table in the real DOM) can the width actually
+		// needed per column be measured — see renderTablesTree.
 		if (pendingColumnSizing) {
 			pendingColumnSizing();
 		}
 	}
 
 	// ---------------------------------------------------------------------
-	// Kopfbereich: Tabs (wie table.js)
+	// Header area: tabs (as in table.js)
 	// ---------------------------------------------------------------------
 
 	function renderTabs() {
@@ -203,7 +203,7 @@
 		return bar;
 	}
 
-	/** @param {'overview'|'tables'|'diagram'} tab */
+	/** Switches to the given tab and re-renders. @param {'overview'|'tables'|'diagram'} tab */
 	function renderTabButton(tab, label) {
 		const btn = el('button', { className: 'tab' + (activeTab === tab ? ' active' : ''), text: label });
 		btn.type = 'button';
@@ -219,7 +219,7 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Übersicht": Name / Beschreibung / Python-Interpreter
+	// "Overview" tab: name / description / Python interpreter
 	// ---------------------------------------------------------------------
 
 	function renderOverviewTab() {
@@ -235,7 +235,7 @@
 				(v) => {
 					project.name = v;
 				},
-				// Große Titel-Schrift wie im Generator-Editor.
+				// Large title font as in the generator editor.
 				'title-input',
 			),
 		);
@@ -249,27 +249,26 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Übersicht: Ausgabedateien + Ausgabeordner + Start-Knopf des
-	// Generator-Laufs
+	// Overview: output files + output folder + the generator run's start button
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Anzeigename einer `{…}`-Variable — gemeinsame Beschriftungen mit dem
-	 * Tag-Feld des Table Editors (siehe variableLabel in common.js), damit
-	 * Tags in beiden Editoren gleich heißen.
+	 * Display name of a `{…}` variable — labels shared with the table editor's
+	 * tag field (see variableLabel in common.js), so tags are named identically
+	 * in both editors.
 	 * @param {string} token
 	 */
 	function variableLabel(token) {
 		return variableLabelCommon(strings, token);
 	}
 
-	/** Variablen für den Ausgabeordner des Projekts (kein Tabellen-/Spaltenbezug). */
+	/** Variables available for the project's output folder (no table/column context). */
 	const OUTPUT_PATH_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'project'];
 
 	/**
-	 * Zeigt die Dateinamen-Vorlage einer Tabelle rein lesend an: `{…}`-Teile
-	 * als Tags (dieselbe Optik wie das editierbare Tag-Feld im Table Editor),
-	 * fester Text dazwischen unverändert.
+	 * Renders a table's file name template read-only: `{…}` parts as tags (the
+	 * same look as the editable tag field in the table editor), with the
+	 * constant text in between unchanged.
 	 * @param {string} template
 	 * @param {string} ext
 	 */
@@ -304,9 +303,9 @@
 	}
 
 	/**
-	 * Feld „Ausgabeordner“: Tag-Feld wie der Dateiname im Table Editor —
-	 * fester Text plus dynamische Variablen (Datum, Zeitstempel,
-	 * Projektname, …). Relativ zur Projektdatei; leer -> „output“.
+	 * The "output folder" field: a tag field like the file name in the table
+	 * editor — constant text plus dynamic variables (date, timestamp, project
+	 * name, …). Relative to the project file; empty -> "output".
 	 */
 	function renderOutputPathField() {
 		const field = el('div', { className: 'field' });
@@ -330,8 +329,8 @@
 		});
 		row.appendChild(tagField.element);
 
-		// Ordner-Auswahldialog (VS-Code-nativ) — Ergebnis landet als fester
-		// Text im Tag-Feld, Variablen lassen sich danach weiter ergänzen.
+		// Folder picker (native VS Code) — the result lands in the tag field as
+		// constant text; variables can still be added afterwards.
 		const browseBtn = el('button', { className: 'icon-button' });
 		browseBtn.type = 'button';
 		browseBtn.title = strings.outputPathBrowseLabel;
@@ -344,7 +343,7 @@
 
 		field.appendChild(row);
 
-		// „Dynamischen Wert einfügen“ in einer eigenen Zeile unter dem Feld.
+		// "Insert dynamic value" on its own line below the field.
 		const actionsRow = el('div', { className: 'filename-actions' });
 		const addBtn = el('button', { className: 'toolbar-btn' });
 		addBtn.type = 'button';
@@ -373,10 +372,10 @@
 	}
 
 	/**
-	 * Karte „Generierte Dateien“: Start-Knopf des Generator-Laufs plus eine
-	 * rein lesende Übersicht, welche Datei der Lauf für jede ausgewählte
-	 * Tabelle erzeugen wird (td-Datei, Name, Dateiname, Datensatzanzahl) —
-	 * bearbeitet wird das im Table Editor bzw. im Tabellen-Tab.
+	 * The "generated files" card: the generator run's start button plus a
+	 * read-only overview of which file the run will produce for each selected
+	 * table (td file, name, file name, record count) — editing happens in the
+	 * table editor or on the tables tab.
 	 */
 	function renderOutputFilesCard() {
 		const card = el('section', { className: 'field-group card' });
@@ -449,13 +448,12 @@
 						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-table'} records-type-icon`,
 					}),
 				);
-				// Berechnete Anzahl aus der Konfiguration (bei referenzierten
-				// Tabellen die Kardinalität entlang der FK-Kette multipliziert)
-				// statt nur des konfigurierten Bereichs; Bereiche in derselben
-				// „min..max“-Schreibweise wie die Kardinalitäts-Eingabe (100
-				// Datensätze × 1..3 → „100..300“). Die Konfiguration selbst
-				// steht im Tooltip. Ist die Kette nicht berechenbar, bleibt der
-				// konfigurierte Wert stehen.
+				// The count estimated from the configuration (for referenced
+				// tables the cardinality multiplied along the FK chain) rather
+				// than just the configured range; ranges use the same "min..max"
+				// notation as the cardinality input (100 records × 1..3 →
+				// "100..300"). The configuration itself is in the tooltip. If the
+				// chain is not computable, the configured value stays.
 				let text;
 				if (row.estimatedMin !== undefined && row.estimatedMax !== undefined) {
 					text =
@@ -486,7 +484,7 @@
 		return card;
 	}
 
-	/** Dünner Umschlag um das gemeinsame Textfeld (common.js), mit den Commit-Funktionen dieses Editors. */
+	/** Thin wrapper around the shared text field (common.js), using this editor's commit functions. */
 	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
 		return renderTextFieldCommon(id, labelText, value, placeholder, onChange, postEditDebounced, postEdit, extraClass);
 	}
@@ -504,7 +502,7 @@
 		);
 	}
 
-	/** Verknüpfter Python-Interpreter: Status-Text + Icon, plus Schalter zum (Neu-)Verknüpfen (siehe project/python.ts). */
+	/** Linked Python interpreter: status text + icon, plus a button to (re-)link it (see project/python.ts). */
 	function renderPythonField() {
 		const field = el('div', { className: 'field' });
 		field.appendChild(el('label', { text: strings.pythonSectionLabel }));
@@ -543,10 +541,10 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Tabellen": Auswahlbaum (Namensräume + Checkboxen) + Datensatz-Anzahl
+	// "Tables" tab: picker tree (namespaces + checkboxes) + record counts
 	// ---------------------------------------------------------------------
 
-	/** @param {ProjectPickerNode[]} nodes */
+	/** Whether the tree contains any table node at all. @param {ProjectPickerNode[]} nodes */
 	function countCheckedTables(nodes) {
 		let count = 0;
 		for (const node of nodes) {
@@ -556,6 +554,7 @@
 	}
 
 	/**
+	 * Whether a table matches the search text (by label or path).
 	 * @param {ProjectPickerTableNode} node
 	 * @param {string} filterLower
 	 */
@@ -564,6 +563,8 @@
 	}
 
 	/**
+	 * Filters the tree to matching tables, keeping the groups that still contain
+	 * at least one match.
 	 * @param {ProjectPickerNode[]} nodes
 	 * @param {string} filterLower
 	 * @returns {ProjectPickerNode[]}
@@ -622,17 +623,17 @@
 	}
 
 	/**
-	 * Baut die Baum-Tabelle des Tabellen-Tab komplett neu (nach jeder
-	 * Such-/Auf-/Zuklapp-Änderung sowie beim ersten Rendern). `container`
-	 * kann beim allerersten Aufruf noch losgelöst vom echten DOM sein (siehe
-	 * render()) — die endgültigen Spaltenbreiten werden dann erst gesetzt,
-	 * sobald er wirklich im Dokument hängt.
+	 * Rebuilds the tables tab's tree table from scratch (after every
+	 * search/expand/collapse change and on the first render). On the very first
+	 * call `container` may still be detached from the real DOM (see render()) —
+	 * the final column widths are then only applied once it is really in the
+	 * document.
 	 * @param {HTMLElement} container
 	 */
 	function renderTablesTree(container) {
-		// Ein evtl. offenes Kontextmenü bezieht sich auf den alten Baum-Stand
-		// (z. B. vor einem Update vom Extension-Host) — schließen statt mit
-		// veralteten Knoten weiterarbeiten.
+		// A context menu that may still be open refers to the old tree state
+		// (e.g. from before an update by the extension host) — close it instead
+		// of continuing to work with stale nodes.
 		dismissContextMenu();
 		container.innerHTML = '';
 		pendingColumnSizing = null;
@@ -690,22 +691,23 @@
 
 		const sizeColumns = () => fixColumnWidths(table, RESIZABLE_COLUMNS, resizableHeaders, cols, columnWidths);
 		if (container.isConnected) {
-			// Nachträgliches Neuzeichnen (Suche, Auf-/Zuklappen): der Container
-			// hängt bereits im echten DOM, die Breite lässt sich also sofort messen.
+			// Subsequent re-render (search, expand/collapse): the container is
+			// already in the real DOM, so the width can be measured right away.
 			sizeColumns();
 		} else {
-			// Erstes Rendern: Container hängt noch nicht im DOM (siehe render()).
+			// First render: the container is not in the DOM yet (see render()).
 			pendingColumnSizing = sizeColumns;
 		}
 	}
 
 	/**
+	 * Appends the rows of one tree level (recursively for groups).
 	 * @param {HTMLElement} tbody
 	 * @param {ProjectPickerNode[]} nodes
 	 * @param {number} depth
-	 * @param {string} parentPath Punkt-getrennter Pfad der Elterngruppe (für collapsedGroups), leer auf der Wurzelebene.
-	 * @param {boolean} filterActive Bei aktiver Suche bleiben alle (schon auf Treffer gefilterten) Gruppen aufgeklappt — wie VS Codes eigene Baum-Suche.
-	 * @param {() => void} refresh Zeichnet die Baum-Tabelle neu (nach Auf-/Zuklappen einer Gruppe).
+	 * @param {string} parentPath Dot-separated path of the parent group (for collapsedGroups), empty at the root level.
+	 * @param {boolean} filterActive While a search is active every (already match-filtered) group stays expanded — like VS Code's own tree search.
+	 * @param {() => void} refresh Re-renders the tree table (after a group was expanded or collapsed).
 	 */
 	function appendPickerRows(tbody, nodes, depth, parentPath, filterActive, refresh) {
 		for (const node of nodes) {
@@ -723,11 +725,10 @@
 	}
 
 	/**
-	 * Baut den Einrückungs-/Klapp-Pfeil-Bereich einer Zeile: Einrückung nach
-	 * Baumtiefe, dann ein 16px breiter Klapp-Pfeil (Gruppen) oder ein
-	 * gleich breiter Platzhalter (Tabellen) — nur so richten sich Icon und
-	 * Text von Gruppen- und Tabellenzeilen auf derselben Tiefe exakt
-	 * aneinander aus, unabhängig davon, ob die Zeile selbst aufklappbar ist.
+	 * Builds a row's indentation/twistie area: indentation by tree depth, then a
+	 * 16px twistie (groups) or an equally wide placeholder (tables) — only this
+	 * way do the icon and text of group and table rows at the same depth line up
+	 * exactly, regardless of whether the row itself is expandable.
 	 * @param {number} depth
 	 * @param {boolean} [collapsed]
 	 */
@@ -771,14 +772,15 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Kontextmenü der Namensraum-Zeilen: Webviews haben kein natives
-	// VS-Code-Kontextmenü, daher ein eigenes, über die Menü-Theme-Variablen
-	// gestyltes (siehe .context-menu in main.css).
+	// Context menu of the namespace rows: webviews have no native VS Code
+	// context menu, so this is a custom one styled via the menu theme variables
+	// (see .context-menu in main.css).
 	// ---------------------------------------------------------------------
 
-	/** Räumt das aktuell offene Kontextmenü ab (höchstens eines gleichzeitig). @type {(() => void) | null} */
+	/** Tears down the currently open context menu (at most one at a time). @type {(() => void) | null} */
 	let closeContextMenu = null;
 
+	/** Closes the open context menu, if any. */
 	function dismissContextMenu() {
 		if (closeContextMenu) {
 			closeContextMenu();
@@ -786,7 +788,7 @@
 	}
 
 	/**
-	 * Sammelt alle Gruppen-Pfade eines Teilbaums — für „Alle zuklappen“.
+	 * Collects every group path of a subtree — for "collapse all".
 	 * @param {ProjectPickerNode[]} nodes
 	 * @param {string} parentPath
 	 * @param {string[]} out
@@ -802,10 +804,9 @@
 	}
 
 	/**
-	 * Sammelt alle noch nicht ausgewählten, auswählbaren Tabellen unterhalb
-	 * eines Knotens — für „Alle auswählen“. Bei aktiver Suche ist `nodes`
-	 * bereits der gefilterte Teilbaum, ausgewählt wird also genau das, was
-	 * gerade sichtbar ist.
+	 * Collects every selectable table below a node that is not selected yet —
+	 * for "select all". While a search is active `nodes` is already the filtered
+	 * subtree, so exactly what is currently visible gets selected.
 	 * @param {ProjectPickerNode[]} nodes
 	 * @param {string[]} out
 	 */
@@ -820,12 +821,11 @@
 	}
 
 	/**
-	 * Sammelt alle ausgewählten Tabellen unterhalb eines Knotens — für „Alle
-	 * abwählen“. Bewusst inklusive der gesperrten (automatisch mitgenommenen):
-	 * ob eine Tabelle wirklich abgewählt werden darf, entscheidet der
-	 * Extension-Host — wird sie von einer *verbleibenden* Tabelle noch
-	 * benötigt, bleibt sie stillschweigend ausgewählt; untereinander dürfen
-	 * die entfernten sich dagegen ruhig referenzieren (siehe removeTables in
+	 * Collects every selected table below a node — for "deselect all".
+	 * Deliberately including the locked (automatically included) ones: whether a
+	 * table may really be deselected is decided by the extension host — if it is
+	 * still needed by a *remaining* table it stays silently selected, whereas
+	 * the removed ones may freely reference each other (see removeTables in
 	 * project/editorProvider.ts).
 	 * @param {ProjectPickerNode[]} nodes
 	 * @param {string[]} out
@@ -841,15 +841,14 @@
 	}
 
 	/**
-	 * Öffnet das Kontextmenü einer Namensraum-Zeile an Position (x, y). Alle
-	 * Einträge wirken ausschließlich auf den Teilbaum des angeklickten
-	 * Knotens (ihn selbst eingeschlossen), nie auf den ganzen Baum.
-	 * Geschlossen wird per Klick außerhalb, Escape, Fokusverlust des
-	 * Fensters oder Auswahl eines Eintrags.
+	 * Opens the context menu of a namespace row at position (x, y). Every entry
+	 * acts exclusively on the subtree of the clicked node (including the node
+	 * itself), never on the whole tree. It is closed by a click outside, Escape,
+	 * the window losing focus, or by picking an entry.
 	 * @param {number} x
 	 * @param {number} y
 	 * @param {ProjectPickerGroupNode} node
-	 * @param {string} groupPath Punkt-getrennter Pfad des Knotens (siehe appendPickerRows).
+	 * @param {string} groupPath Dot-separated path of the node (see appendPickerRows).
 	 * @param {() => void} refresh
 	 */
 	function showGroupContextMenu(x, y, node, groupPath, refresh) {
@@ -892,8 +891,8 @@
 
 		menu.appendChild(el('div', { className: 'context-menu-separator' }));
 
-		// Der Knoten selbst plus alle Untergruppen seines Teilbaums — mehr
-		// klappen die beiden Einträge nie auf oder zu.
+		// The node itself plus every subgroup of its subtree — the two entries
+		// never expand or collapse more than that.
 		/** @type {string[]} */
 		const subtreeGroupPaths = [groupPath];
 		collectGroupPaths(node.children, groupPath, subtreeGroupPaths);
@@ -911,8 +910,8 @@
 			refresh();
 		});
 
-		// Pfeiltasten wandern durch die aktiven Einträge (Enter löst den
-		// fokussierten Button ganz normal aus).
+		// Arrow keys move through the enabled entries (Enter activates the
+		// focused button as usual).
 		menu.addEventListener('keydown', (event) => {
 			if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
 				return;
@@ -931,8 +930,8 @@
 		});
 
 		document.body.appendChild(menu);
-		// Erst nach dem Anhängen messen, damit das Menü bei Bedarf nach
-		// links/oben ausweicht, statt aus dem Sichtbereich zu ragen.
+		// Measure only after appending, so the menu can shift left/up if needed
+		// instead of extending past the viewport.
 		const rect = menu.getBoundingClientRect();
 		menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - rect.width - 4))}px`;
 		menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - rect.height - 4))}px`;
@@ -975,8 +974,8 @@
 	function renderGroupRow(node, depth, groupPath, collapsed, refresh) {
 		const tr = el('tr', { className: 'tree-group-row' });
 		const td = el('td', { className: 'tree-group-cell' });
-		// +1 für die Füll-Spalte (siehe buildColGroup) — sonst bliebe der
-		// Namensraum-Hintergrund rechts hinter den Inhaltsspalten sichtbar kürzer.
+		// +1 for the filler column (see buildColGroup) — otherwise the namespace
+		// background would visibly stop short of the content columns on the right.
 		td.colSpan = COLUMN_ORDER.length + 1;
 
 		const row = el('span', { className: 'tree-row' });
@@ -1011,8 +1010,8 @@
 		});
 		tr.addEventListener('contextmenu', (event) => {
 			event.preventDefault();
-			// Aufruf per Kontextmenü-Taste/Shift+F10 meldet (0,0) als
-			// Koordinaten — dann stattdessen an der Zeile selbst ausrichten.
+			// Invocation via the context menu key/Shift+F10 reports (0,0) as
+			// coordinates — align to the row itself in that case.
 			const rowRect = tr.getBoundingClientRect();
 			const hasPointer = event.clientX || event.clientY;
 			showGroupContextMenu(
@@ -1039,9 +1038,9 @@
 		for (const part of renderTreePrefix(depth)) {
 			row.appendChild(part);
 		}
-		// Checkbox sitzt wie in VS Codes eigenen Baum-Ansichten eingerückt in
-		// der Zeile selbst (nach Einrückung und Klapp-Pfeil-Platzhalter, vor
-		// dem Icon) statt in einer eigenen, uneingerückten Spalte ganz links.
+		// As in VS Code's own tree views, the checkbox sits indented inside the
+		// row itself (after the indentation and twistie placeholder, before the
+		// icon) rather than in its own unindented column on the far left.
 		const checkbox = /** @type {HTMLInputElement} */ (el('input', { className: 'tree-checkbox' }));
 		checkbox.type = 'checkbox';
 		checkbox.checked = node.checked;
@@ -1072,10 +1071,9 @@
 		} else if (!node.checked) {
 			// Noch nicht Teil des Projekts -> keine Datensatzanzahl relevant.
 		} else {
-			// Icon vor dem Eingabefeld kennzeichnet die Art der Tabelle:
-			// primär (feste Gesamtanzahl) vs. referenziert/sekundär (Anzahl je
-			// Datensatz der referenzierten Tabelle, auch als Bereich — siehe
-			// renderRecordsInput).
+			// The icon in front of the input marks the kind of table: primary (a
+			// fixed total) vs. referenced/secondary (a count per record of the
+			// referenced table, possibly a range — see renderRecordsInput).
 			const iconTitle = node.secondary
 				? strings.tablesReferencedIconTooltip.replace('{0}', node.referencedTable || '')
 				: strings.tablesPrimaryIconTooltip;
@@ -1104,29 +1102,27 @@
 		actionsTd.appendChild(openBtn);
 		tr.appendChild(actionsTd);
 
-		// Leere Füll-Zelle passend zur Füll-Spalte im Kopf (siehe buildColGroup).
+		// Empty filler cell matching the filler column in the header (see buildColGroup).
 		tr.appendChild(el('td', { className: 'col-spacer' }));
 
 		return tr;
 	}
 
 	/**
-	 * Eingabefeld für die Datensatzanzahl — für beide Tabellenarten dasselbe
-	 * Feld, nur Platzhalter und Prüfregel unterscheiden sich:
+	 * Input for the record count — the same field for both kinds of table, only
+	 * placeholder and validation rule differ:
 	 *
-	 * - Primäre Tabelle: feste Gesamtanzahl, nur Ziffern. Im Ruhezustand mit
-	 *   Tausendertrennzeichen (z. B. "12.500"), beim Fokussieren die reinen
-	 *   Ziffern zum leichteren Bearbeiten — ähnlich wie das Beschreibungsfeld
-	 *   zwischen Vorschau und Rohtext umschaltet. `type="text"` statt
-	 *   `type="number"`, weil ein natives Zahlenfeld kein Trennzeichen
-	 *   anzeigen kann, ohne den Wert selbst ungültig zu machen.
-	 * - Referenzierte (sekundäre) Tabelle: Anzahl je Datensatz der
-	 *   referenzierten Tabelle, als Zahl ("5") oder Bereich ("1..3") — ohne
-	 *   Tausendertrennzeichen, weil dessen Punkt mit der Bereichs-Syntax
-	 *   kollidieren würde.
+	 * - Primary table: a fixed total, digits only. At rest it shows thousands
+	 *   separators (e.g. "12,500"), on focus the bare digits for easier editing
+	 *   — similar to how the description field switches between preview and raw
+	 *   text. `type="text"` rather than `type="number"`, because a native number
+	 *   field cannot display a separator without invalidating the value itself.
+	 * - Referenced (secondary) table: the count per record of the referenced
+	 *   table, as a number ("5") or a range ("1..3") — without thousands
+	 *   separators, since their dot would collide with the range syntax.
 	 *
-	 * Leer ist in beiden Fällen ein Fehler (Pflichtangabe) — dieselbe Regel,
-	 * die im Extension-Host die Problems-Diagnostics erzeugt (siehe
+	 * Empty is an error in both cases (mandatory value) — the same rule that
+	 * produces the Problems diagnostics in the extension host (see
 	 * buildRecordsDiagnostics in project/editorProvider.ts).
 	 * @param {ProjectPickerTableNode} node
 	 */
@@ -1184,8 +1180,8 @@
 		};
 
 		input.addEventListener('focus', () => {
-			// Zum Bearbeiten die reinen Ziffern zeigen — ein Trennzeichen mitten
-			// im Editieren würde nur den Cursor durcheinanderbringen.
+			// Show the bare digits for editing — a separator mid-edit would only
+			// confuse the cursor.
 			input.value = digitsOnly(input.value);
 		});
 		input.addEventListener('input', () => {
@@ -1206,7 +1202,7 @@
 			commit();
 			postEdit();
 			refreshError();
-			// Zurück zur formatierten Anzeige, jetzt, wo nicht mehr editiert wird.
+			// Back to the formatted display now that editing has finished.
 			const entry = project.tables.find((t) => t.path === node.path);
 			input.value = entry && entry.records !== undefined ? formatRecordsDisplay(entry.records) : '';
 		});
@@ -1216,8 +1212,8 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Diagramm": rein lesendes ER-Diagramm der ausgewählten Tabellen
-	// (automatisches Layout und SVG-Rendering in media/diagram.js)
+	// "ER Diagram" tab: read-only ER diagram of the selected tables (automatic
+	// layout and SVG rendering live in media/diagram.js)
 	// ---------------------------------------------------------------------
 
 	function renderDiagramTab() {
@@ -1279,10 +1275,10 @@
 				render();
 				break;
 			case 'pickerTree': {
-				// Baum-/Übersichts-Broadcast nach Datei-Änderungen im Workspace:
-				// unverändert -> ignorieren, geändert -> aufgeschoben neu
-				// zeichnen (siehe renderSoon) — sonst verlöre z. B. das
-				// Datensätze-Feld beim Tippen Fokus und Cursor.
+				// Tree/overview broadcast after file changes in the workspace:
+				// unchanged -> ignore, changed -> re-render deferred (see
+				// renderSoon) — otherwise the records field, for example, would
+				// lose focus and cursor while typing.
 				const broadcastJson = JSON.stringify([message.pickerTree, message.outputFiles, message.diagram]);
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				if (Array.isArray(message.outputFiles)) {

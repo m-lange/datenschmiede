@@ -5,9 +5,9 @@ import { GENERATOR_NOTEBOOK_TYPE } from '../notebook';
 import { fileExists, resolveTargetFolder } from '../../util';
 
 /**
- * Befehl "Neuen Generator erstellen…": legt eine neue .tdgen-Datei mit
- * einem Grundgerüst (Beispiel-Code-Zellen) an und öffnet sie direkt im
- * Generator-Notebook — Gegenstück zu table/commands/newTable.ts.
+ * "New Generator…" command: creates a new .tdgen file with a skeleton (example
+ * code cells) and opens it straight away in the generator notebook — the
+ * counterpart to table/commands/newTable.ts.
  */
 export async function newGeneratorCommand(target?: vscode.Uri): Promise<void> {
 	const folder = await resolveTargetFolder(target);

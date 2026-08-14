@@ -2,15 +2,14 @@ import { GeneratorBase } from '../base';
 import { GeneratorConfig, GeneratorContext, GeneratorIssue, RequiredRefs, emptyRequiredRefs } from '../types';
 
 /**
- * Der Standard-Generator zum Auflösen der Fremdschlüssel-Beziehung einer
- * FK-Spalte: zieht Werte aus der referenzierten Spalte der referenzierten
- * Tabelle (fk_table/fk_column der Spalte selbst — deshalb ohne eigene
- * Parameter). Die *treibende* FK-Spalte einer Tabelle bestimmt zusätzlich
- * über die Datensatz-Kardinalität des Projekts, wie viele Datensätze je
- * referenziertem Datensatz entstehen (siehe python/generate.py).
+ * The default generator for resolving an FK column's foreign key relationship:
+ * draws values from the referenced column of the referenced table (the column's
+ * own fk_table/fk_column — hence no parameters of its own). A table's *driving*
+ * FK column additionally determines, together with the project's cardinality,
+ * how many records are created per referenced record (see python/generate.py).
  *
- * Wird beim Anhaken der FK-Checkbox automatisch zugewiesen und ist nur für
- * FK-Spalten wählbar (siehe media/table.js).
+ * It is assigned automatically when the FK checkbox is ticked and is selectable
+ * on FK columns only (see media/table.js).
  */
 class ForeignKeyGenerator extends GeneratorBase {
 	constructor() {
@@ -29,8 +28,8 @@ class ForeignKeyGenerator extends GeneratorBase {
 	}
 
 	public override validate(_config: GeneratorConfig, _ctx: GeneratorContext): GeneratorIssue[] {
-		// Referenzierte Tabelle/Spalte prüft bereits die FK-Validierung der
-		// Spalte selbst (table/validation.ts) — hier keine Doppelmeldung.
+		// The referenced table/column is already checked by the column's own FK
+		// validation (table/validation.ts) — no duplicate message here.
 		return [];
 	}
 

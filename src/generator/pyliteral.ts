@@ -1,25 +1,27 @@
 /**
- * Kleiner Parser für Python-*Literale* — das TypeScript-Gegenstück zu
- * `ast.literal_eval`: versteht dicts, Listen, Tupel, Strings (einfach/
- * doppelt, auch triple-quoted), Zahlen, True/False/None, Kommentare und
- * hängende Kommata. Bewusst NICHT mehr (keine Ausdrücke, Aufrufe,
- * Variablen) — genutzt vom Notebook-Serializer, um aus dem `return [...]`
- * der `parameters()`-Zelle die deklarativen `[[parameters]]`-Blöcke der
- * `.tdgen`-Datei abzuleiten (siehe generator/notebookCells.ts). Gibt der
- * Code kein Literal zurück, bleibt die zuletzt abgeleitete Liste erhalten
- * und die Hintergrund-Prüfung meldet es.
+ * A small parser for Python *literals* — the TypeScript counterpart to
+ * `ast.literal_eval`: it understands dicts, lists, tuples, strings (single and
+ * double quoted, including triple-quoted), numbers, True/False/None, comments
+ * and trailing commas. Deliberately NOT more (no expressions, calls or
+ * variables) — used by the notebook serializer to derive the declarative
+ * `[[parameters]]` blocks of the `.tdgen` file from the `return [...]` of the
+ * `parameters()` cell (see generator/notebookCells.ts). If the code does not
+ * return a literal, the last derived list is kept and the background validation
+ * reports it.
  *
- * Bewusst frei von jeder vscode-Abhängigkeit (einfach testbar).
+ * Deliberately free of any vscode dependency (easy to test).
  */
 
+/** Any value a Python literal can evaluate to. */
 export type PyValue = string | number | boolean | null | PyValue[] | { [key: string]: PyValue };
 
+/** Internal signal that the input is not a pure literal; never escapes this module. */
 class PyLiteralError extends Error {}
 
 /**
- * Extrahiert den Ausdruck des ersten `return` auf oberster Zeilenebene
- * eines Methodenrumpfs und parst ihn als Literal. `null`, wenn kein
- * `return` gefunden wird oder der Ausdruck kein reines Literal ist.
+ * Extracts the expression of the first top-level `return` in a method body and
+ * parses it as a literal. `null` if no `return` is found or the expression is
+ * not a pure literal.
  */
 export function parseReturnLiteral(body: string): PyValue | null {
 	const match = /(^|\n)[ \t]*return\b/.exec(body ?? '');
@@ -30,7 +32,7 @@ export function parseReturnLiteral(body: string): PyValue | null {
 	try {
 		const parser = new Parser(expression);
 		const value = parser.parseValue();
-		// Nachfolgender Rest (weitere Anweisungen) ist erlaubt und wird ignoriert.
+		// Trailing content (further statements) is allowed and ignored.
 		return value;
 	} catch (err) {
 		if (err instanceof PyLiteralError) {
@@ -40,11 +42,13 @@ export function parseReturnLiteral(body: string): PyValue | null {
 	}
 }
 
+/** Recursive-descent parser over the literal grammar; `pos` is the read cursor. */
 class Parser {
 	private pos = 0;
 
 	constructor(private readonly text: string) {}
 
+	/** Parses one value, dispatching on the next character. */
 	public parseValue(): PyValue {
 		this.skipWhitespace();
 		const c = this.peek();
@@ -78,6 +82,7 @@ class Parser {
 		throw new PyLiteralError(`unexpected character at ${this.pos}`);
 	}
 
+	/** `{ "key": value, … }` — keys must be strings, a trailing comma is allowed. */
 	private parseDict(): { [key: string]: PyValue } {
 		this.expect('{');
 		const result: { [key: string]: PyValue } = {};
@@ -111,8 +116,9 @@ class Parser {
 		}
 	}
 
+	/** `[…]` or `(…)` — `close` is the expected closing bracket; a trailing comma is allowed. */
 	private parseList(close: string): PyValue[] {
-		this.pos++; // öffnende Klammer
+		this.pos++; // opening bracket
 		const result: PyValue[] = [];
 		this.skipWhitespace();
 		if (this.peek() === close) {
@@ -136,6 +142,7 @@ class Parser {
 		}
 	}
 
+	/** Single- or double-quoted string, optionally triple-quoted, with the usual escapes. */
 	private parseString(): string {
 		const quote = this.peek();
 		const triple = this.text.startsWith(quote.repeat(3), this.pos);
@@ -175,6 +182,7 @@ class Parser {
 		throw new PyLiteralError('unterminated string');
 	}
 
+	/** Integer or float, including Python's `_` digit separators and exponents. */
 	private parseNumber(): number {
 		const match = /^[+-]?(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?/.exec(this.text.slice(this.pos));
 		if (!match) {
@@ -184,6 +192,7 @@ class Parser {
 		return Number(match[0].replace(/_/g, ''));
 	}
 
+	/** Advances past whitespace and `#` comments. */
 	private skipWhitespace(): void {
 		for (;;) {
 			const c = this.peek();
@@ -201,6 +210,7 @@ class Parser {
 		}
 	}
 
+	/** Current character; throws at end of input. */
 	private peek(): string {
 		if (this.pos >= this.text.length) {
 			throw new PyLiteralError('unexpected end of input');
@@ -208,6 +218,7 @@ class Parser {
 		return this.text[this.pos];
 	}
 
+	/** Consumes the expected character or fails. */
 	private expect(c: string): void {
 		if (this.peek() !== c) {
 			throw new PyLiteralError(`expected "${c}" at ${this.pos}`);

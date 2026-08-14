@@ -8,18 +8,17 @@ import { toPlanLookups } from '../project/run';
 import { listLookups } from '../lookup/repository';
 import { log } from '../outputChannel';
 
-/** Notebook-Typ des Generator-Editors (siehe `contributes.notebooks` in package.json). */
+/** Notebook type of the generator editor (see `contributes.notebooks` in package.json). */
 export const GENERATOR_NOTEBOOK_TYPE = 'datenschmiede-generator';
 
 /**
- * Das Generator-Notebook: `.tdgen`-Dateien öffnen als natives VS-Code-
- * Notebook (Markdown-Kopf, parameters()-Zelle, Scratch-Zelle mit
- * Testwerten, die vier Methoden-Zellen — Abbildung siehe
- * generator/notebookCells.ts). Ausgeführt wird über einen **persistenten
- * Python-Prozess je Notebook** (python/notebook_kernel.py): Variablen,
- * Importe und Funktionen bleiben zwischen Zell-Ausführungen erhalten —
- * volles Python wie in einem Jupyter-Kernel, mit echten Monaco-Editoren
- * samt Python-Syntax je Zelle. Ersetzt den früheren Webview-Editor.
+ * The generator notebook: `.tdgen` files open as a native VS Code notebook
+ * (markdown header, parameters() cell, scratch cell with test values, the four
+ * method cells — for the mapping see generator/notebookCells.ts). Execution
+ * happens in a **persistent Python process per notebook**
+ * (python/notebook_kernel.py): variables, imports and functions survive between
+ * cell executions — full Python as in a Jupyter kernel, with real Monaco
+ * editors and Python syntax per cell. Replaces the former webview editor.
  */
 export class GeneratorNotebook {
 	public static register(context: vscode.ExtensionContext): vscode.Disposable {
@@ -34,15 +33,16 @@ export class GeneratorNotebook {
 	}
 }
 
-/** Schlüssel der Zellen-Rolle in den Zell-Metadaten. */
+/** Key of the cell role inside the cell metadata. */
 const ROLE_KEY = 'datenschmiedeRole';
 
+/** Translates between the `.tdgen` TOML on disk and the notebook's cells. */
 class GeneratorNotebookSerializer implements vscode.NotebookSerializer {
 	public deserializeNotebook(content: Uint8Array): vscode.NotebookData {
 		const text = Buffer.from(content).toString('utf8');
-		// Kaputtes TOML wirft — VS Code zeigt den Fehler an, die Datei lässt
-		// sich über „Reopen Editor With… > Text Editor“ reparieren; die
-		// genaue Position steht zusätzlich in der Problems-Ansicht.
+		// Broken TOML throws — VS Code surfaces the error, and the file can be
+		// repaired via "Reopen Editor With… > Text Editor"; the exact position
+		// is additionally reported in the Problems view.
 		const file = parseGeneratorText(text);
 
 		const locale = vscode.env.language.toLowerCase().startsWith('de') ? 'de' : 'en';
@@ -57,9 +57,9 @@ class GeneratorNotebookSerializer implements vscode.NotebookSerializer {
 		});
 
 		const notebook = new vscode.NotebookData(cells);
-		// Rückfall-Stand fürs Speichern: Name und Parameterliste bleiben
-		// erhalten, wenn die Überschrift fehlt bzw. parameters() (noch) kein
-		// Literal zurückgibt.
+		// Fallback state for saving: name and parameter list are preserved when
+		// the heading is missing or parameters() does not (yet) return a
+		// literal.
 		notebook.metadata = { previous: file };
 		return notebook;
 	}
@@ -77,7 +77,7 @@ class GeneratorNotebookSerializer implements vscode.NotebookSerializer {
 	}
 }
 
-/** Ein laufender Kernel-Prozess samt wartender Antworten. */
+/** A running kernel process together with its outstanding replies. */
 interface Kernel {
 	child: ChildProcessWithoutNullStreams;
 	pending: Map<number, (reply: KernelReply) => void>;
@@ -85,6 +85,7 @@ interface Kernel {
 	buffer: string;
 }
 
+/** One reply line of the kernel protocol (see python/notebook_kernel.py). */
 interface KernelReply {
 	ok: boolean;
 	outputs?: string[];
@@ -93,9 +94,10 @@ interface KernelReply {
 	traceback?: string;
 }
 
+/** Runs notebook cells in a persistent Python process and streams their output back. */
 class GeneratorNotebookController implements vscode.Disposable {
 	private readonly controller: vscode.NotebookController;
-	/** Ein persistenter Kernel je geöffnetem Notebook (voller Python-Zustand zwischen Zell-Ausführungen). */
+	/** One persistent kernel per open notebook (full Python state between cell executions). */
 	private readonly kernels = new Map<string, Kernel>();
 	private readonly closeSub: vscode.Disposable;
 
@@ -126,6 +128,7 @@ class GeneratorNotebookController implements vscode.Disposable {
 		this.closeSub.dispose();
 	}
 
+	/** Terminates the kernel of one notebook, if it is running. */
 	private killKernel(key: string): void {
 		const kernel = this.kernels.get(key);
 		if (kernel) {
@@ -134,13 +137,15 @@ class GeneratorNotebookController implements vscode.Disposable {
 		}
 	}
 
+	/** Interrupt = restart the kernel; the next execution starts a fresh process. */
 	private restartKernel(key: string): void {
-		// Abbrechen = Kernel neu starten (wie „Restart Kernel“ in Jupyter):
-		// beendet auch endlos laufende Zellen zuverlässig.
+		// Interrupting means restarting the kernel (like "Restart Kernel" in
+		// Jupyter): this reliably terminates endlessly running cells too.
 		this.killKernel(key);
 		log('Generator notebook kernel restarted.');
 	}
 
+	/** Returns the notebook's kernel, starting one if none is running; `null` without a usable interpreter. */
 	private async getKernel(key: string): Promise<Kernel | null> {
 		const existing = this.kernels.get(key);
 		if (existing && existing.child.exitCode === null) {
@@ -172,20 +177,20 @@ class GeneratorNotebookController implements vscode.Disposable {
 						resolve(reply);
 					}
 				} catch {
-					// Keine Protokoll-Zeile (z. B. print auf stdout außerhalb der
-					// Umleitung) -> ignorieren.
+					// Not a protocol line (e.g. a print to stdout outside the
+					// redirection) -> ignore it.
 				}
 			}
 		});
 		child.on('close', () => {
-			// Alle wartenden Ausführungen als abgebrochen beantworten.
+			// Answer every pending execution as aborted.
 			for (const resolve of kernel.pending.values()) {
 				resolve({ ok: false, ename: 'KernelDied', error: vscode.l10n.t('The Python kernel exited.') });
 			}
 			kernel.pending.clear();
 		});
 
-		// Nachschlagelisten des Workspace für ctx.lookup(...) mitgeben.
+		// Hand the workspace's lookup lists over for ctx.lookup(...).
 		const lookups = toPlanLookups(await listLookups());
 		child.stdin.write(`${JSON.stringify({ type: 'init', lookups })}\n`);
 
@@ -194,6 +199,7 @@ class GeneratorNotebookController implements vscode.Disposable {
 		return kernel;
 	}
 
+	/** Executes the selected cells one after another in the notebook's kernel. */
 	private async execute(cells: vscode.NotebookCell[], notebook: vscode.NotebookDocument): Promise<void> {
 		for (const cell of cells) {
 			const execution = this.controller.createNotebookCellExecution(cell);

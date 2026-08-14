@@ -1,14 +1,14 @@
 // @ts-check
-// Webview-Skript für den Table Editor. Bewusst als eigenständiges,
-// unkompiliertes Skript gehalten (kein Bundling nötig, keine Abhängigkeiten).
+// Webview script for the table editor. Deliberately kept as a standalone,
+// uncompiled script (no bundling needed, no dependencies).
 //
-// UI-Anleihen an Oracle SQL Developer for VS Code: Tabs (hier: "Übersicht" /
-// "Spalten"), ein schlankes Bordered-Toolbar über dem Grid, ein Grid mit
-// Zeilennummern-Spalte, PK-/FK-Checkbox-Spalten, Spalten für referenzierte
-// Tabelle/Spalte sowie der Generator-Spalte (Auswahl + Parameter-Dialog).
-// Der Übersicht-Tab enthält zusätzlich die Ausgabe-Einstellungen: Dateiname
-// als Tag-Feld (dynamische Variablen als klickbare Tags, ähnlich Power
-// Automate) und die CSV-Konfiguration.
+// The UI borrows from Oracle SQL Developer for VS Code: tabs (here "Overview" /
+// "Columns"), a slim bordered toolbar above the grid, and a grid with a row
+// number column, PK/FK checkbox columns, columns for the referenced
+// table/column and the generator column (picker + parameter dialog). The
+// overview tab additionally holds the output settings: the file name as a tag
+// field (dynamic variables as clickable tags, similar to Power Automate) and
+// the CSV configuration.
 (function () {
 	'use strict';
 
@@ -16,8 +16,8 @@
 	// eslint-disable-next-line no-undef
 	const vscode = acquireVsCodeApi();
 
-	// Gemeinsame, zustandslose Bausteine aus common.js (vor diesem Skript
-	// eingebunden, siehe getHtml in table/editorProvider.ts).
+	// Shared, stateless building blocks from common.js (loaded before this
+	// script, see getHtml in table/editorProvider.ts).
 	// eslint-disable-next-line no-undef
 	const {
 		el,
@@ -54,15 +54,15 @@
 		'json',
 	];
 
-	/** Eingebaute Dateinamen-Variablen — Gegenstück zu FILE_NAME_VARIABLES in src/table/model.ts. */
+	/** Built-in file name variables — the counterpart to FILE_NAME_VARIABLES in src/table/model.ts. */
 	const FILE_NAME_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'schema', 'table', 'records'];
 
 	/**
-	 * `hidden` ist der Auge-Umschalter in der Aktionsspalte (Zeile gedimmt):
-	 * die Spalte bleibt überall in der Extension sichtbar und wird beim
-	 * Generator-Lauf ganz normal generiert (z. B. als FK-Quelle nutzbar) —
-	 * nur in die Ausgabedatei wird sie nicht geschrieben. Wird als `hidden`
-	 * in der .td-Datei gespeichert (Gegenstück: Column im Extension-Host).
+	 * `hidden` is the eye toggle in the actions column (the row is dimmed): the
+	 * column stays visible everywhere in the extension and is generated as usual
+	 * during a generator run (usable as an FK source, for example) — it is
+	 * merely not written to the output file. Stored as `hidden` in the .td file
+	 * (counterpart: Column in the extension host).
 	 * @typedef {{id:string,params:Record<string,string>}} GeneratorConfig
 	 * @typedef {{name:string,type:string,pk:boolean,fk:boolean,fkTable:string,fkColumn:string,description:string,hidden:boolean,generator?:GeneratorConfig}} Column
 	 */
@@ -83,25 +83,25 @@
 	let parseError = null;
 	/** @type {'overview' | 'columns'} */
 	let activeTab = 'columns';
-	/** @type {TableOption[]} Tabellen im Workspace (Label + Spaltennamen), für FK- und Generator-Referenzen */
+	/** @type {TableOption[]} Tables in the workspace (label + column names), for FK and generator references */
 	let tableOptions = [];
-	/** @type {GeneratorOption[]} Verfügbare Generatoren (eingebaute + benutzerdefinierte), kommen vom Extension-Host */
+	/** @type {GeneratorOption[]} Available generators (built-in + custom), supplied by the extension host */
 	let generatorOptions = [];
-	/** @type {LookupOption[]} Nachschlagelisten (.lkp) im Workspace, für Lookup-Parameter */
+	/** @type {LookupOption[]} Lookup lists (.lkp) in the workspace, for lookup parameters */
 	let lookupOptions = [];
 	/**
-	 * Von Hand gezogene Spaltenbreiten im Grid (px), je Spalten-Schlüssel.
-	 * Kommt initial vom Extension-Host (per globalState geräteweit über alle
-	 * .td-Dateien hinweg gemerkt, siehe table/editorProvider.ts) und wird bei jeder
-	 * Größenänderung dorthin zurückgeschickt. Fehlt ein Eintrag, wird die
-	 * Spalte weiterhin automatisch an ihren Inhalt angepasst.
+	 * Manually dragged grid column widths (px), per column key. It arrives
+	 * initially from the extension host (remembered per machine across all .td
+	 * files via globalState, see table/editorProvider.ts) and is sent back there
+	 * on every resize. Where an entry is missing, the column keeps sizing itself
+	 * to its content.
 	 * @type {Record<string, number>}
 	 */
 	let columnWidths = {};
-	/** @type {(() => void) | null} von renderColumnsTab gesetzt: berechnet die finalen Spaltenbreiten, sobald die Tabelle im DOM hängt (siehe render()). */
+	/** @type {(() => void) | null} set by renderColumnsTab: computes the final column widths once the table is in the DOM (see render()). */
 	let pendingColumnSizing = null;
 
-	/** Größenziehbare Grid-Spalten mit ihrer Mindestbreite (px). */
+	/** Resizable grid columns with their minimum width (px). */
 	const RESIZABLE_COLUMNS = [
 		{ key: 'name', minWidth: 140 },
 		{ key: 'type', minWidth: 120 },
@@ -113,7 +113,7 @@
 
 	const app = document.getElementById('app');
 
-	/** @returns {OutputConfig} Standard-Ausgabe, bis der Extension-Host den echten Stand schickt (Gegenstück zu createDefaultOutput in src/table/model.ts). */
+	/** @returns {OutputConfig} Default output until the extension host sends the real state (counterpart to createDefaultOutput in src/table/model.ts). */
 	function defaultOutput() {
 		return {
 			fileName: '',
@@ -137,11 +137,11 @@
 	const postEditDebounced = debounce(postEdit, 250);
 
 	/**
-	 * Eigene logische Identität der gerade bearbeiteten Tabelle (`schema.name`,
-	 * bzw. nur `name` ohne Schema) — leer, solange sie noch keinen Namen hat.
-	 * Kleines Gegenstück zu `logicalTableName` in src/table/model.ts, um im FK-„Referenzierte
-	 * Tabelle“-Select eine Selbst-Referenz zu erkennen (siehe populateTableOptions,
-	 * refreshTableError in renderColumnRow).
+	 * Logical identity of the table currently being edited (`schema.name`, or
+	 * just `name` without a schema) — empty while it has no name yet. A small
+	 * counterpart to `logicalTableName` in src/table/model.ts, used to detect a
+	 * self-reference in the FK "referenced table" select (see
+	 * populateTableOptions, refreshTableError in renderColumnRow).
 	 */
 	function ownTableLabel() {
 		const name = (state.name || '').trim();
@@ -153,16 +153,16 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Anti-Flacker: Options-Broadcasts vom Extension-Host (nach jeder
-	// Datei-Änderung im Workspace) lösen kein sofortiges Neuzeichnen mehr
-	// aus. Unveränderte Listen werden komplett ignoriert; bei echten
-	// Änderungen wird das Neuzeichnen aufgeschoben, solange gerade ein
-	// Eingabefeld fokussiert ist (oder der Parameter-Dialog offen ist) —
-	// sonst verlöre das Feld bei jedem Broadcast Fokus und Cursor (das
-	// frühere „Flackern“). Mechanik siehe createDeferredRenderer in common.js.
+	// Anti-flicker: option broadcasts from the extension host (after every file
+	// change in the workspace) no longer trigger an immediate re-render.
+	// Unchanged lists are ignored entirely; for real changes the re-render is
+	// deferred while an input has focus (or the parameter dialog is open) —
+	// otherwise the field would lose focus and cursor on every broadcast (the
+	// former "flicker"). For the mechanism see createDeferredRenderer in
+	// common.js.
 	// ---------------------------------------------------------------------
 
-	/** Zuletzt verarbeitete Auswahllisten (JSON), um unveränderte Broadcasts zu ignorieren. */
+	/** Last processed picker lists (JSON), used to ignore unchanged broadcasts. */
 	let lastOptionsJson = '';
 
 	const deferredRender = createDeferredRenderer(
@@ -177,8 +177,8 @@
 		if (!strings) {
 			return;
 		}
-		// Tab-Leiste und Inhalt getrennt: die Leiste bleibt oben stehen,
-		// gescrollt wird nur der Inhaltsbereich (.tab-content, siehe main.css).
+		// Tab bar and content are separate: the bar stays at the top, only the
+		// content area scrolls (.tab-content, see main.css).
 		const content = el('div', { className: 'tab-content' });
 		if (parseError) {
 			content.appendChild(renderErrorState(strings, parseError));
@@ -189,15 +189,15 @@
 		content.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderColumnsTab());
 		app.appendChild(content);
 
-		// Erst jetzt (Tabelle hängt im echten DOM) lässt sich die tatsächlich
-		// benötigte Breite je Spalte messen — siehe renderColumnsTab.
+		// Only now (with the table in the real DOM) can the width actually
+		// needed per column be measured — see renderColumnsTab.
 		if (pendingColumnSizing) {
 			pendingColumnSizing();
 		}
 	}
 
 	// ---------------------------------------------------------------------
-	// Kopfbereich: Tabs (SQL-Developer-artige Objekt-Navigation)
+	// Header area: tabs (SQL-Developer-style object navigation)
 	// ---------------------------------------------------------------------
 
 	function renderTabs() {
@@ -224,7 +224,7 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Übersicht": Name / Schema / Beschreibung + Ausgabe (Dateiname, CSV)
+	// "Overview" tab: name / schema / description + output (file name, CSV)
 	// ---------------------------------------------------------------------
 
 	function renderOverviewTab() {
@@ -240,7 +240,7 @@
 				(v) => {
 					state.name = v;
 				},
-				// Große Titel-Schrift wie im Generator-Editor.
+				// Large title font as in the generator editor.
 				'title-input',
 			),
 		);
@@ -268,13 +268,13 @@
 		return stack;
 	}
 
-	/** Dünner Umschlag um das gemeinsame Textfeld (common.js), mit den Commit-Funktionen dieses Editors. */
+	/** Thin wrapper around the shared text field (common.js), using this editor's commit functions. */
 	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
 		return renderTextFieldCommon(id, labelText, value, placeholder, onChange, postEditDebounced, postEdit, extraClass);
 	}
 
 	// ---------------------------------------------------------------------
-	// Übersicht: Ausgabe-Karte — Dateiname als Tag-Feld + CSV-Einstellungen
+	// Overview: output card — file name as a tag field + CSV settings
 	// ---------------------------------------------------------------------
 
 	/** Anzeigename einer Dateinamen-Variable (`{…}`-Token ohne Klammern) — gemeinsame Beschriftungen, siehe common.js. @param {string} token */
@@ -286,7 +286,7 @@
 		const card = el('section', { className: 'field-group card' });
 		card.appendChild(el('h3', { className: 'card-title', text: strings.outputSectionTitle }));
 
-		// --- Dateiname als Tag-Feld ---
+		// --- File name as a tag field ---
 		const nameField = el('div', { className: 'field' });
 		nameField.appendChild(el('label', { text: strings.outputFileNameLabel }));
 
@@ -310,8 +310,8 @@
 		row.appendChild(el('span', { className: 'filename-ext', text: `.${(state.output.format || 'csv').toLowerCase()}` }));
 		nameField.appendChild(row);
 
-		// „Dynamischen Wert einfügen“ in einer eigenen Zeile unter dem Feld
-		// (gleiches Layout wie der Ausgabeordner im Projekt-Editor).
+		// "Insert dynamic value" on its own line below the field (the same
+		// layout as the output folder in the project editor).
 		const actionsRow = el('div', { className: 'filename-actions' });
 		const addBtn = el('button', { className: 'toolbar-btn' });
 		addBtn.type = 'button';
@@ -328,7 +328,7 @@
 		nameField.appendChild(el('p', { className: 'hint', text: strings.outputFileNameHint }));
 		card.appendChild(nameField);
 
-		// --- Dateityp (vorerst nur CSV) ---
+		// --- File type (CSV only for now) ---
 		const formatField = el('div', { className: 'field field-narrow' });
 		const formatLabel = el('label', { text: strings.outputFormatLabel });
 		formatLabel.htmlFor = 'f-format';
@@ -346,7 +346,7 @@
 		formatField.appendChild(wrapSelectWithChevron(formatSelect));
 		card.appendChild(formatField);
 
-		// --- CSV-Einstellungen ---
+		// --- CSV settings ---
 		const csvSection = el('div', { className: 'csv-settings' });
 		csvSection.appendChild(el('h4', { className: 'csv-settings-title', text: strings.outputCsvSectionLabel }));
 		const grid = el('div', { className: 'csv-settings-grid' });
@@ -407,6 +407,7 @@
 	}
 
 	/**
+	 * Labelled dropdown of the CSV settings.
 	 * @param {string} labelText
 	 * @param {string} current
 	 * @param {{value:string,label:string}[]} options
@@ -417,8 +418,8 @@
 		field.appendChild(el('label', { text: labelText }));
 		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
 		const values = options.map((o) => o.value);
-		// Einen von Hand ins TOML geschriebenen, hier unbekannten Wert trotzdem
-		// anzeigen statt ihn stillschweigend zu ersetzen.
+		// Still display a value hand-written into the TOML that is unknown here,
+		// instead of silently replacing it.
 		if (current && !values.includes(current)) {
 			const opt = /** @type {HTMLOptionElement} */ (el('option', { text: current }));
 			opt.value = current;
@@ -439,6 +440,7 @@
 	}
 
 	/**
+	 * Labelled text input of the CSV settings.
 	 * @param {string} labelText
 	 * @param {string} current
 	 * @param {string} placeholder
@@ -457,6 +459,7 @@
 	}
 
 	/**
+	 * Labelled checkbox of the CSV settings.
 	 * @param {string} labelText
 	 * @param {boolean} current
 	 * @param {(value: boolean) => void} onChange
@@ -476,10 +479,9 @@
 	}
 
 	/**
-	 * Menü „Dynamischen Wert einfügen“ des Dateinamen-Felds: eingebaute
-	 * Variablen plus die Spalten dieser Tabelle (Wert aus dem ersten
-	 * generierten Datensatz) — auf Basis des gemeinsamen schwebenden Menüs
-	 * (siehe showFloatingMenu in common.js).
+	 * The file name field's "insert dynamic value" menu: built-in variables plus
+	 * this table's columns (value taken from the first generated record) — built
+	 * on the shared floating menu (see showFloatingMenu in common.js).
 	 * @param {number} x
 	 * @param {number} y
 	 * @param {(token: string) => void} onPick
@@ -503,9 +505,9 @@
 
 
 	// ---------------------------------------------------------------------
-	// Generatoren: Anzeige-Text + Warnungs-Prüfung (kleines Gegenstück zu
-	// GeneratorBase.displayString/validate in src/generator/base.ts — die
-	// Webview kommt ohne Modul-Bundling aus, daher dupliziert)
+	// Generators: display text + warning checks (a small counterpart to
+	// GeneratorBase.displayString/validate in src/generator/base.ts — the
+	// webview works without module bundling, hence the duplication)
 	// ---------------------------------------------------------------------
 
 	/** @param {string} template @param {Record<string,string>} params */
@@ -524,10 +526,10 @@
 	/** Anzeige-Text der Generator-Konfiguration einer Spalte (leer ohne Generator). @param {Column} column */
 	function generatorDisplayString(column) {
 		const config = column.generator;
-		// FK-Spalten zeigen schlicht den Generator-Namen („Foreign Key“) —
-		// welche Tabelle/Spalte referenziert wird, steht bereits in den
-		// FK-Spalten daneben. Gilt auch ohne gespeicherten Generator (ältere
-		// Dateien): dann greift der Fremdschlüssel-Generator implizit.
+		// FK columns simply show the generator name ("Foreign Key") — which
+		// table/column is referenced is already stated in the FK columns next to
+		// it. This also applies without a stored generator (older files): the
+		// foreign key generator then applies implicitly.
 		if ((config && config.id === 'foreign-key') || (!config?.id && column.fk)) {
 			const fkOption = findGeneratorOption('foreign-key');
 			return fkOption ? fkOption.label : 'Foreign Key';
@@ -540,8 +542,8 @@
 			return config.id + strings.generatorNotFoundSuffix;
 		}
 		if (config.id === 'combine') {
-			// Die Vorlage enthält selbst {spalten}-Platzhalter — roh anzeigen
-			// statt sie fälschlich als Parameter-Platzhalter zu füllen.
+			// The template itself contains {column} placeholders — show it raw
+			// instead of wrongly filling them as parameter placeholders.
 			const template = (config.params.template || '').trim();
 			return template ? `${option.label}: ${template}` : option.label;
 		}
@@ -558,9 +560,9 @@
 	}
 
 	/**
-	 * Worauf sich ein `column`-Parameter bezieht: der Wert des nächsten
-	 * davorstehenden `table`-/`lookup`-Parameters (siehe boundReferenceValue
-	 * in src/generator/base.ts).
+	 * What a `column` parameter refers to: the value of the nearest preceding
+	 * `table`/`lookup` parameter (see boundReferenceValue in
+	 * src/generator/base.ts).
 	 * @param {GeneratorOption} option
 	 * @param {GeneratorParameter} parameter
 	 * @param {Record<string,string>} params
@@ -579,18 +581,18 @@
 	}
 
 	/**
-	 * Erste Warnung zur Generator-Konfiguration einer Spalte, oder null —
-	 * dieselben Regeln erzeugen im Extension-Host die Diagnostics der
-	 * Problems-Ansicht (siehe validateTable in src/table/validation.ts).
+	 * First warning about a column's generator configuration, or null — the same
+	 * rules produce the Problems view diagnostics in the extension host (see
+	 * validateTable in src/table/validation.ts).
 	 * @param {Column} column
 	 */
 	function generatorWarning(column) {
 		const config = column.generator;
 		if (!config || !config.id) {
-			// Jede Spalte soll einen Generator ausgewählt und konfiguriert
-			// haben — dieselbe Regel erzeugt die Warnung in der Problems-
-			// Ansicht. FK-Spalten sind ausgenommen: sie verwenden implizit
-			// immer den Fremdschlüssel-Generator.
+			// Every column is expected to have a generator selected and
+			// configured — the same rule produces the warning in the Problems
+			// view. FK columns are exempt: they implicitly always use the
+			// foreign key generator.
 			return column.fk ? null : strings.genWarnNoGenerator;
 		}
 		const option = findGeneratorOption(config.id);
@@ -601,8 +603,8 @@
 			return strings.genWarnFkOnly;
 		}
 		if (column.fk && config.id !== 'foreign-key') {
-			// Über die Oberfläche nicht mehr möglich (Auswahl gesperrt) — kann
-			// nur aus von Hand bearbeitetem TOML stammen.
+			// No longer reachable through the UI (the picker is locked) — this
+			// can only come from hand-edited TOML.
 			return strings.genWarnFkMismatch;
 		}
 		if (config.id === 'combine') {
@@ -670,8 +672,8 @@
 					break;
 				}
 				case 'own_column': {
-					// Spalte der eigenen Tabelle: muss existieren und darf nicht
-					// die generierte Spalte selbst sein.
+					// A column of the own table: must exist and must not be the
+					// generated column itself.
 					const ownColumns = state.columns.map((c) => (c.name || '').trim());
 					if (value === (column.name || '').trim() || !ownColumns.includes(value)) {
 						return strings.genWarnRefNotFound.replace('{0}', parameter.name).replace('{1}', value);
@@ -685,8 +687,8 @@
 					break;
 			}
 		}
-		// Zahlenbereich min > max (Random Int/Float) — kleine Zusatzprüfung
-		// passend zu den builtins.
+		// Numeric range min > max (Random Int/Float) — a small extra check
+		// matching the builtins.
 		if ((config.id === 'random-int' || config.id === 'random-float') && config.params.min && config.params.max) {
 			const min = Number((config.params.min || '').replace(',', '.'));
 			const max = Number((config.params.max || '').replace(',', '.'));
@@ -698,10 +700,10 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tab "Spalten": Toolbar + Grid
+	// "Columns" tab: toolbar + grid
 	// ---------------------------------------------------------------------
 
-	/** Feste Spaltenreihenfolge für das Grid, für buildColGroup (siehe common.js). */
+	/** Fixed column order of the grid, for buildColGroup (see common.js). */
 	const COLUMN_ORDER = ['num', 'name', 'type', 'desc', 'pk', 'fk', 'refTable', 'refColumn', 'gen', 'actions'];
 
 	function renderColumnsTab() {
@@ -785,15 +787,14 @@
 		wrap.appendChild(table);
 		section.appendChild(wrap);
 
-		// table-layout bleibt bis hierhin "auto" (siehe CSS), damit Spalten
-		// ohne von Hand gesetzte Breite sich noch inhaltsbasiert einpendeln
-		// können. Erst wenn die Tabelle wirklich im DOM hängt (im echten
-		// Layout, nicht in diesem noch losgelösten Baum), lässt sich die
-		// dafür tatsächlich benötigte Breite messen. Danach wird auf
-		// table-layout: fixed umgeschaltet — nur damit ist eine per Hand
-		// gesetzte <col>-Breite zuverlässig maßgeblich (unter "auto" ist ein
-		// spezifiziertes <col>-width nur ein Hinweis, den z. B. Formularfelder
-		// in den Zellen überstimmen können).
+		// Up to this point table-layout stays "auto" (see CSS) so that columns
+		// without a manually set width can still settle on a content-based
+		// width. Only once the table is really in the DOM (in the real layout,
+		// not in this still-detached tree) can the width actually needed be
+		// measured. Afterwards it switches to table-layout: fixed — only then
+		// does a manually set <col> width reliably take effect (under "auto" a
+		// specified <col> width is merely a hint that form fields in the cells,
+		// for example, can override).
 		pendingColumnSizing = () => fixColumnWidths(table, RESIZABLE_COLUMNS, resizableHeaders, cols, columnWidths);
 
 		return section;
@@ -862,19 +863,18 @@
 		pkTd.appendChild(renderFlagCheckbox(column, 'pk', strings.primaryKeyLabel));
 		row.appendChild(pkTd);
 
-		// Referenzierte Tabelle/Spalte werden schon hier aufgebaut
-		// (aber erst weiter unten in die Zeile eingehängt), damit der
-		// FK-Checkbox-Handler sie direkt aktivieren/deaktivieren kann, statt
-		// die ganze Zeile neu zu rendern.
+		// The referenced table/column controls are built here already (but only
+		// attached to the row further below), so the FK checkbox handler can
+		// enable/disable them directly instead of re-rendering the whole row.
 		const refTableTd = el('td', { className: 'col-ref-table' });
 		const tableSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
 		populateTableOptions(tableSelect, column.fkTable);
 		tableSelect.disabled = !column.fk;
-		// Spiegelt die Prüfung in src/table/validation.ts: leer -> "Tabelle wählen",
-		// gleicht der eigenen Tabelle -> "Selbst-Referenz", gesetzt aber in
-		// tableOptions nicht (mehr) vorhanden (z. B. Datei gelöscht/umbenannt)
-		// -> "nicht gefunden". Dieselbe Meldung landet zusätzlich als
-		// Diagnostic in der Problems-Ansicht.
+		// Mirrors the check in src/table/validation.ts: empty -> "select a
+		// table", equals the own table -> "self-reference", set but no longer
+		// present in tableOptions (e.g. the file was deleted or renamed) -> "not
+		// found". The same message additionally lands as a diagnostic in the
+		// Problems view.
 		const refreshTableError = () => {
 			const value = tableSelect.value.trim();
 			const ownLabel = ownTableLabel();
@@ -890,8 +890,7 @@
 		refTableTd.appendChild(wrapSelectWithChevron(tableSelect));
 		refreshTableError();
 
-		// Welche Spalten zur Auswahl stehen, hängt von der gewählten
-		// referenzierten Tabelle ab.
+		// Which columns are on offer depends on the referenced table selected.
 		const refColumnTd = el('td', { className: 'col-ref-column' });
 		const columnSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
 		populateColumnOptions(columnSelect, column.fkTable, column.fkColumn);
@@ -899,8 +898,8 @@
 		const refreshColumnError = () => {
 			const value = columnSelect.value.trim();
 			const table = tableOptions.find((t) => t.label === column.fkTable.trim());
-			// Nur prüfen, wenn die referenzierte Tabelle selbst gefunden wurde —
-			// sonst wäre das nur eine Folge des Tabellenfehlers oben.
+			// Only checked when the referenced table itself was found —
+			// otherwise this would merely follow from the table error above.
 			const notFound = !!value && !!table && !table.columns.includes(value);
 			updateFieldError(
 				columnSelect,
@@ -911,8 +910,8 @@
 		refColumnTd.appendChild(wrapSelectWithChevron(columnSelect));
 		refreshColumnError();
 
-		// Generator-Zelle schon hier aufbauen, damit FK-Wechsel und
-		// Referenz-Änderungen ihre Anzeige direkt auffrischen können.
+		// Build the generator cell here already, so FK toggles and reference
+		// changes can refresh its display directly.
 		const genCell = renderGeneratorCell(column);
 
 		columnSelect.addEventListener('change', () => {
@@ -926,9 +925,9 @@
 			column.fkTable = tableSelect.value;
 			postEdit();
 			refreshTableError();
-			// Spaltenliste an die neu gewählte Tabelle anpassen; ein bisheriger
-			// Wert bleibt erhalten (zeigt ggf. "nicht gefunden" an), statt ihn
-			// automatisch zu verwerfen.
+			// Adapt the column list to the newly selected table; a previous value
+			// is preserved (possibly shown as "not found") instead of being
+			// discarded automatically.
 			populateColumnOptions(columnSelect, column.fkTable, column.fkColumn);
 			refreshColumnError();
 			genCell.refresh();
@@ -941,9 +940,9 @@
 				columnSelect.disabled = !column.fk;
 				refreshTableError();
 				refreshColumnError();
-				// FK anhaken weist automatisch (und fest) den Fremdschlüssel-
-				// Generator zu — die Generator-Auswahl ist für FK-Spalten
-				// gesperrt; Abhaken entfernt ihn wieder.
+				// Ticking FK automatically (and permanently) assigns the foreign
+				// key generator — the generator picker is locked for FK columns;
+				// unticking removes it again.
 				if (column.fk) {
 					column.generator = { id: 'foreign-key', params: {} };
 					postEdit();
@@ -980,8 +979,9 @@
 		actionsTd.appendChild(actions);
 		row.appendChild(actionsTd);
 
-		// Leere Füll-Zelle passend zur Füll-Spalte im Kopf (siehe renderColGroup):
-		// nimmt Restplatz auf, statt die Inhaltsspalten zu strecken.
+		// Empty filler cell matching the filler column in the header (see
+		// renderColGroup): it absorbs the remaining space instead of stretching
+		// the content columns.
 		row.appendChild(el('td', { className: 'col-spacer' }));
 
 		return row;
@@ -992,12 +992,11 @@
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Baut die Generator-Zelle einer Spalte: ein Select über alle passenden
-	 * Generatoren (die gewählte Option zeigt den Anzeige-Text der
-	 * Konfiguration statt nur des Namens) plus ein Stift-Knopf, der den
-	 * Parameter-Dialog öffnet. Bei Warnungen (siehe generatorWarning) wird
-	 * die Zelle markiert; die ausführliche Meldung steht in der
-	 * Problems-Ansicht und als Tooltip an der Zelle.
+	 * Builds a column's generator cell: a select over all applicable generators
+	 * (the selected option shows the configuration's display text rather than
+	 * just the name) plus a pencil button that opens the parameter dialog. On
+	 * warnings (see generatorWarning) the cell is marked; the full message lives
+	 * in the Problems view and as a tooltip on the cell.
 	 * @param {Column} column
 	 */
 	function renderGeneratorCell(column) {
@@ -1012,7 +1011,7 @@
 		pencil.setAttribute('aria-label', strings.generatorEditParamsLabel);
 		pencil.appendChild(el('i', { className: 'codicon codicon-edit' }));
 
-		/** Befüllt das Select passend zum aktuellen FK-Zustand der Spalte neu. */
+		/** Rebuilds the select to match the column's current FK state. */
 		function rebuildSelect() {
 			select.innerHTML = '';
 			const emptyOption = /** @type {HTMLOptionElement} */ (el('option', { text: strings.generatorEmptyOption }));
@@ -1040,10 +1039,10 @@
 			appendGroup(strings.generatorBuiltinGroupLabel, builtins);
 			appendGroup(strings.generatorCustomGroupLabel, customs);
 
-			// Einen gesetzten, aber nicht (mehr) vorhandenen Generator trotzdem
-			// anzeigen (z. B. .tdgen gelöscht/umbenannt), statt ihn zu verwerfen.
-			// FK-Spalten ohne gespeicherten Generator zeigen den (implizit
-			// geltenden) Fremdschlüssel-Generator statt „— keiner —“.
+			// Still display a generator that is set but no longer available (e.g.
+			// its .tdgen was deleted or renamed) instead of discarding it. FK
+			// columns without a stored generator show the (implicitly applied)
+			// foreign key generator rather than "— none —".
 			const currentId = column.generator ? column.generator.id : column.fk ? 'foreign-key' : '';
 			if (currentId && !available.some((o) => o.id === currentId)) {
 				const opt = /** @type {HTMLOptionElement} */ (
@@ -1053,19 +1052,19 @@
 				select.appendChild(opt);
 			}
 			select.value = currentId;
-			// FK-Spalten verwenden immer den Fremdschlüssel-Generator (wird über
-			// die FK-Checkbox automatisch zugewiesen) — die Auswahl ist gesperrt.
+			// FK columns always use the foreign key generator (assigned
+			// automatically via the FK checkbox) — the picker is locked.
 			select.disabled = column.fk;
 		}
 
-		/** Frischt Anzeige-Text, Stift-Zustand und Warnungs-Markierung auf. */
+		/** Refreshes the display text, the pencil state and the warning marker. */
 		function refresh() {
-			// FK-Spalten ohne gespeicherten Generator verwenden implizit den
-			// Fremdschlüssel-Generator (siehe rebuildSelect).
+			// FK columns without a stored generator implicitly use the foreign
+			// key generator (see rebuildSelect).
 			const effectiveId = column.generator ? column.generator.id : column.fk ? 'foreign-key' : '';
 			const option = effectiveId ? findGeneratorOption(effectiveId) : null;
-			// Die gewählte Option zeigt den Anzeige-Text der Konfiguration
-			// (displayString) statt nur des Generator-Namens.
+			// The selected option shows the configuration's display text
+			// (displayString) rather than just the generator name.
 			for (const opt of select.options) {
 				if (opt.value === '') {
 					continue;
@@ -1126,17 +1125,17 @@
 		return { element: td, refresh, rebuild };
 	}
 
-	/** Räumt einen evtl. offenen Parameter-Dialog ab (höchstens einen gleichzeitig); `true` übernimmt die Änderungen, sonst werden sie verworfen. @type {((keepChanges?: boolean) => void) | null} */
+	/** Tears down an open parameter dialog (at most one at a time); `true` keeps the changes, otherwise they are discarded. @type {((keepChanges?: boolean) => void) | null} */
 	let closeParamDialog = null;
 	/**
-	 * Schließt den Dialog, ohne etwas zurückzuschreiben — für den Fall, dass
-	 * das Dokument von außen ersetzt wurde (z. B. Undo/Git): der Dialog
-	 * bearbeitet dann einen veralteten Spalten-Stand, weitere Eingaben würden
-	 * ins Leere laufen. @type {(() => void) | null}
+	 * Closes the dialog without writing anything back — for the case where the
+	 * document was replaced externally (e.g. undo/git): the dialog would then be
+	 * editing a stale column state, and further input would go nowhere.
+	 * @type {(() => void) | null}
 	 */
 	let abandonParamDialog = null;
 
-	/** Schließt den Dialog wie „Abbrechen“ (Änderungen verwerfen). */
+	/** Closes the dialog like "Cancel" (discarding the changes). */
 	function dismissParamDialog() {
 		if (closeParamDialog) {
 			closeParamDialog(false);
@@ -1144,16 +1143,15 @@
 	}
 
 	/**
-	 * Parameter-Dialog eines Generators (VS-Code-artiges Modal in der
-	 * Webview): je Parameter ein zum Datentyp passendes Eingabefeld —
-	 * Auswahl bei vordefinierten Wertelisten und Referenz-Typen
-	 * (table/lookup/column), Datums-/Zeit-Felder, Zahlenfelder, sonst freie
-	 * Eingabe. Werte werden direkt in die Spalten-Konfiguration geschrieben;
-	 * **Fertig** behält sie, **Abbrechen** (auch X/Escape/Klick daneben)
-	 * stellt den Stand beim Öffnen wieder her.
+	 * A generator's parameter dialog (a VS-Code-style modal inside the
+	 * webview): one input per parameter matching its data type — a picker for
+	 * predefined value lists and reference types (table/lookup/column),
+	 * date/time fields, number fields, otherwise free input. Values are written
+	 * straight into the column configuration; **Done** keeps them, **Cancel**
+	 * (including X/Escape/clicking outside) restores the state at opening time.
 	 * @param {Column} column
 	 * @param {GeneratorOption} option
-	 * @param {() => void} onChanged Frischt die Generator-Zelle auf (Anzeige-Text + Warnung).
+	 * @param {() => void} onChanged Refreshes the generator cell (display text + warning).
 	 */
 	function openParamDialog(column, option, onChanged) {
 		dismissParamDialog();
@@ -1161,7 +1159,7 @@
 			return;
 		}
 		const params = column.generator.params;
-		// Stand beim Öffnen, um ihn bei Abbrechen wiederherzustellen.
+		// State at opening time, to restore it on cancel.
 		const originalParams = JSON.parse(JSON.stringify(params));
 
 		const overlay = el('div', { className: 'dialog-overlay' });
@@ -1187,7 +1185,7 @@
 			dialog.appendChild(el('p', { className: 'hint param-dialog-desc', text: option.description }));
 		}
 
-		/** Nachschlage-Selects für `column`-Parameter, um sie bei Änderung ihres Bezugs-Parameters neu zu befüllen. @type {(() => void)[]} */
+		/** Refill callbacks of the `column` parameter selects, invoked when their bound parameter changes. @type {(() => void)[]} */
 		const dependentRefreshers = [];
 		const refreshDependents = () => {
 			for (const refresh of dependentRefreshers) {
@@ -1254,8 +1252,8 @@
 				case 'table':
 					return buildSelect(tableOptions.map((t) => t.label), true);
 				case 'own_column': {
-					// Spalten der eigenen Tabelle — ohne die gerade konfigurierte
-					// Spalte selbst; ihre Werte gelten für dieselben Datensätze.
+					// Columns of the own table — excluding the column being
+					// configured; their values apply to the same records.
 					const ownColumns = state.columns
 						.map((c) => (c.name || '').trim())
 						.filter((name) => name && name !== (column.name || '').trim());
@@ -1328,8 +1326,8 @@
 			}
 		}
 
-		// Fußzeile: Fertig übernimmt die Werte, Abbrechen stellt den Stand beim
-		// Öffnen wieder her (X/Escape/Klick daneben wirken wie Abbrechen).
+		// Footer: Done keeps the values, Cancel restores the state at opening
+		// time (X/Escape/clicking outside act as Cancel).
 		const footer = el('div', { className: 'param-dialog-footer' });
 		const cancelBtn = el('button', { className: 'toolbar-btn', text: strings.generatorCancelLabel });
 		cancelBtn.type = 'button';
@@ -1372,7 +1370,7 @@
 		closeParamDialog = (keepChanges) => {
 			cleanup();
 			if (!keepChanges) {
-				// Abbrechen: alle Änderungen dieses Dialogs verwerfen.
+				// Cancel: discard every change made in this dialog.
 				for (const key of Object.keys(params)) {
 					delete params[key];
 				}
@@ -1380,12 +1378,12 @@
 			}
 			postEdit();
 			onChanged();
-			// Ein während des Dialogs aufgeschobenes Neuzeichnen jetzt nachholen.
+			// Perform a re-render that was deferred while the dialog was open.
 			deferredRender.flushIfIdle();
 		};
 
-		// Erstes Eingabefeld fokussieren, damit sich der Dialog sofort per
-		// Tastatur ausfüllen lässt.
+		// Focus the first input so the dialog can be filled in from the keyboard
+		// right away.
 		const firstControl = dialog.querySelector('input, select');
 		if (firstControl instanceof HTMLElement) {
 			firstControl.focus();
@@ -1393,11 +1391,11 @@
 	}
 
 	/**
-	 * Checkbox für PK/FK.
+	 * Checkbox for PK/FK.
 	 * @param {Column} column
 	 * @param {'pk'|'fk'} key
 	 * @param {string} label
-	 * @param {() => void} [onToggle] Wird zusätzlich aufgerufen, wenn FK umgeschaltet wird (Referenz-Spalten (de)aktivieren).
+	 * @param {() => void} [onToggle] Additionally invoked when FK is toggled (to enable/disable the reference columns).
 	 */
 	function renderFlagCheckbox(column, key, label, onToggle) {
 		const checkbox = /** @type {HTMLInputElement} */ (el('input'));
@@ -1416,10 +1414,10 @@
 	}
 
 	/**
-	 * Füllt das "Referenzierte Tabelle"-Select mit den Tabellen des Workspace.
-	 * Die eigene Tabelle bleibt sichtbar (z. B. falls von Hand im TOML als
-	 * `fk_table` eingetragen — dann greift die Fehleranzeige in
-	 * refreshTableError), lässt sich über das Select aber nicht neu auswählen.
+	 * Fills the "referenced table" select with the workspace's tables. The own
+	 * table stays visible (e.g. if it was hand-written into the TOML as
+	 * `fk_table` — the error display in refreshTableError then kicks in) but
+	 * cannot be selected anew through the select.
 	 * @param {HTMLSelectElement} select
 	 * @param {string} currentValue
 	 */
@@ -1442,9 +1440,9 @@
 	}
 
 	/**
-	 * Füllt das "Referenzierte Spalte"-Select mit den Spalten der aktuell
-	 * gewählten referenzierten Tabelle (leer, solange keine/eine unbekannte
-	 * Tabelle gewählt ist).
+	 * Fills the "referenced column" select with the columns of the currently
+	 * selected referenced table (empty while no table, or an unknown one, is
+	 * selected).
 	 * @param {HTMLSelectElement} select
 	 * @param {string} tableLabel
 	 * @param {string} currentValue
@@ -1461,15 +1459,14 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Vorschau: erzeugt über den Extension-Host (Python-Läufer) 20
-	// Datensätze mit der aktuellen Konfiguration — inklusive aller (auch
-	// per Auge-Umschalter ausgeblendeter) Spalten — und zeigt sie in einer
-	// Tabelle im Dialog.
+	// Preview: has the extension host (the Python runner) generate 20 records
+	// with the current configuration — including every column, even those
+	// hidden via the eye toggle — and shows them in a table inside a dialog.
 	// ---------------------------------------------------------------------
 
-	/** `true`, solange eine Vorschau-Generierung läuft (Knopf zeigt dann einen Spinner). */
+	/** `true` while a preview generation is running (the button then shows a spinner). */
 	let previewRunning = false;
-	/** @type {HTMLButtonElement | null} Vorschau-Knopf des aktuellen Renderings, um den Spinner umzuschalten. */
+	/** @type {HTMLButtonElement | null} Preview button of the current render, used to toggle the spinner. */
 	let previewButton = null;
 
 	function renderPreviewButton() {
@@ -1609,9 +1606,9 @@
 	}
 
 	/**
-	 * Knopf der Aktionsspalte (verschieben/entfernen) — der Auge-Umschalter
-	 * hat seinen eigenen Aufbau (renderHideToggle), da sein Icon wechselt.
-	 * @param {string} icon codicon-Name ohne Präfix, z. B. "chevron-up"
+	 * Button of the actions column (move/remove) — the eye toggle has its own
+	 * builder (renderHideToggle), since its icon changes.
+	 * @param {string} icon codicon name without the prefix, e.g. "chevron-up"
 	 * @param {string} label
 	 * @param {() => void} onClick
 	 * @param {{ disabled?: boolean, danger?: boolean, action?: string }} [options]
@@ -1634,10 +1631,10 @@
 	}
 
 	/**
-	 * Auge-Umschalter „Spalte aus der Ausgabe ausblenden“ (Icon wechselt,
-	 * Zeile wird gedimmt): die Spalte wird weiterhin generiert, aber nicht in
-	 * die Ausgabedatei geschrieben — der Zustand wird als `hidden` in der
-	 * .td-Datei gespeichert (siehe Column-Typedef).
+	 * Eye toggle "hide column from the output" (the icon changes and the row is
+	 * dimmed): the column is still generated but not written to the output file
+	 * — the state is stored as `hidden` in the .td file (see the Column
+	 * typedef).
 	 * @param {Column} column
 	 * @param {HTMLElement} row
 	 */
@@ -1663,9 +1660,9 @@
 	}
 
 	/**
-	 * Verschiebt eine Spalte um eine Position nach oben (-1) oder unten (+1)
-	 * und setzt den Fokus wieder auf denselben Knopf der verschobenen Zeile,
-	 * damit sich eine Spalte per wiederholtem Klick/Enter weiterbewegen lässt.
+	 * Moves a column one position up (-1) or down (+1) and restores focus to the
+	 * same button of the moved row, so a column can be moved further with
+	 * repeated clicks or Enter presses.
 	 * @param {number} index
 	 * @param {-1|1} delta
 	 */
@@ -1706,9 +1703,9 @@
 				render();
 				break;
 			case 'update':
-				// Externer Dokumentwechsel (Undo, Git, Texteditor): ein offener
-				// Parameter-Dialog bearbeitet danach einen veralteten Stand ->
-				// schließen, ohne etwas zurückzuschreiben.
+				// External document change (undo, git, text editor): an open
+				// parameter dialog would then be editing a stale state -> close
+				// it without writing anything back.
 				if (abandonParamDialog) {
 					abandonParamDialog();
 				}
@@ -1724,10 +1721,10 @@
 				render();
 				break;
 			case 'options': {
-				// Aktualisierte Auswahllisten (Tabellen/Generatoren/Nachschlage-
-				// listen) nach Datei-Änderungen im Workspace. Unverändert ->
-				// gar nichts tun; geändert -> neu zeichnen, aber erst, wenn
-				// gerade kein Eingabefeld fokussiert ist (siehe renderSoon).
+				// Updated picker lists (tables/generators/lookup lists) after file
+				// changes in the workspace. Unchanged -> do nothing at all;
+				// changed -> re-render, but only once no input has focus (see
+				// renderSoon).
 				const optionsJson = JSON.stringify([message.tableOptions, message.generatorOptions, message.lookupOptions]);
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
 				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
@@ -1750,8 +1747,8 @@
 				);
 				break;
 			case 'previewDone':
-				// Lauf beendet ohne Ergebnis (Fehler wurde vom Extension-Host
-				// als Meldung angezeigt) — nur den Knopf zurücksetzen.
+				// Run finished without a result (the extension host already showed
+				// the error as a notification) — just reset the button.
 				previewRunning = false;
 				refreshPreviewButton();
 				break;

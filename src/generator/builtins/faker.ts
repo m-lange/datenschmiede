@@ -1,12 +1,12 @@
 import { GeneratorBase } from '../base';
 
 /**
- * Eingebauter Generator: realistisch wirkende Werte über die Python-Bibliothek
- * Faker (https://faker.readthedocs.io/). `provider` ist der Name einer
- * Faker-Methode — als vordefinierte Liste der gängigsten Provider angeboten
- * (siehe types.ts zu choices). Python-Gegenstück in python/generate.py; dort
- * wird ein fehlendes `faker`-Paket mit einer verständlichen Meldung samt
- * Installationshinweis gemeldet.
+ * Built-in generator: realistic-looking values via the Python library Faker
+ * (https://faker.readthedocs.io/). `provider` is the name of a Faker method —
+ * offered as a predefined list of the most common providers (see `choices` in
+ * types.ts). Its Python counterpart lives in python/generate.py, which reports
+ * a missing `faker` package with an understandable message including
+ * installation instructions.
  */
 export const FAKER_PROVIDERS = [
 	'name',
@@ -37,8 +37,10 @@ export const FAKER_PROVIDERS = [
 	'uuid4',
 ] as const;
 
+/** Locales offered for the `locale` parameter. */
 export const FAKER_LOCALES = ['de_DE', 'de_AT', 'de_CH', 'en_US', 'en_GB', 'fr_FR', 'it_IT', 'es_ES', 'nl_NL', 'pl_PL', 'cs_CZ', 'ja_JP'] as const;
 
+/** See the module doc comment above. */
 class FakerGenerator extends GeneratorBase {
 	constructor() {
 		super({

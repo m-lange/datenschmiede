@@ -1,23 +1,23 @@
 /**
- * Abbildung zwischen dem `.tdgen`-Modell (generator/model.ts) und den
- * Zellen des Generator-Notebooks — bewusst vscode-frei (einfach testbar);
- * die dünne Umwandlung in echte vscode.NotebookCellData übernimmt
+ * Mapping between the `.tdgen` model (generator/model.ts) and the cells of the
+ * generator notebook — deliberately vscode-free (easy to test); the thin
+ * conversion into actual vscode.NotebookCellData happens in
  * generator/notebook.ts.
  *
- * Notebook-Aufbau:
- *   1. Markdown-Zelle:  `# <name>` + Beschreibung
- *   2. parameters()-Zelle (Python): gibt die Parameterdefinitionen als
- *      Literal-Liste von dicts zurück — beim Speichern leitet der
- *      Serializer daraus die `[[parameters]]`-Blöcke ab (pyliteral.ts);
- *      der Code selbst wird verbatim in `[code] parameters` gespeichert
- *   3. Scratch-Zelle (Python): Testwerte (`params = {...}`, `n = 10`) und
- *      freie Experimente — persistiert in `[code] scratch`
- *   4. die vier Methoden-Zellen (generate/parse_params/display_value/
- *      validate), jeweils als vollständige Funktion (Signatur + Rumpf)
+ * Notebook layout:
+ *   1. markdown cell: `# <name>` + description
+ *   2. parameters() cell (Python): returns the parameter definitions as a
+ *      literal list of dicts — on save the serializer derives the
+ *      `[[parameters]]` blocks from it (pyliteral.ts); the code itself is
+ *      stored verbatim in `[code] parameters`
+ *   3. scratch cell (Python): test values (`params = {...}`, `n = 10`) and free
+ *      experiments — persisted in `[code] scratch`
+ *   4. the four method cells (generate/parse_params/display_value/validate),
+ *      each as a complete function (signature + body)
  *
- * Die Zellen-Rollen stecken in den Zell-Metadaten, nicht in der Position —
- * Umsortieren ist damit unkritisch; unbekannte Zusatz-Zellen werden beim
- * Speichern an die Scratch-Zelle angehängt statt verloren zu gehen.
+ * Cell roles live in the cell metadata, not in the position — reordering is
+ * therefore harmless; unknown extra cells are appended to the scratch cell on
+ * save instead of being lost.
  */
 
 import {
@@ -31,6 +31,7 @@ import {
 import { GeneratorParameter, PARAMETER_TYPES } from './types';
 import { parseReturnLiteral } from './pyliteral';
 
+/** What a notebook cell means to the serializer; stored in the cell metadata. */
 export type CellRole =
 	| 'header'
 	| 'doc'
@@ -42,6 +43,7 @@ export type CellRole =
 	| 'validate'
 	| 'extra';
 
+/** A vscode-free description of one notebook cell. */
 export interface CellSpec {
 	kind: 'markdown' | 'code';
 	language: string;
@@ -50,10 +52,9 @@ export interface CellSpec {
 }
 
 /**
- * Kurzbeschreibungen, die als Markdown-Zellen vor den jeweiligen
- * Code-Zellen stehen (Rolle `doc`). Sie werden beim Öffnen erzeugt und
- * beim Speichern ignoriert (nicht persistiert) — Änderungen daran gehen
- * also bewusst nicht in die Datei ein.
+ * Short descriptions rendered as markdown cells in front of the respective code
+ * cells (role `doc`). They are generated when the file is opened and ignored on
+ * save (not persisted) — edits to them deliberately do not reach the file.
  */
 const CELL_DOCS: Record<string, { en: string; de: string }> = {
 	parameters: {
@@ -82,6 +83,7 @@ const CELL_DOCS: Record<string, { en: string; de: string }> = {
 	},
 };
 
+/** Fixed first line of each method cell, keyed by cell role. */
 const METHOD_SIGNATURES: Record<string, string> = {
 	parameters: PARAMETERS_SIGNATURE,
 	generate: GENERATE_SIGNATURE,
@@ -90,7 +92,7 @@ const METHOD_SIGNATURES: Record<string, string> = {
 	validate: VALIDATE_SIGNATURE,
 };
 
-/** Rückt einen Methodenrumpf für die Zellen-Darstellung unter seiner Signatur ein. */
+/** Indents a method body for display beneath its signature in the cell. */
 function indentBody(body: string): string {
 	return (body || 'pass')
 		.split('\n')
@@ -98,7 +100,7 @@ function indentBody(body: string): string {
 		.join('\n');
 }
 
-/** Entfernt die Einrückung eines Funktionsrumpfs wieder (Gegenstück zu indentBody). */
+/** Removes the indentation of a function body again (counterpart to indentBody). */
 function dedentBody(text: string): string {
 	return text
 		.split('\n')
@@ -106,16 +108,16 @@ function dedentBody(text: string): string {
 		.join('\n');
 }
 
-/** Baut die vollständige Funktions-Zelle (Signatur + eingerückter Rumpf). */
+/** Builds the complete function cell (signature + indented body). */
 function methodCellText(role: string, body: string): string {
 	return `${METHOD_SIGNATURES[role]}\n${indentBody(body)}`;
 }
 
 /**
- * Extrahiert den Rumpf aus einer Funktions-Zelle: beginnt die Zelle mit
- * `def <name>(`, zählt alles danach (dedentet) als Rumpf; sonst gilt die
- * ganze Zelle als Rumpf (die kanonische Signatur wird beim nächsten Öffnen
- * wiederhergestellt).
+ * Extracts the body from a function cell: if the cell starts with
+ * `def <name>(`, everything after it counts (dedented) as the body; otherwise
+ * the whole cell is the body (the canonical signature is restored the next time
+ * the file is opened).
  */
 function extractBody(role: string, cellText: string): string {
 	const lines = cellText.split('\n');
@@ -126,8 +128,8 @@ function extractBody(role: string, cellText: string): string {
 	const name = role === 'parameters' ? 'parameters' : role;
 	const normalize = (body: string) => {
 		const trimmed = body.replace(/\s+$/, '');
-		// Leere Zellen werden als `pass` dargestellt (indentBody) — beim
-		// Zurücklesen wieder zu leer normalisieren, damit die Datei stabil bleibt.
+		// Empty cells are rendered as `pass` (indentBody) — normalize them back
+		// to empty when reading, so the file stays stable.
 		return trimmed.trim() === 'pass' ? '' : trimmed;
 	};
 	if (firstIndex < lines.length && new RegExp(`^def\\s+${name}\\s*\\(`).test(lines[firstIndex].trim())) {
@@ -136,12 +138,12 @@ function extractBody(role: string, cellText: string): string {
 	return normalize(cellText);
 }
 
-/** Formatiert einen JS-String als Python-String-Literal (JSON-Escapes sind Python-kompatibel). */
+/** Formats a JS string as a Python string literal (JSON escapes are Python-compatible). */
 function pyString(value: string): string {
 	return JSON.stringify(value ?? '');
 }
 
-/** Baut den kanonischen parameters()-Rumpf aus den deklarativen `[[parameters]]`-Blöcken. */
+/** Builds the canonical parameters() body from the declarative `[[parameters]]` blocks. */
 export function parametersBodyFromList(parameters: GeneratorParameter[]): string {
 	if (parameters.length === 0) {
 		return [
@@ -174,10 +176,10 @@ export function parametersBodyFromList(parameters: GeneratorParameter[]): string
 }
 
 /**
- * Liest die Parameterdefinitionen aus dem parameters()-Rumpf (Literal-
- * Auswertung des `return [...]`). `null`, wenn der Rückgabewert kein
- * Literal bzw. keine Liste von dicts ist — der Aufrufer behält dann die
- * bisherige Liste, die Hintergrund-Prüfung meldet es.
+ * Reads the parameter definitions from the parameters() body (literal
+ * evaluation of the `return [...]`). `null` if the return value is not a
+ * literal or not a list of dicts — the caller then keeps the previous list and
+ * the background validation reports it.
  */
 export function parametersFromBody(body: string): GeneratorParameter[] | null {
 	const value = parseReturnLiteral(body);
@@ -212,7 +214,7 @@ export function parametersFromBody(body: string): GeneratorParameter[] | null {
 	return result;
 }
 
-/** Standard-Inhalt der Scratch-Zelle: Testwerte für alle deklarierten Parameter. */
+/** Default content of the scratch cell: test values for every declared parameter. */
 export function defaultScratch(parameters: GeneratorParameter[]): string {
 	const entries = parameters
 		.filter((p) => p.name.trim())
@@ -224,12 +226,12 @@ export function defaultScratch(parameters: GeneratorParameter[]): string {
 	].join('\n');
 }
 
-/** Baut die Notebook-Zellen aus dem Datei-Modell (`locale` wählt die Sprache der Beschreibungs-Zellen). */
+/** Builds the notebook cells from the file model (`locale` picks the language of the description cells). */
 export function fileToCells(file: GeneratorFile, locale: 'de' | 'en' = 'en'): CellSpec[] {
 	const cells: CellSpec[] = [];
-	// <small> verkleinert die Beschreibungs-Zellen gegenüber normalem
-	// Markdown-Text (das Tag gehört zur erlaubten HTML-Teilmenge des
-	// Notebook-Renderers; wird es entfernt, bleibt der Text normal groß).
+	// <small> renders the description cells smaller than regular markdown text
+	// (the tag is part of the notebook renderer's allowed HTML subset; removing
+	// it just leaves the text at normal size).
 	const doc = (key: string) =>
 		cells.push({ kind: 'markdown', language: 'markdown', value: `<small>${CELL_DOCS[key][locale]}</small>`, role: 'doc' });
 
@@ -271,10 +273,10 @@ export function fileToCells(file: GeneratorFile, locale: 'de' | 'en' = 'en'): Ce
 }
 
 /**
- * Liest das Datei-Modell aus den Notebook-Zellen zurück. `previous` liefert
- * Rückfall-Werte (Name ohne Markdown-Überschrift, Parameterliste bei nicht
- * literal auswertbarem parameters()-Rumpf). Unbekannte Zusatz-Zellen werden
- * an die Scratch-Zelle angehängt, damit nichts verloren geht.
+ * Reads the file model back from the notebook cells. `previous` supplies
+ * fallback values (the name when there is no markdown heading, the parameter
+ * list when the parameters() body does not evaluate to a literal). Unknown
+ * extra cells are appended to the scratch cell so nothing is lost.
  */
 export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): GeneratorFile {
 	const file: GeneratorFile = {
@@ -291,8 +293,8 @@ export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): Generat
 	for (const cell of cells) {
 		switch (cell.role) {
 			case 'doc':
-				// Beschreibungs-Zellen werden beim Öffnen erzeugt und nicht
-				// persistiert (Änderungen daran gehen bewusst nicht in die Datei).
+				// Description cells are generated on open and not persisted
+				// (edits to them deliberately do not reach the file).
 				break;
 			case 'header': {
 				const lines = cell.value.split('\n');
@@ -304,8 +306,8 @@ export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): Generat
 						.join('\n')
 						.trim();
 				} else {
-					// Ohne Überschrift bleibt der bisherige Name erhalten (die
-					// Hintergrund-Prüfung meldet einen fehlenden Namen ohnehin).
+					// Without a heading the previous name is kept (the background
+					// validation reports a missing name anyway).
 					file.description = cell.value.trim();
 				}
 				break;
@@ -346,8 +348,8 @@ export function cellsToFile(cells: CellSpec[], previous: GeneratorFile): Generat
 		}
 	}
 
-	// Wurde die Scratch-Zelle gelöscht, bleibt ihr bisheriger Inhalt erhalten
-	// (wie bei den Methoden-Zellen: Löschen wirkt nicht dauerhaft).
+	// If the scratch cell was deleted, its previous content is preserved (as
+	// with the method cells: deleting does not take effect permanently).
 	const scratchBase = sawScratch ? scratch : previous.code.scratch;
 	file.code.scratch = [scratchBase, ...extras.map((extra) => `# --- zusätzliche Zelle ---\n${extra}`)]
 		.filter((part) => part.trim())

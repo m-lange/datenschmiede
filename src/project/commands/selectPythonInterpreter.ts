@@ -5,11 +5,11 @@ import { ProjectEditorProvider } from '../editorProvider';
 import { fullDocumentRange } from '../../util';
 
 /**
- * Befehl "Python-Interpreter auswählen…": dasselbe wie der "Ändern…"-Knopf im
- * Übersicht-Tab der Projekt-Webview (siehe project/editorProvider.ts), aber
- * auch direkt über die Command Palette erreichbar. Wirkt auf den gerade
- * fokussierten `.tdproject`-Tab (siehe `activeProjectDocument`) — ohne
- * offenes Projekt gibt es nichts zu verknüpfen.
+ * "Select Python Interpreter…" command: the same as the "Change…" button on the
+ * project webview's overview tab (see project/editorProvider.ts), but also
+ * reachable directly from the Command Palette. It acts on the currently focused
+ * `.tdproject` tab (see `activeProjectDocument`) — without an open project
+ * there is nothing to link.
  */
 export async function selectPythonInterpreterCommand(): Promise<void> {
 	const document = activeProjectDocument();
@@ -39,10 +39,10 @@ export async function selectPythonInterpreterCommand(): Promise<void> {
 }
 
 /**
- * Das `.tdproject`-Textdokument des gerade fokussierten Editor-Tabs, falls
- * vorhanden — über die native Tab-API statt einer eigenen "aktives Projekt"-
- * Verfolgung, da der Projekt-Editor selbst keine Seitenleisten-Ansicht mehr
- * hat, die das bräuchte.
+ * The `.tdproject` text document of the currently focused editor tab, if any —
+ * obtained through the native tab API rather than our own "active project"
+ * tracking, since the project editor itself no longer has a sidebar view that
+ * would need it.
  */
 function activeProjectDocument(): vscode.TextDocument | undefined {
 	const activeTab = vscode.window.tabGroups.activeTabGroup?.activeTab;

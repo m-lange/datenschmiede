@@ -14,9 +14,15 @@ import { checkPython310Available } from './project/python';
 import { disposeOutputChannel } from './outputChannel';
 import { WorkspaceIndex } from './workspaceIndex';
 
+/**
+ * Extension entry point: wires up the three custom editors (.td, .tdproject,
+ * .lkp), the generator notebook (.tdgen), workspace-wide diagnostics and the
+ * `datenschmiede.*` commands. Everything registered here is pushed onto
+ * `context.subscriptions` so VS Code disposes it on deactivation.
+ */
 export function activate(context: vscode.ExtensionContext): void {
-	// Gemeinsamer Workspace-Index (EIN Watcher-Satz, EIN Einlese-Cache) für
-	// Diagnostics, Table Editor und Projekt-Editor — siehe workspaceIndex.ts.
+	// Shared workspace index (ONE set of file watchers, ONE parse cache) used by
+	// diagnostics, the table editor and the project editor — see workspaceIndex.ts.
 	const index = new WorkspaceIndex();
 	context.subscriptions.push(index);
 
@@ -24,9 +30,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(ProjectEditorProvider.register(context, index));
 	context.subscriptions.push(LookupEditorProvider.register(context));
 	context.subscriptions.push(GeneratorNotebook.register(context));
-	// Workspace-weite Hintergrund-Prüfung aller Dateien (auch nicht geöffneter).
+	// Background validation of every file in the workspace, opened or not.
 	context.subscriptions.push(WorkspaceDiagnostics.register(context, index));
-	// Output-Channel „Datenschmiede“ (Lauf-Protokolle, Python-Tracebacks).
+	// The shared "Datenschmiede" output channel (run logs, Python tracebacks).
 	context.subscriptions.push({ dispose: disposeOutputChannel });
 
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newTable', newTableCommand));
@@ -42,7 +48,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		),
 	);
 
-	// Best-effort, im Hintergrund — siehe project/python.ts#checkPython310Available.
+	// Best-effort, fire-and-forget — see project/python.ts#checkPython310Available.
 	void checkPython310Available();
 }
 

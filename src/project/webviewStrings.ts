@@ -1,26 +1,26 @@
 /**
- * Übersetzte Texte für die Projekt-Editor-Webview — Gegenstück zu
- * webviewStrings.ts für .tdproject-Dateien. Aus denselben Gründen (kein
- * `vscode.l10n` innerhalb einer Webview) ermittelt der Extension-Host die
- * passende Sprache und schickt dieses fertige Text-Objekt einmalig beim
- * Start (siehe project/editorProvider.ts).
+ * Translated texts for the project editor webview — the counterpart to
+ * table/webviewStrings.ts for .tdproject files. For the same reason (no
+ * `vscode.l10n` inside a webview) the extension host determines the matching
+ * language and sends this ready-made text object once at startup (see
+ * project/editorProvider.ts).
  */
 export interface ProjectWebviewStrings {
 	tabOverview: string;
 	tabTables: string;
 	tabDiagram: string;
 
-	/** Leerer Diagramm-Tab — noch keine Tabellen ausgewählt. */
+	/** Empty diagram tab — no tables selected yet. */
 	diagramEmptyText: string;
-	/** Hinweis rechts in der Diagramm-Legende: Klick auf einen Kasten öffnet die `.td`-Datei. */
+	/** Hint on the right of the diagram legend: clicking a box opens the `.td` file. */
 	diagramOpenHint: string;
 	diagramLegendPk: string;
 	diagramLegendFk: string;
-	/** Tooltip des Datensatz-Zählers im Kasten-Kopf (ohne bisherigen Lauf: berechnete/konfigurierte Anzahl). */
+	/** Tooltip of the record counter in the box header (without a previous run: the estimated/configured count). */
 	diagramRecordsTitle: string;
-	/** Tooltip-Zeile des Zählers mit echter Anzahl; `{0}` = Anzahl, `{1}` = Zeitpunkt des Laufs. */
+	/** Tooltip line of the counter showing the real count; `{0}` = count, `{1}` = time of the run. */
 	diagramRecordsLastRun: string;
-	/** Tooltip-Zeile mit dem konfigurierten Wert unter der echten Anzahl; `{0}` = konfigurierter Wert. */
+	/** Tooltip line showing the configured value below the real count; `{0}` = configured value. */
 	diagramRecordsConfigured: string;
 
 	fieldNameLabel: string;
@@ -42,7 +42,7 @@ export interface ProjectWebviewStrings {
 	outputFilesColFile: string;
 	outputFilesColFileName: string;
 	outputFilesColRecords: string;
-	/** Zusatz hinter der Datensatzanzahl einer referenzierten Tabelle; `{0}` = referenzierte Tabelle. */
+	/** Suffix after a referenced table's record count; `{0}` = referenced table. */
 	outputFilesPerRecordSuffix: string;
 	outputFilesEmptyText: string;
 
@@ -52,7 +52,7 @@ export interface ProjectWebviewStrings {
 	outputPathBrowseLabel: string;
 	outputAddVariableButton: string;
 	outputVariableGroupLabel: string;
-	/** Anzeigenamen der `{…}`-Variablen — dieselben Beschriftungen wie im Table Editor (siehe table/webviewStrings.ts). */
+	/** Display names of the `{…}` variables — the same labels as in the table editor (see table/webviewStrings.ts). */
 	outputVarDate: string;
 	outputVarTime: string;
 	outputVarDatetime: string;
@@ -66,19 +66,19 @@ export interface ProjectWebviewStrings {
 	tablesColHeaderTable: string;
 	tablesColHeaderPath: string;
 	tablesColHeaderRecords: string;
-	/** Platzhalter des Datensatz-Felds einer primären Tabelle — feste Zahl, ohne Bereich. */
+	/** Placeholder of a primary table's records field — a fixed number, no range. */
 	tablesRecordsPlaceholder: string;
-	/** Platzhalter des Datensatz-Felds einer referenzierten (sekundären) Tabelle — Zahl oder Bereich. */
+	/** Placeholder of a referenced (secondary) table's records field — a number or a range. */
 	tablesRecordsRangePlaceholder: string;
 	tablesRecordsRequiredError: string;
-	/** Fehlertext eines ungültigen Werts im Datensatz-Feld einer referenzierten Tabelle (weder Zahl noch Bereich). */
+	/** Error text for an invalid value in a referenced table's records field (neither a number nor a range). */
 	tablesRecordsInvalidError: string;
-	/** Tooltip des Icons vor dem Datensatz-Feld einer primären Tabelle (ohne ausgehenden Fremdschlüssel). */
+	/** Tooltip of the icon in front of a primary table's records field (no outgoing foreign key). */
 	tablesPrimaryIconTooltip: string;
 	/**
-	 * Tooltip des Icons vor dem Datensatz-Feld einer referenzierten
-	 * (sekundären) Tabelle; `{0}` = referenzierte Tabelle, von der Webview
-	 * per einfachem Ersetzen ausgewertet.
+	 * Tooltip of the icon in front of a referenced (secondary) table's records
+	 * field; `{0}` = referenced table, substituted by the webview with a simple
+	 * replace.
 	 */
 	tablesReferencedIconTooltip: string;
 	tablesMissingFileText: string;
@@ -87,7 +87,7 @@ export interface ProjectWebviewStrings {
 	tablesLockedTooltip: string;
 	tablesExpandGroupTitle: string;
 	tablesCollapseGroupTitle: string;
-	/** Kontextmenü eines Namensraum-Knotens (siehe showGroupContextMenu in media/project.js). */
+	/** Context menu of a namespace node (see showGroupContextMenu in media/project.js). */
 	tablesMenuSelectAll: string;
 	tablesMenuDeselectAll: string;
 	tablesMenuExpandAll: string;
@@ -270,7 +270,7 @@ const de: ProjectWebviewStrings = {
 
 const CATALOG: Record<string, ProjectWebviewStrings> = { en, de };
 
-/** Wählt den Text-Katalog passend zur VS-Code-Anzeigesprache (`vscode.env.language`). */
+/** Picks the text catalog matching VS Code's display language (`vscode.env.language`). */
 export function getProjectWebviewStrings(vscodeLanguage: string): ProjectWebviewStrings {
 	const lang = vscodeLanguage.toLowerCase().split('-')[0];
 	return CATALOG[lang] ?? en;

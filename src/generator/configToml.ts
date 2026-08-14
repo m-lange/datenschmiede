@@ -1,28 +1,28 @@
 /**
- * Lesen/Schreiben des Generator-Teils einer `[[columns]]`-Tabelle im
- * `.td`-TOML. Jeder Generator ist für seinen Teil selbst verantwortlich
- * (parseParams/encodeParams in GeneratorBase bzw. den builtins/) — diese
- * Datei findet nur den passenden Generator und delegiert.
+ * Reading/writing the generator part of a `[[columns]]` table in the `.td`
+ * TOML. Every generator is responsible for its own part
+ * (parseParams/encodeParams in GeneratorBase or the builtins/) — this file only
+ * finds the matching generator and delegates.
  *
- * Format innerhalb einer `[[columns]]`-Tabelle:
+ * Format inside a `[[columns]]` table:
  *
  *   generator = "random-int"
  *   [columns.generator_params]
  *   min = "1"
  *   max = "100"
  *
- * Bewusst vscode-frei (wird von table/toml.ts genutzt). Benutzerdefinierte
- * Generatoren (`custom:<name>`) und unbekannte ids werden generisch
- * geparst/geschrieben (GeneratorBase-Standard), damit eine Konfiguration
- * auch dann verlustfrei erhalten bleibt, wenn die `.tdgen`-Datei gerade
- * nicht auflösbar ist — die Validierung meldet das separat.
+ * Deliberately vscode-free (used by table/toml.ts). Custom generators
+ * (`custom:<name>`) and unknown ids are parsed/written generically (the
+ * GeneratorBase default) so a configuration round-trips losslessly even when
+ * the `.tdgen` file currently cannot be resolved — validation reports that
+ * separately.
  */
 
 import { GeneratorBase } from './base';
 import { findBuiltinGenerator } from './builtins';
 import { GeneratorConfig } from './types';
 
-/** Generischer Rückfall-Generator für unbekannte/nicht auflösbare ids (verlustfreies Round-Tripping). */
+/** Generic fallback generator for unknown/unresolvable ids (lossless round-tripping). */
 class FallbackGenerator extends GeneratorBase {
 	constructor(id: string) {
 		super({ id, name: id, description: '', parameters: [] });
@@ -30,17 +30,17 @@ class FallbackGenerator extends GeneratorBase {
 }
 
 /**
- * Löst eine Generator-`id` in ihren Generator auf: eingebaute direkt, sonst
- * (benutzerdefinierte und unbekannte) ein generischer Rückfall — die
- * *aufgelösten* benutzerdefinierten Generatoren kennt nur der Extension-Host
- * (siehe generator/repository.ts) und reicht sie dort weiter, wo mehr als
- * generisches Verhalten gebraucht wird.
+ * Resolves a generator `id` to its generator: built-in ones directly, everything
+ * else (custom and unknown) to a generic fallback — the *resolved* custom
+ * generators are known only to the extension host (see
+ * generator/repository.ts), which passes them wherever more than generic
+ * behaviour is required.
  */
 export function resolveGeneratorForToml(id: string): GeneratorBase {
 	return findBuiltinGenerator(id) ?? new FallbackGenerator(id);
 }
 
-/** Liest `generator`/`generator_params` einer rohen `[[columns]]`-Tabelle. */
+/** Reads `generator`/`generator_params` of a raw `[[columns]]` table. */
 export function parseGeneratorConfig(rawColumn: Record<string, unknown>): GeneratorConfig | undefined {
 	const id = typeof rawColumn.generator === 'string' ? rawColumn.generator.trim() : '';
 	if (!id) {
@@ -53,11 +53,10 @@ export function parseGeneratorConfig(rawColumn: Record<string, unknown>): Genera
 }
 
 /**
- * Schreibt die TOML-Zeilen des Generator-Teils einer Spalte (leeres Array,
- * wenn kein Generator konfiguriert ist) — eingehängt von
- * table/toml.ts#serializeTable ans Ende des jeweiligen `[[columns]]`-Blocks,
- * da `[columns.generator_params]` als Untertabelle alles Nachfolgende
- * schlucken würde.
+ * Writes the TOML lines of a column's generator part (an empty array when no
+ * generator is configured) — appended by table/toml.ts#serializeTable at the end
+ * of the respective `[[columns]]` block, because `[columns.generator_params]`
+ * would, as a sub-table, swallow everything that follows.
  */
 export function encodeGeneratorConfigLines(config: GeneratorConfig | undefined, tomlString: (v: string) => string): string[] {
 	if (!config || !config.id.trim()) {

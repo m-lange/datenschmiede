@@ -3,19 +3,18 @@ import { GeneratorBase } from '../generator/base';
 import { GeneratorContext, GeneratorIssueKind, KnownLookupRef } from '../generator/types';
 
 /**
- * Inhaltliche Prüfungen für eine Tabellendefinition, unabhängig davon, ob
- * das TOML syntaktisch gültig ist (das prüft table/toml.ts/parseTableText bereits).
+ * Semantic checks for a table definition, independent of whether the TOML is
+ * syntactically valid (table/toml.ts/parseTableText already covers that).
  *
- * Bewusst frei von jeder vscode-Abhängigkeit (einfach testbar); die
- * Übersetzung der Meldungen für die Problems-Ansicht übernimmt der Aufrufer
- * (table/editorProvider.ts) über vscode.l10n, die Webview zeigt dieselben
- * Regeln nochmal direkt am Feld an (siehe media/table.js).
+ * Deliberately free of any vscode dependency (easy to test); the caller
+ * (table/editorProvider.ts) translates the messages for the Problems view via
+ * vscode.l10n, while the webview surfaces the same rules inline on the field
+ * (see media/table.js).
  *
- * Neben den FK-Prüfungen (Fehler) laufen hier die Generator-Prüfungen
- * (Warnungen): jeder Generator prüft seine eigene Konfiguration selbst
- * (GeneratorBase.validate) — inklusive Referenzen auf Tabellen/Spalten/
- * Nachschlagelisten/Generatoren, die nach der Konfiguration umbenannt oder
- * gelöscht wurden.
+ * Besides the FK checks (errors), the generator checks (warnings) run here:
+ * every generator validates its own configuration (GeneratorBase.validate) —
+ * including references to tables, columns, lookup lists and generators that
+ * were renamed or deleted after being configured.
  */
 export type IssueKind =
 	| 'fk-missing-table'
@@ -29,30 +28,31 @@ export type IssueKind =
 	| 'gen-fk-mismatch'
 	| GeneratorIssueKind;
 
+/** A single problem found on one column of a table definition. */
 export interface Issue {
 	columnIndex: number;
 	columnName: string;
 	kind: IssueKind;
-	/** Zusätzliche Angabe für die Meldung, z. B. der (nicht gefundene) `fk_table`-/`fk_column`-Wert. */
+	/** Extra detail for the message, e.g. the (unresolved) `fk_table`/`fk_column` value. */
 	detail?: string;
-	/** Name des betroffenen Generator-Parameters (nur bei Generator-Prüfungen). */
+	/** Name of the affected generator parameter (generator checks only). */
 	paramName?: string;
-	/** `true` für Generator-Prüfungen — sie erscheinen als Warnung statt als Fehler in der Problems-Ansicht. */
+	/** `true` for generator checks — they appear as a warning rather than an error in the Problems view. */
 	warning?: boolean;
 }
 
-/** Eine Tabelle des Workspace, um FK-Referenzen gegenzuprüfen (siehe TableOption in table/repository.ts). */
+/** A table of the workspace, used to cross-check FK references (see TableOption in table/repository.ts). */
 export interface KnownTable {
-	/** Logische Identität (`schema.name` bzw. nur `name`), wie sie in `fk_table` gespeichert wird. */
+	/** Logical identity (`schema.name`, or just `name`), as stored in `fk_table`. */
 	label: string;
 	columns: string[];
 }
 
 /**
- * Sucht einen Zyklus, der bei `start` beginnt und über die gerichteten
- * Kanten wieder zu `start` zurückführt. Liefert den Pfad inklusive Start-
- * und End-Knoten (`[start, …, start]`), oder `null`. Bereits erfolglos
- * abgesuchte Knoten werden gemerkt, damit die Suche linear bleibt.
+ * Searches for a cycle that starts at `start` and leads back to `start` along
+ * the directed edges. Returns the path including start and end node
+ * (`[start, …, start]`), or `null`. Nodes already searched without success are
+ * remembered so the search stays linear.
  */
 function findCycleFrom(start: string, edges: Map<string, string[]>): string[] | null {
 	const dead = new Set<string>();
@@ -78,10 +78,10 @@ function findCycleFrom(start: string, edges: Map<string, string[]>): string[] | 
 }
 
 /**
- * Zyklus zwischen Tabellen über ihre FK-/Generator-Referenzen (Kanten siehe
- * buildTableRefEdges in table/repository.ts): ist die eigene Tabelle Teil
- * eines Kreises (A → B → A), lässt sich keine Generier-Reihenfolge auflösen
- * — der Aufrufer meldet das als Warnung in der Problems-Ansicht.
+ * Cycle between tables via their FK/generator references (for the edges see
+ * buildTableRefEdges in table/repository.ts): if the own table is part of a
+ * cycle (A → B → A), no generation order can be resolved — the caller reports
+ * this as a warning in the Problems view.
  */
 export function findTableCycle(ownLabel: string, edges: Map<string, string[]>): string[] | null {
 	if (!ownLabel) {
@@ -91,9 +91,9 @@ export function findTableCycle(ownLabel: string, edges: Map<string, string[]>): 
 }
 
 /**
- * Zyklus zwischen den Spalten *einer* Tabelle über ihre Generator-
- * Abhängigkeiten (z. B. zwei Kombinations-Vorlagen, die sich gegenseitig
- * referenzieren) — auch dann lässt sich keine Generier-Reihenfolge auflösen.
+ * Cycle between the columns of *one* table via their generator dependencies
+ * (e.g. two combine templates referencing each other) — here, too, no
+ * generation order can be resolved.
  */
 export function findColumnCycle(table: Table, generators: GeneratorBase[]): string[] | null {
 	const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
@@ -129,12 +129,14 @@ export function findColumnCycle(table: Table, generators: GeneratorBase[]): stri
 }
 
 /**
- * @param knownTables Alle `.td`-Tabellen, die aktuell im Workspace gefunden wurden. Wird
- * genutzt, um veraltete FK-Referenzen zu erkennen, z. B. wenn die referenzierte Datei
- * inzwischen gelöscht oder die Spalte dort umbenannt/entfernt wurde.
- * @param generators Alle verfügbaren Generatoren (eingebaute + benutzerdefinierte aus
- * `.tdgen`-Dateien), um Generator-Konfigurationen gegenzuprüfen.
- * @param lookups Alle `.lkp`-Nachschlagelisten des Workspace (für den Lookup-Generator).
+ * Runs all content checks for one table definition.
+ *
+ * @param knownTables All `.td` tables currently found in the workspace. Used to detect
+ * stale FK references, e.g. when the referenced file has since been deleted or the
+ * column there was renamed or removed.
+ * @param generators All available generators (built-in plus custom ones from `.tdgen`
+ * files), used to cross-check generator configurations.
+ * @param lookups All `.lkp` lookup lists of the workspace (for the lookup generator).
  */
 export function validateTable(
 	table: Table,
@@ -143,9 +145,9 @@ export function validateTable(
 	lookups: KnownLookupRef[] = [],
 ): Issue[] {
 	const issues: Issue[] = [];
-	// Eigene logische Identität dieser Tabelle, um eine Selbst-Referenz zu erkennen
-	// (leer, solange die Tabelle noch keinen Namen hat -> dann kann fk_table ihr
-	// auch nicht gleichen, der Vergleich unten greift also erst, sobald sie einen hat).
+	// This table's own logical identity, used to detect a self-reference (empty
+	// while the table has no name yet -> fk_table cannot equal it either, so the
+	// comparison below only kicks in once a name exists).
 	const ownLabel = logicalTableName(table);
 	const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
 
@@ -165,16 +167,16 @@ export function validateTable(
 			if (!fkColumn) {
 				issues.push({ columnIndex, columnName: column.name, kind: 'fk-missing-column' });
 			} else if (referencedTable && !referencedTable.columns.includes(fkColumn)) {
-				// Nur prüfen, wenn die referenzierte Tabelle selbst gefunden wurde — sonst wäre das
-				// nur eine Folge von fk-table-not-found und würde die Meldung verdoppeln.
+				// Only checked when the referenced table itself was found — otherwise this
+				// would merely follow from fk-table-not-found and duplicate the message.
 				issues.push({ columnIndex, columnName: column.name, kind: 'fk-column-not-found', detail: fkColumn });
 			}
 		}
 
 		if (!column.generator || !column.generator.id.trim()) {
-			// Jede Spalte soll einen Generator ausgewählt und konfiguriert
-			// haben. FK-Spalten sind ausgenommen — sie verwenden implizit
-			// immer den Fremdschlüssel-Generator.
+			// Every column is expected to have a generator selected and
+			// configured. FK columns are exempt — they implicitly always use
+			// the foreign key generator.
 			if (!column.fk) {
 				issues.push({ columnIndex, columnName: column.name, kind: 'gen-missing', warning: true });
 			}
@@ -183,8 +185,8 @@ export function validateTable(
 
 		const generator = generators.find((g) => g.id === column.generator?.id);
 		if (!generator) {
-			// Der konfigurierte (i. d. R. benutzerdefinierte) Generator existiert
-			// nicht (mehr) — Datei gelöscht oder ihr Name geändert.
+			// The configured (usually custom) generator no longer exists — its
+			// file was deleted or its name changed.
 			issues.push({
 				columnIndex,
 				columnName: column.name,
@@ -201,9 +203,8 @@ export function validateTable(
 		}
 
 		if (column.fk && generator.id !== 'foreign-key') {
-			// Über die Oberfläche nicht mehr möglich (die Generator-Auswahl ist
-			// für FK-Spalten gesperrt) — kann nur aus von Hand bearbeitetem TOML
-			// stammen.
+			// No longer reachable through the UI (the generator picker is locked
+			// for FK columns) — this can only come from hand-edited TOML.
 			issues.push({ columnIndex, columnName: column.name, kind: 'gen-fk-mismatch', warning: true });
 			return;
 		}

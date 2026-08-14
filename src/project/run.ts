@@ -15,17 +15,16 @@ import { saveRunResult } from './runResults';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 
 /**
- * Befehl "Testdaten generieren" (Run-Knopf in der Editor-Titelleiste des
- * Projekt-Editors bzw. Start-Knopf im Übersicht-Tab der Webview).
+ * "Generate Test Data" command (run button in the project editor's title bar,
+ * or the start button on the webview's overview tab).
  *
- * Baut aus dem Projekt (.tdproject), seinen Tabellen (.td), den
- * Nachschlagelisten (.lkp) und den benutzerdefinierten Generatoren (.tdgen)
- * einen Plan (JSON) und übergibt ihn dem Python-Läufer
- * (python/generate.py) mit dem verknüpften Interpreter. Der Läufer bestimmt
- * zuerst die Generier-Reihenfolge (Tabellen topologisch, darin Spalte für
- * Spalte) und erzeugt dann die Daten vektorisiert mit pandas/numpy; sein
- * Fortschritt (JSON-Zeilen auf stdout) wird als VS-Code-Fortschritt
- * angezeigt. Ausgabe landet im Ordner `output/` neben der Projektdatei.
+ * Builds a plan (JSON) from the project (.tdproject), its tables (.td), the
+ * lookup lists (.lkp) and the custom generators (.tdgen) and hands it to the
+ * Python runner (python/generate.py) using the linked interpreter. The runner
+ * first determines the generation order (tables topologically, then column by
+ * column within each) and then produces the data vectorized with pandas/numpy;
+ * its progress (JSON lines on stdout) is surfaced as VS Code progress. Output
+ * lands in the `output/` folder next to the project file.
  */
 export async function runGenerationCommand(context: vscode.ExtensionContext, resource?: vscode.Uri): Promise<void> {
 	const uri = resource ?? activeProjectUri();
@@ -49,7 +48,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 		return;
 	}
 
-	// Verknüpften Interpreter auflösen (Python 3.10+, siehe project/python.ts).
+	// Resolve the linked interpreter (Python 3.10+, see project/python.ts).
 	if (!project.python) {
 		void vscode.window.showErrorMessage(
 			vscode.l10n.t('This test data project has no linked Python interpreter yet. Select one now?'),
@@ -76,15 +75,14 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 		return;
 	}
 
-	// Plan als JSON in den globalen Extension-Speicher schreiben (kein Teil
-	// des Workspace) und den Python-Läufer damit starten.
+	// Write the plan as JSON into the extension's global storage (not part of
+	// the workspace) and start the Python runner with it.
 	const planUri = await writePlanFile(context, plan.plan, 'plan');
 
 	const projectName = project.name.trim() || vscode.workspace.asRelativePath(uri, false);
 	const channel = getOutputChannel();
-	// Lauf-Protokoll sichtbar machen (ohne den Fokus zu stehlen) und mit
-	// einer Plan-Zusammenfassung beginnen — der Fortschritt (Tabellen und
-	// Spalten) wird darunter live mitgeschrieben.
+	// Reveal the run log (without stealing focus) and start with a plan
+	// summary — progress (tables and columns) is appended below it live.
 	channel.show(true);
 	log(`Run "${projectName}" — ${pythonStatus.path}`);
 	for (const table of plan.plan.tables) {
@@ -104,12 +102,12 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 		},
 		async (progress, token) => {
 			let doneFiles: { table: string; file: string; records: number }[] | null = null;
-			/** Vom Läufer aufgelöster Ausgabeordner (Variablen ersetzt), aus dem done-Event. */
+			/** Output folder as resolved by the runner (variables substituted), from the done event. */
 			let doneOutputDir = '';
 
-			// Prozess-Start, Protokoll-Parsing und die gemeinsame `log`-/
-			// `error`-Behandlung liegen im geteilten Läufer (planRunner.ts) —
-			// hier nur die lauf-spezifischen Events (Fortschritt + Ergebnis).
+			// Process start, protocol parsing and the shared `log`/`error`
+			// handling live in the common runner (planRunner.ts) — only the
+			// run-specific events (progress + result) are handled here.
 			const result = await runPlanProcess({
 				pythonPath: pythonStatus.path,
 				context,
@@ -127,7 +125,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 							break;
 						}
 						case 'column_done': {
-							// Spalte-für-Spalte-Fortschritt im Protokoll (ohne Zeitstempel-Präfix).
+							// Column-by-column progress in the log (without a timestamp prefix).
 							channel.appendLine(`    ✓ ${String(event.column ?? '')} (${Number(event.records)} values)`);
 							break;
 						}
@@ -156,7 +154,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 				const files: { table: string; file: string; records: number }[] = doneFiles;
 				const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
 				log(`Run "${projectName}" finished in ${seconds}s: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
-				// Echte Datensatzanzahlen fürs ER-Diagramm merken (siehe runResults.ts).
+				// Remember the real record counts for the ER diagram (see runResults.ts).
 				await saveRunResult(context, uri, files);
 				const openLabel = vscode.l10n.t('Open Output Folder');
 				void vscode.window
@@ -187,7 +185,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 	);
 }
 
-/** Projekt-URI des aktiven Editor-Tabs, falls dort gerade ein .tdproject offen ist (Aufruf über die Command Palette). */
+/** Project URI of the active editor tab, if a .tdproject is open there (invocation via the Command Palette). */
 function activeProjectUri(): vscode.Uri | undefined {
 	const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
 	if (input instanceof vscode.TabInputCustom && input.uri.path.endsWith('.tdproject')) {
@@ -199,6 +197,7 @@ function activeProjectUri(): vscode.Uri | undefined {
 	return undefined;
 }
 
+/** One column as handed to python/generate.py (snake_case: this is the wire format). */
 export interface PlanColumn {
 	name: string;
 	type: string;
@@ -206,11 +205,12 @@ export interface PlanColumn {
 	fk: boolean;
 	fk_table: string;
 	fk_column: string;
-	/** Spalte wird generiert, aber nicht in die Ausgabedatei geschrieben (siehe Column.hidden). */
+	/** Column is generated but not written to the output file (see Column.hidden). */
 	hidden: boolean;
 	generator: (GeneratorConfig & { table_refs: string[]; own_column_refs: string[] }) | null;
 }
 
+/** One table of the plan, including its record count and output settings. */
 export interface PlanTable {
 	path: string;
 	schema: string;
@@ -235,12 +235,13 @@ export interface PlanTable {
 	};
 }
 
+/** The complete job handed to the Python runner on stdin. */
 export interface Plan {
-	/** Ordner der Projekt- bzw. Tabellendatei — Bezugspunkt für den (relativen) Ausgabeordner. */
+	/** Folder of the project (or table) file — the anchor for the (relative) output folder. */
 	project_dir: string;
-	/** Ausgabeordner-Vorlage mit `{…}`-Variablen (leer -> `output`), aufgelöst in python/generate.py. */
+	/** Output folder template with `{…}` variables (empty -> `output`), resolved in python/generate.py. */
 	output_path: string;
-	/** Projektname für die `{project}`-Variable. */
+	/** Project name for the `{project}` variable. */
 	project_name: string;
 	tables: PlanTable[];
 	lookups: { name: string; columns: string[]; rows: { values: string[]; weight: string }[] }[];
@@ -252,17 +253,17 @@ export interface Plan {
 		display_value: string;
 		validate: string;
 	}[];
-	/** Vorschau-Modus (siehe table/preview.ts): nichts schreiben, stattdessen die Zeilen dieser Tabelle zurückmelden. */
+	/** Preview mode (see table/preview.ts): write nothing, report this table's rows back instead. */
 	preview?: { table: string; limit: number };
 }
 
 /**
- * Baut die Plan-Spalten einer Tabelle inkl. der aufgelösten Generator-
- * Referenzen (table_refs/own_column_refs, für die Generier-Reihenfolge in
- * python/generate.py). Nicht auflösbare Generatoren landen als Meldung in
- * `errors`; verwendete benutzerdefinierte Generatoren werden in
- * `usedCustomGenerators` gesammelt. Gemeinsame Grundlage für den vollen
- * Lauf (buildPlan) und die Tabellen-Vorschau (table/preview.ts).
+ * Builds a table's plan columns including the resolved generator references
+ * (table_refs/own_column_refs, which drive the generation order in
+ * python/generate.py). Unresolvable generators are appended to `errors` as a
+ * message; custom generators actually used are collected in
+ * `usedCustomGenerators`. Shared basis for the full run (buildPlan) and the
+ * table preview (table/preview.ts).
  */
 export function buildPlanColumns(
 	table: Table,
@@ -308,7 +309,7 @@ export function buildPlanColumns(
 	});
 }
 
-/** Verdichtet die verwendeten benutzerdefinierten Generatoren zum Plan-Format. */
+/** Condenses the custom generators actually used into the plan format. */
 export function toPlanCustomGenerators(usedCustomGenerators: Map<string, CustomGenerator>): Plan['custom_generators'] {
 	return [...usedCustomGenerators.values()].map((generator) => ({
 		name: generator.name,
@@ -320,7 +321,7 @@ export function toPlanCustomGenerators(usedCustomGenerators: Map<string, CustomG
 	}));
 }
 
-/** Alle lesbaren Nachschlagelisten im Plan-Format — auch Custom-Code kann per ctx.lookup(...) beliebige Listen ansprechen. */
+/** All readable lookup lists in plan format — custom code can address any list via ctx.lookup(...). */
 export function toPlanLookups(lookupEntries: Awaited<ReturnType<typeof listLookups>>): Plan['lookups'] {
 	return lookupEntries
 		.filter((entry) => entry.lookup)
@@ -332,11 +333,10 @@ export function toPlanLookups(lookupEntries: Awaited<ReturnType<typeof listLooku
 }
 
 /**
- * Baut den Plan für python/generate.py — oder eine Fehlerliste, wenn das
- * Projekt (noch) nicht lauffähig ist (fehlende Dateien, fehlende/ungültige
- * Datensatzanzahl, nicht auflösbare Generatoren). Die Fehler entsprechen den
- * Diagnostics der Editoren; hier werden sie nur für die Lauf-Meldung knapp
- * zusammengefasst.
+ * Builds the plan for python/generate.py — or a list of errors if the project
+ * is not runnable yet (missing files, missing or invalid record counts,
+ * unresolvable generators). The errors mirror the editors' diagnostics; here
+ * they are merely summarized briefly for the run notification.
  */
 function buildPlan(
 	projectUri: vscode.Uri,
@@ -367,8 +367,8 @@ function buildPlan(
 		const table = entry.table;
 		const label = tableLabel(table, entry.relativePath);
 
-		// Treibende FK-Spalte: die erste FK-Spalte mit gültigem Ziel — sie
-		// bestimmt zusammen mit der Kardinalität die Zeilenanzahl (siehe
+		// Driving FK column: the first FK column with a valid target — together
+		// with the cardinality it determines the row count (see
 		// python/generate.py#run_table).
 		const driving = table.columns.find(
 			(column) =>

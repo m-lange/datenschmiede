@@ -1,25 +1,24 @@
 /**
- * Generische, formatunabhängige TOML-Bausteine — gemeinsam genutzt von
- * table/toml.ts (.td) und project/toml.ts (.tdproject). Bewusst getrennt von
- * beiden, damit ein wirklich geteilter Baustein wie `ParseError` nicht in
- * einer der beiden dateiformat-spezifischen Dateien "versteckt" liegt.
+ * Generic, format-agnostic TOML building blocks — shared by table/toml.ts (.td)
+ * and project/toml.ts (.tdproject). Deliberately kept separate from both so
+ * that a genuinely shared piece such as `ParseError` is not "hidden" inside one
+ * of the two file-format-specific modules.
  */
 
 /**
- * Wird geworfen, wenn der TOML-Text einer .td-/.tdproject-Datei nicht
- * geparst werden kann (z. B. weil die Datei von Hand fehlerhaft bearbeitet
- * wurde).
+ * Thrown when the TOML text of a .td/.tdproject file cannot be parsed (for
+ * example because the file was hand-edited into an invalid state).
  *
- * Bewusst frei von jeder vscode-Abhängigkeit gehalten (einfach testbar);
- * die Übersetzung/Formatierung der Meldung übernimmt der jeweilige Aufrufer
- * (table/editorProvider.ts/project/editorProvider.ts) über vscode.l10n.
+ * Deliberately free of any vscode dependency so it stays easy to test; the
+ * caller (table/editorProvider.ts, project/editorProvider.ts) is responsible
+ * for translating and formatting the message via vscode.l10n.
  */
 export class ParseError extends Error {
-	/** 1-basierte Zeile, an der der Fehler auftrat (falls bekannt). */
+	/** 1-based line the error occurred on, if known. */
 	public readonly line?: number;
-	/** 1-basierte Spalte, an der der Fehler auftrat (falls bekannt). */
+	/** 1-based column the error occurred on, if known. */
 	public readonly column?: number;
-	/** Ursprüngliche, unübersetzte Meldung des TOML-Parsers. */
+	/** The TOML parser's original, untranslated message. */
 	public readonly rawMessage: string;
 
 	constructor(rawMessage: string, position?: { line: number; column: number }) {
@@ -30,29 +29,28 @@ export class ParseError extends Error {
 	}
 }
 
-/** Formatiert einen JS-String als TOML-String (einzeilig oder mehrzeilig). */
+/** Formats a JS string as a TOML string (single-line or multi-line). */
 export function tomlString(value: string): string {
 	const text = value ?? '';
 	if (!text.includes('\n')) {
-		// Einzeiliger "basic string": TOMLs Escape-Regeln (\" \\ \n \t \r \b \f \uXXXX)
-		// entsprechen exakt denen von JSON, daher genügt JSON.stringify.
+		// Single-line "basic string": TOML's escape rules (\" \\ \n \t \r \b \f
+		// \uXXXX) are exactly JSON's, so JSON.stringify is sufficient.
 		return JSON.stringify(text);
 	}
 
-	// Mehrzeiliger "basic string" für z. B. Beschreibungen mit Zeilenumbrüchen.
+	// Multi-line "basic string", e.g. for descriptions containing line breaks.
 	let body = text.replace(/\\/g, '\\\\');
-	// Ein Vorkommen von """ innerhalb des Texts würde das Ende des Strings
-	// vortäuschen -> ein Anführungszeichen escapen, um das zu vermeiden.
+	// An occurrence of """ inside the text would fake the end of the string ->
+	// escape one quote to prevent that.
 	body = body.replace(/"""/g, '""\\"');
-	// Endet der Text auf ein Anführungszeichen, würde es mit den drei
-	// schließenden Anführungszeichen verschmelzen -> ebenfalls escapen.
+	// If the text ends with a quote it would merge with the three closing
+	// quotes -> escape it as well.
 	if (body.endsWith('"')) {
 		body = `${body.slice(0, -1)}\\"`;
 	}
-	// Der Zeilenumbruch direkt nach dem öffnenden """ wird von TOML beim
-	// Parsen automatisch entfernt (praktisch für die Lesbarkeit hier).
-	// Vor dem schließenden """ passiert das NICHT, daher darf dort kein
-	// zusätzlicher Zeilenumbruch eingefügt werden, sonst wäre der
-	// geparste Wert nach einem Speichern-Zyklus nicht mehr identisch.
+	// TOML strips the newline immediately following the opening """ while
+	// parsing (which is convenient for readability here). It does NOT do so
+	// before the closing """, so no extra newline may be inserted there —
+	// otherwise the parsed value would differ after a save round-trip.
 	return `"""\n${body}"""`;
 }

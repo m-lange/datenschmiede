@@ -1,11 +1,11 @@
 /**
- * Übersetzte Texte für die Webview (das Formular).
+ * Translated texts for the webview (the form).
  *
- * `vscode.l10n` ist innerhalb einer Webview nicht verfügbar (sie läuft in
- * einem eigenen, von der Extension unabhängigen Browser-Kontext). Deshalb
- * ermittelt der Extension-Host die passende Sprache (siehe
- * table/editorProvider.ts, `vscode.env.language`) und schickt der Webview
- * dieses fertige Text-Objekt einmalig beim Start.
+ * `vscode.l10n` is not available inside a webview (it runs in its own browser
+ * context, independent of the extension). The extension host therefore
+ * determines the matching language (see table/editorProvider.ts,
+ * `vscode.env.language`) and sends the webview this ready-made text object once
+ * at startup.
  */
 export interface WebviewStrings {
 	tabOverview: string;
@@ -61,7 +61,7 @@ export interface WebviewStrings {
 	generatorRequiredSuffix: string;
 	generatorTrueLabel: string;
 	generatorFalseLabel: string;
-	/** Warnungstexte — Kurzfassungen der Meldungen aus table/editorProvider.ts für den Zell-Tooltip. */
+	/** Warning texts — short forms of the messages in table/editorProvider.ts, used for the cell tooltip. */
 	genWarnNoGenerator: string;
 	genWarnNotFound: string;
 	genWarnFkOnly: string;
@@ -71,7 +71,7 @@ export interface WebviewStrings {
 	genWarnRefNotFound: string;
 
 	previewButton: string;
-	/** Titel des Vorschau-Dialogs; `{0}` = Anzahl der Datensätze. */
+	/** Title of the preview dialog; `{0}` = number of records. */
 	previewDialogTitle: string;
 	previewCloseLabel: string;
 
@@ -82,7 +82,7 @@ export interface WebviewStrings {
 	outputAddVariableButton: string;
 	outputVariableGroupLabel: string;
 	outputColumnGroupLabel: string;
-	/** Anzeigenamen der eingebauten Dateinamen-Variablen (siehe FILE_NAME_VARIABLES in table/model.ts). */
+	/** Display names of the built-in file name variables (see FILE_NAME_VARIABLES in table/model.ts). */
 	outputVarDate: string;
 	outputVarTime: string;
 	outputVarDatetime: string;
@@ -312,7 +312,7 @@ const de: WebviewStrings = {
 
 const CATALOG: Record<string, WebviewStrings> = { en, de };
 
-/** Wählt den Text-Katalog passend zur VS-Code-Anzeigesprache (`vscode.env.language`). */
+/** Picks the text catalog matching VS Code's display language (`vscode.env.language`). */
 export function getWebviewStrings(vscodeLanguage: string): WebviewStrings {
 	const lang = vscodeLanguage.toLowerCase().split('-')[0];
 	return CATALOG[lang] ?? en;

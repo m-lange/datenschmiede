@@ -1,8 +1,8 @@
 /**
- * Übersetzte Texte für die Lookup-Webview — gleiche Mechanik wie
- * table/webviewStrings.ts: `vscode.l10n` ist in der Webview nicht verfügbar,
- * daher schickt der Extension-Host das fertige Text-Objekt einmalig beim
- * Start (siehe lookup/editorProvider.ts).
+ * Translated texts for the lookup webview — the same mechanism as
+ * table/webviewStrings.ts: `vscode.l10n` is not available inside a webview, so
+ * the extension host sends this ready-made text object once at startup (see
+ * lookup/editorProvider.ts).
  */
 export interface LookupWebviewStrings {
 	tabOverview: string;
@@ -15,15 +15,15 @@ export interface LookupWebviewStrings {
 
 	chartTitle: string;
 	chartEmpty: string;
-	/** {0} = Zeilennummer — Fallback-Beschriftung für eine Zeile ohne Wert in der ersten Spalte. */
+	/** {0} = row number — fallback label for a row without a value in the first column. */
 	chartRowFallback: string;
 
 	addRowButton: string;
 	addColumnButton: string;
-	/** Toolbar-Knopf: 100 % gleichmäßig auf alle Zeilen verteilen. */
+	/** Toolbar button: distribute 100 % evenly across all rows. */
 	distributeEvenlyButton: string;
 	distributeEvenlyTooltip: string;
-	/** Toolbar-Knopf: vorhandene Gewichte proportional auf Summe 100 % skalieren. */
+	/** Toolbar button: scale the existing weights proportionally to a sum of 100 %. */
 	normalizeWeightsButton: string;
 	normalizeWeightsTooltip: string;
 
@@ -126,7 +126,7 @@ const de: LookupWebviewStrings = {
 
 const CATALOG: Record<string, LookupWebviewStrings> = { en, de };
 
-/** Wählt den Text-Katalog passend zur VS-Code-Anzeigesprache (`vscode.env.language`). */
+/** Picks the text catalog matching VS Code's display language (`vscode.env.language`). */
 export function getLookupWebviewStrings(vscodeLanguage: string): LookupWebviewStrings {
 	const lang = vscodeLanguage.toLowerCase().split('-')[0];
 	return CATALOG[lang] ?? en;

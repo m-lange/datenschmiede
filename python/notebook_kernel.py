@@ -1,20 +1,20 @@
-# Datenschmiede — persistenter Python-Kernel fuer das Generator-Notebook.
+# Datenschmiede — persistent Python kernel for the generator notebook.
 #
-# Ein Prozess je geoeffnetem .tdgen-Notebook (siehe generator/notebook.ts):
-# fuehrt Zellen in EINEM gemeinsamen Namespace aus — Variablen, Funktionen
-# und Importe bleiben zwischen Ausfuehrungen erhalten (volles Python, wie
-# in einem Jupyter-Kernel). Protokoll: JSON-Zeilen auf stdin/stdout.
+# One process per open .tdgen notebook (see generator/notebook.ts): executes
+# cells in ONE shared namespace — variables, functions and imports survive
+# between executions (full Python, as in a Jupyter kernel). Protocol: JSON
+# lines on stdin/stdout.
 #
 #   -> {"type": "init", "lookups": [...]}
 #   -> {"type": "exec", "id": 1, "role": "generate", "code": "..."}
 #   <- {"id": 1, "ok": true, "outputs": ["..."], ...}
 #   <- {"id": 1, "ok": false, "error": "...", "ename": "...", "traceback": "..."}
 #
-# Nach dem Ausfuehren einer Methoden-Zelle wird die Methode automatisch mit
-# den aktuellen Testwerten aufgerufen (params/n aus dem Namespace, z. B.
-# von der Scratch-Zelle gesetzt) und das Ergebnis angezeigt — wie die
-# Ausgabe einer Notebook-Zelle. Freie Zellen zeigen den Wert ihres letzten
-# Ausdrucks (wie Jupyter).
+# After a method cell has been executed the method is called automatically with
+# the current test values (params/n from the namespace, set by the scratch cell
+# for example) and the result is displayed — like the output of a notebook
+# cell. Free-form cells display the value of their last expression (as in
+# Jupyter).
 
 import ast
 import contextlib
@@ -36,7 +36,7 @@ except ImportError:
 
 
 class Ctx:
-    """Gegenstueck zum ctx des Generator-Laufs, soweit ohne Tabellen-Daten moeglich."""
+    """Counterpart to the generator run's ctx, as far as possible without table data."""
 
     def __init__(self):
         if np is not None:
@@ -67,9 +67,9 @@ class Ctx:
 
     def lookup_value(self, name, column):
         """
-        Im Zellen-Testlauf: gewichtete Ziehung EINES Werts je Datensatz
-        (n aus dem Namespace). Die Zeilen-Konsistenz mit anderen Spalten/
-        Tabellen entsteht erst im echten Lauf bzw. der Tabellen-Vorschau.
+        In a cell test run: a weighted draw of ONE value per record (n from the
+        namespace). Row consistency with other columns/tables only emerges in a
+        real run or in the table preview.
         """
         if np is None or pd is None:
             raise RuntimeError("Missing Python packages: numpy, pandas")
@@ -105,16 +105,17 @@ class Ctx:
 
 
 CTX = Ctx()
-# Gemeinsamer Namespace aller Zellen — vorbelegt mit den ueblichen Helfern.
+# Shared namespace of all cells — prefilled with the usual helpers.
 NAMESPACE = {"np": np, "pd": pd, "ctx": CTX, "params": {}, "n": 10}
 
 
 def dumps(value):
+    """Readable JSON for a cell's output."""
     return json.dumps(value, ensure_ascii=False, indent=2, default=str)
 
 
 def auto_call(role, outputs):
-    """Ruft die gerade definierte Methode mit den aktuellen Testwerten auf."""
+    """Calls the method just defined with the current test values."""
     params = dict(NAMESPACE.get("params") or {})
     n = int(NAMESPACE.get("n") or 10)
 
@@ -159,14 +160,15 @@ def auto_call(role, outputs):
 
 
 def run_cell(role, code):
+    """Executes one cell in the shared namespace and collects its output lines."""
     outputs = []
     CTX.log_lines = []
     stdout = io.StringIO()
     with contextlib.redirect_stdout(stdout):
         tree = ast.parse(code or "pass", mode="exec")
-        # Wie Jupyter: ist die letzte Anweisung ein Ausdruck, wird sein Wert
-        # angezeigt (nur bei freien Zellen relevant — Methoden-Zellen enden
-        # mit einer Funktionsdefinition).
+        # As in Jupyter: if the last statement is an expression, its value is
+        # displayed (only relevant for free-form cells — method cells end with
+        # a function definition).
         last_expr = None
         if tree.body and isinstance(tree.body[-1], ast.Expr):
             last_expr = ast.Expression(tree.body.pop().value)
@@ -185,6 +187,7 @@ def run_cell(role, code):
 
 
 def main():
+    """Reads the protocol from stdin until EOF and answers on stdout."""
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -203,7 +206,7 @@ def main():
         try:
             reply["ok"] = True
             reply["outputs"] = run_cell(message.get("role") or "extra", message.get("code") or "")
-        except Exception as err:  # noqa: BLE001 — jede Ausnahme als Zell-Fehler melden
+        except Exception as err:  # noqa: BLE001 — report every exception as a cell error
             reply = {
                 "id": message.get("id"),
                 "ok": False,

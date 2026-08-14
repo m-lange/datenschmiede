@@ -28,16 +28,16 @@ type WebviewToExtensionMessage =
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { project: Project } | { error: unknown };
 
-/** Schlüssel für die geräteweit gemerkte Spaltenbreite des Tabellen-Tab-Auswahlbaums (siehe table/editorProvider.ts fürs Gegenstück im Table Editor). */
+/** Key of the per-machine column widths of the tables tab's picker tree (see table/editorProvider.ts for the table editor counterpart). */
 const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.projectColumnWidths';
 
-/** Ein Icon-Paar (helles/dunkles Theme), als Webview-URI — siehe buildTableIcons. */
+/** An icon pair (light/dark theme) as webview URIs — see buildTableIcons. */
 interface IconPair {
 	dark: string;
 	light: string;
 }
 
-/** Icons für den Tabellen-Tab-Auswahlbaum: dieselben SVGs wie das Datei-Icon im Explorer (icons/), je nach Zeilen-Status. */
+/** Icons for the tables tab's picker tree: the same SVGs as the file icon in the explorer (icons/), chosen per row state. */
 interface ProjectTreeIcons {
 	normal: IconPair;
 	required: IconPair;
@@ -45,7 +45,7 @@ interface ProjectTreeIcons {
 	namespace: IconPair;
 }
 
-/** Löst die Icon-Dateien (icons/) einmal je Webview-Panel in Webview-URIs auf (siehe getHtml für dasselbe Muster bei media/). */
+/** Resolves the icon files (icons/) into webview URIs once per webview panel (see getHtml for the same pattern with media/). */
 function buildTableIcons(webview: vscode.Webview, extensionUri: vscode.Uri): ProjectTreeIcons {
 	const iconUri = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'icons', name)).toString();
 	return {
@@ -57,12 +57,12 @@ function buildTableIcons(webview: vscode.Webview, extensionUri: vscode.Uri): Pro
 }
 
 /**
- * Eine Zeile im Tabellen-Tab der Projekt-Webview: abgeleitete Anzeige-Infos
- * zu einer ausgewählten Tabelle (siehe buildTableRows) — nicht Teil des
- * persistierten Modells (project/model.ts), sondern bei jeder Anzeige aus dem
- * aktuellen Stand der referenzierten `.td`-Dateien neu berechnet. Nur noch
- * für die Problems-Diagnostics genutzt (siehe buildRecordsDiagnostics) — die
- * Webview selbst nutzt inzwischen den vollständigeren ProjectPickerNode-Baum.
+ * A row in the project webview's tables tab: derived display info about a
+ * selected table (see buildTableRows) — not part of the persisted model
+ * (project/model.ts) but recomputed on every render from the current state of
+ * the referenced `.td` files. Nowadays only used for the Problems diagnostics
+ * (see buildRecordsDiagnostics) — the webview itself uses the richer
+ * ProjectPickerNode tree.
  */
 interface ProjectTableRow {
 	path: string;
@@ -72,80 +72,78 @@ interface ProjectTableRow {
 	records?: string;
 }
 
-/** Ein Namensraum-Knoten im Tabellen-Tab, gebildet aus den Punkt-getrennten Segmenten des `schema`-Felds (z. B. `ag.cor.sapbp` -> drei Ebenen). */
+/** A namespace node in the tables tab, formed from the dot-separated segments of the `schema` field (e.g. `ag.cor.sapbp` -> three levels). */
 export interface ProjectPickerGroupNode {
 	kind: 'group';
 	segment: string;
 	children: ProjectPickerNode[];
 }
 
-/** Eine Tabellen-Zeile im Tabellen-Tab — Anzeige- und Auswahl-Info für eine `.td`-Datei des Workspace, unabhängig davon, ob sie schon zum Projekt gehört. */
+/** A table row in the tables tab — display and selection info for a `.td` file of the workspace, whether or not it already belongs to the project. */
 export interface ProjectPickerTableNode {
 	kind: 'table';
 	path: string;
-	/** `schema.name`, oder der Pfad als Fallback ohne gesetzten Namen bzw. bei kaputtem TOML. */
+	/** `schema.name`, or the path as a fallback when no name is set or the TOML is broken. */
 	label: string;
-	/** `false`, wenn die Datei kein gültiges TOML enthält — dann nicht auswählbar. */
+	/** `false` if the file is not valid TOML — it then cannot be selected. */
 	found: boolean;
-	/** Teil des Projekts (explizit ausgewählt oder über eine FK-Kette automatisch mitgenommen). */
+	/** Part of the project (selected explicitly, or pulled in automatically via an FK chain). */
 	checked: boolean;
-	/** `true`, wenn `checked` nur automatisch zustande kam und sich die Tabelle deshalb nicht abwählen lässt. */
+	/** `true` if `checked` came about only automatically, so the table cannot be deselected. */
 	locked: boolean;
 	/**
-	 * `true` bei einer referenzierten (sekundären) Tabelle — sie hat einen
-	 * gültigen ausgehenden Fremdschlüssel (`fk_table` außer sich selbst);
-	 * ihr `records`-Wert gilt dann je Datensatz von `referencedTable` und
-	 * darf auch ein Bereich ("1..3") sein. `false` bei einer primären
-	 * Tabelle, deren `records`-Wert eine feste Gesamtanzahl ist.
+	 * `true` for a referenced (secondary) table — it has a valid outgoing
+	 * foreign key (`fk_table` other than itself); its `records` value then
+	 * applies per record of `referencedTable` and may also be a range ("1..3").
+	 * `false` for a primary table, whose `records` value is a fixed total.
 	 */
 	secondary: boolean;
-	/** Logische Identität der über den ausgehenden FK referenzierten Tabelle (nur gesetzt, wenn `secondary`). */
+	/** Logical identity of the table referenced via the outgoing FK (only set when `secondary`). */
 	referencedTable?: string;
-	/** Nur relevant, wenn `checked` ist — Pflichtangabe für beide Tabellenarten (siehe `secondary` für die Bedeutung). */
+	/** Only relevant when `checked` — mandatory for both kinds of table (see `secondary` for the meaning). */
 	records?: string;
 }
 
 export type ProjectPickerNode = ProjectPickerGroupNode | ProjectPickerTableNode;
 
 /**
- * Eine Zeile der Ausgabedateien-Übersicht im Übersicht-Tab: welche Datei der
- * Generator-Lauf für eine ausgewählte Tabelle erzeugen wird (td-Datei,
- * Tabellenname, Dateiname-Vorlage, Datensatzanzahl) — rein lesend, bearbeitet
- * wird der Dateiname im Table Editor, die Datensatzanzahl im Tabellen-Tab.
+ * A row of the output files overview on the overview tab: which file the
+ * generator run will produce for a selected table (td file, table name, file
+ * name template, record count) — read-only here; the file name is edited in the
+ * table editor and the record count on the tables tab.
  */
 export interface OutputFileRow {
-	/** Workspace-relativer Pfad der `.td`-Datei. */
+	/** Workspace-relative path of the `.td` file. */
 	path: string;
-	/** Logische Identität (`schema.name`), oder der Pfad als Fallback. */
+	/** Logical identity (`schema.name`), or the path as a fallback. */
 	label: string;
-	/** Dateiname-Vorlage mit `{…}`-Variablen (Standard `{schema}_{table}`, wenn nichts konfiguriert). */
+	/** File name template with `{…}` variables (default `{schema}_{table}` when nothing is configured). */
 	fileName: string;
-	/** Dateiendung inkl. Punkt, aus dem konfigurierten Dateityp (vorerst ".csv"). */
+	/** File extension including the dot, from the configured file type (".csv" for now). */
 	ext: string;
-	/** Konfigurierte Datensatzanzahl ("100" bzw. "5"/"1..3" je referenziertem Datensatz). */
+	/** Configured record count ("100", or "5"/"1..3" per referenced record). */
 	records?: string;
 	/**
-	 * Aus der Konfiguration berechnete Datensatzanzahl: bei referenzierten
-	 * Tabellen die Kardinalität multipliziert entlang der FK-Kette bis zur
-	 * primären Tabelle (bei Bereichen als Von/Bis) — statt nur den
-	 * konfigurierten Bereich anzuzeigen. Fehlt, wenn die Kette (noch) nicht
-	 * berechenbar ist (fehlende/ungültige Angaben).
+	 * Record count estimated from the configuration: for referenced tables the
+	 * cardinality multiplied along the FK chain up to the primary table (as
+	 * min/max for ranges) — rather than merely showing the configured range.
+	 * Absent when the chain is not (yet) computable (missing or invalid values).
 	 */
 	estimatedMin?: number;
 	estimatedMax?: number;
-	/** `false`, wenn die `.td`-Datei nicht (mehr) lesbar ist. */
+	/** `false` if the `.td` file is no longer readable. */
 	found: boolean;
-	/** `true` bei einer referenzierten (sekundären) Tabelle — `records` gilt je Datensatz von `referencedTable`. */
+	/** `true` for a referenced (secondary) table — `records` then applies per record of `referencedTable`. */
 	secondary: boolean;
 	referencedTable?: string;
 }
 
-/** Baut die Ausgabedateien-Übersicht des Übersicht-Tabs (eine Zeile je ausgewählter Tabelle). */
+/** Builds the overview tab's output files list (one row per selected table). */
 function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRow[] {
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
 
-	// Ausgewählte Tabellen nach ihrer logischen Identität, um die FK-Kette
-	// einer referenzierten Tabelle bis zur primären zurückzuverfolgen.
+	// Selected tables keyed by logical identity, so a referenced table's FK
+	// chain can be traced back to the primary table.
 	const byLabel = new Map<string, { entry: TableEntry; records?: string }>();
 	for (const projectTable of project.tables) {
 		const entry = byPath.get(projectTable.path);
@@ -154,7 +152,7 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 		}
 	}
 
-	/** Erste ausgehende FK-Referenz (dieselbe Regel wie die treibende FK-Spalte des Laufs, siehe project/run.ts). */
+	/** First outgoing FK reference (the same rule as the run's driving FK column, see project/run.ts). */
 	function outgoingLabel(entry: TableEntry): string | undefined {
 		if (!entry.table) {
 			return undefined;
@@ -167,12 +165,11 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 	}
 
 	/**
-	 * Berechnete Datensatzanzahl einer Tabelle als Von/Bis-Bereich: primäre
-	 * Tabellen direkt aus ihrer festen Anzahl, referenzierte über die
-	 * Kardinalität multipliziert mit der (rekursiv berechneten) Anzahl der
-	 * referenzierten Tabelle. `null`, sobald ein Glied der Kette fehlt oder
-	 * ungültig ist; `visiting` bricht (über von Hand gebaute TOML mögliche)
-	 * Zyklen ab.
+	 * Estimated record count of a table as a min/max range: primary tables
+	 * straight from their fixed count, referenced ones from the cardinality
+	 * multiplied by the (recursively estimated) count of the referenced table.
+	 * `null` as soon as a link in the chain is missing or invalid; `visiting`
+	 * breaks cycles (which hand-written TOML can produce).
 	 */
 	function effectiveRange(label: string, visiting: Set<string>): { min: number; max: number } | null {
 		const selected = byLabel.get(label);
@@ -216,9 +213,9 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 		return {
 			path: table.path,
 			label,
-			// Ohne konfigurierten Dateinamen greift der Standard `{schema}_{table}`
-			// (siehe python/generate.py) — als Vorlage angezeigt, damit die
-			// Übersicht dieselben Variablen-Tags zeigt wie der Table Editor.
+			// Without a configured file name the default `{schema}_{table}`
+			// applies (see python/generate.py) — shown as a template so the
+			// overview displays the same variable tags as the table editor.
 			fileName: entry.table.output.fileName.trim() || '{schema}_{table}',
 			ext: `.${(entry.table.output.format || 'csv').toLowerCase()}`,
 			records: table.records,
@@ -232,14 +229,13 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 }
 
 /**
- * Custom-Text-Editor für .tdproject-Dateien.
+ * Custom text editor for .tdproject files.
  *
- * Analog zu table/editorProvider.ts bleibt die Datei auf der Festplatte
- * normaler TOML-Text (siehe project/toml.ts); diese Klasse hält Webview und
- * VS-Code-Textdokument synchron. Der Tabellen-Tab enthält die komplette
- * Tabellenauswahl (siehe ProjectPickerNode/buildPickerTree) direkt in der
- * Webview — anders als zuvor keine separate Ansicht in der
- * Explorer-Seitenleiste mehr nötig.
+ * As in table/editorProvider.ts the file on disk stays plain TOML text (see
+ * project/toml.ts); this class keeps the webview and the VS Code text document
+ * in sync. The tables tab hosts the complete table picker (see
+ * ProjectPickerNode/buildPickerTree) directly in the webview — unlike before,
+ * no separate view in the explorer sidebar is needed.
  */
 export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.projectEditor';
@@ -253,19 +249,18 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		return vscode.Disposable.from(providerRegistration, provider);
 	}
 
-	/** Offene Projekt-Webviews samt ihrem Dokument, um sie bei Änderungen an .td-Dateien im Workspace (Tabellen-Tab) neu zu versorgen. */
+	/** Open project webviews together with their document, so they can be refreshed when .td files change in the workspace (tables tab). */
 	private readonly panelDocuments = new Map<vscode.WebviewPanel, vscode.TextDocument>();
 	private cachedEntries: TableEntry[] = [];
-	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), für computeRequiredClosure. */
+	/** Most recently determined generator list (built-in + `.tdgen` files), used by computeRequiredClosure. */
 	private cachedGenerators: GeneratorBase[] = [];
 	private readonly indexSub: vscode.Disposable;
 	private readonly runResultSub: vscode.Disposable;
 	/**
-	 * Aufgelöster Interpreter-Status je verknüpftem Interpreter (`pfad|id`):
-	 * postState läuft bei jedem Tastendruck im Projekt (onDidChangeTextDocument)
-	 * — die Auflösung über die Python-Extension-API soll dabei nicht jedes Mal
-	 * neu passieren. Beim Öffnen eines Projekts ('ready') wird frisch
-	 * aufgelöst und der Cache aktualisiert.
+	 * Resolved interpreter status per linked interpreter (`path|id`): postState
+	 * runs on every keystroke in the project (onDidChangeTextDocument) — the
+	 * resolution via the Python extension API should not be repeated each time.
+	 * Opening a project ('ready') resolves fresh and refreshes the cache.
 	 */
 	private readonly pythonStatusCache = new Map<string, ResolvedPythonStatus>();
 
@@ -273,17 +268,17 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		private readonly context: vscode.ExtensionContext,
 		private readonly index: WorkspaceIndex,
 	) {
-		// Der gemeinsame Workspace-Index meldet Änderungen bereits debounced;
-		// relevant sind .td (Tabellen selbst) und .tdgen (die automatische
-		// Tabellen-Mitnahme berücksichtigt auch Generator-Referenzen, siehe
+		// The shared workspace index already reports changes debounced; the
+		// relevant kinds are .td (the tables themselves) and .tdgen (automatic
+		// table inclusion also accounts for generator references, see
 		// computeRequiredClosure).
 		this.indexSub = index.onDidChange((kinds) => {
 			if (kinds.has('td') || kinds.has('tdgen')) {
 				void this.broadcastPickerTree();
 			}
 		});
-		// Nach jedem Generator-Lauf zeigen die Diagramme die echten
-		// Datensatzanzahlen des Laufs (siehe runResults.ts) — Anzeige auffrischen.
+		// After every generator run the diagrams show that run's real record
+		// counts (see runResults.ts) — refresh the display.
 		this.runResultSub = onDidSaveRunResult(() => {
 			void this.broadcastPickerTree();
 		});
@@ -294,7 +289,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		this.runResultSub.dispose();
 	}
 
-	/** Löst den verknüpften Interpreter auf — aus dem Cache, außer `fresh` erzwingt eine Neuauflösung. */
+	/** Resolves the linked interpreter — from the cache, unless `fresh` forces a re-resolution. */
 	private async resolvePythonStatus(link: PythonLink, fresh: boolean): Promise<ResolvedPythonStatus> {
 		const key = `${link.path}|${link.id ?? ''}`;
 		const cached = this.pythonStatusCache.get(key);
@@ -325,12 +320,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 
 		this.panelDocuments.set(webviewPanel, document);
 
-		// Zähler statt einfachem Flag für selbst angestoßene WorkspaceEdits —
-		// siehe table/editorProvider.ts für die ausführliche Begründung
-		// (überlappende Edits würden sonst den Webview-Zustand mitten in der
-		// Bearbeitung ersetzen).
+		// A counter rather than a simple flag for self-initiated WorkspaceEdits —
+		// see table/editorProvider.ts for the detailed rationale (overlapping
+		// edits would otherwise replace the webview state mid-edit).
 		let selfEditsPending = 0;
-		/** Zuletzt selbst angestoßener Dokumenttext — Vergleichsbasis, solange Edits unterwegs sind. */
+		/** Most recent self-initiated document text — the comparison base while edits are in flight. */
 		let lastQueuedText: string | null = null;
 		const queueSelfEdit = async (newText: string): Promise<boolean> => {
 			if (newText === (lastQueuedText ?? document.getText())) {
@@ -434,9 +428,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					if (!('project' in current)) {
 						break;
 					}
-					// Löst über das normale onDidChangeTextDocument -> postState() eine
-					// aktualisierte Anzeige aus (inkl. neu aufgelöstem pythonStatus) —
-					// kein eigenes Antwort-Message nötig.
+					// Triggers an updated display through the regular
+					// onDidChangeTextDocument -> postState() path (including a freshly
+					// resolved pythonStatus) — no dedicated reply message needed.
 					await this.applyText(document, serializeProject({ ...current.project, python: link }));
 					break;
 				}
@@ -447,9 +441,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				case 'toggleTable': {
 					const applied = await this.setTableChecked(document, message.path, message.checked);
 					if (!applied) {
-						// Abwahl verweigert (Tabelle wird per FK noch benötigt): die
-						// Checkbox in der Webview ist optisch schon abgehakt — Baum neu
-						// schicken, damit sie auf den echten Zustand zurückspringt.
+						// Deselection refused (the table is still needed via an FK): the
+						// webview's checkbox has already flipped visually — resend the
+						// tree so it snaps back to the real state.
 						const state = this.readState(document);
 						if ('project' in state) {
 							void webviewPanel.webview.postMessage({
@@ -461,15 +455,15 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					break;
 				}
 				case 'runGeneration': {
-					// Der eigentliche Lauf liegt im Befehl (siehe project/run.ts) —
-					// derselbe, den auch der Run-Knopf in der Editor-Titelleiste auslöst.
+					// The run itself lives in the command (see project/run.ts) — the
+					// same one the run button in the editor title bar triggers.
 					await vscode.commands.executeCommand('datenschmiede.runGeneration', document.uri);
 					break;
 				}
 				case 'pickOutputFolder': {
-					// Ordner-Auswahldialog für den Ausgabeordner; das Ergebnis wird
-					// als fester Text ins Tag-Feld übernommen (Variablen lassen sich
-					// danach weiterhin ergänzen).
+					// Folder picker for the output folder; the result is inserted into
+					// the tag field as constant text (variables can still be added
+					// afterwards).
 					const projectDir = vscode.Uri.joinPath(document.uri, '..');
 					const picked = await vscode.window.showOpenDialog({
 						canSelectFiles: false,
@@ -486,32 +480,32 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					if (!('project' in current)) {
 						break;
 					}
-					// Innerhalb des Projektordners relativ speichern (portabel,
-					// mit Vorwärts-Schrägstrichen), sonst absolut.
+					// Store paths inside the project folder relatively (portable, with
+					// forward slashes), anything else absolutely.
 					const relative = path.relative(projectDir.fsPath, picked[0].fsPath);
 					const outputPath =
 						relative && !relative.startsWith('..') && !path.isAbsolute(relative)
 							? relative.replace(/\\/g, '/')
 							: picked[0].fsPath;
-					// Löst über das normale onDidChangeTextDocument -> postState()
-					// eine aktualisierte Anzeige aus (wie changePython).
+					// Triggers an updated display through the regular
+					// onDidChangeTextDocument -> postState() path (as changePython does).
 					await this.applyText(document, serializeProject({ ...current.project, outputPath }));
 					break;
 				}
 				case 'selectTables': {
-					// „Alle auswählen“ im Kontextmenü eines Namensraum-Knotens
-					// (siehe showGroupContextMenu in media/project.js).
+					// "Select all" in a namespace node's context menu (see
+					// showGroupContextMenu in media/project.js).
 					await this.addTables(document, message.paths);
 					break;
 				}
 				case 'deselectTables': {
-					// „Alle abwählen“ im Kontextmenü eines Namensraum-Knotens.
+					// "Deselect all" in a namespace node's context menu.
 					await this.removeTables(document, message.paths);
 					break;
 				}
 				case 'columnWidths': {
-					// Geräteweit über alle Projekte hinweg gemerkt (persönliche
-					// Anzeige-Präferenz), analog zu table/editorProvider.ts.
+					// Remembered per machine across all projects (a personal display
+					// preference), analogous to table/editorProvider.ts.
 					await this.context.globalState.update(COLUMN_WIDTHS_STATE_KEY, message.columnWidths);
 					break;
 				}
@@ -519,11 +513,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		});
 	}
 
-	/** Öffnet die `.td`-Datei einer Tabelle (Knopf im Tabellen-Tab, siehe media/project.js). */
+	/** Opens a table's `.td` file (button on the tables tab, see media/project.js). */
 	private async openTableFile(relativePath: string): Promise<void> {
 		let entry = this.cachedEntries.find((e) => e.relativePath === relativePath);
 		if (!entry) {
-			// Cache evtl. veraltet (z. B. Datei gerade erst hinzugefügt) -> einmal neu einlesen.
+			// The cache may be stale (e.g. the file was only just added) -> re-read once.
 			entry = (await this.refreshEntriesCache()).find((e) => e.relativePath === relativePath);
 		}
 		if (!entry) {
@@ -534,16 +528,16 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	/**
-	 * Setzt, ob eine Tabelle Teil des Projekts ist (Checkbox je Zeile im
-	 * Tabellen-Tab, siehe media/project.js). Anhaken nimmt automatisch alle
-	 * über Fremdschlüssel (rekursiv) referenzierten Tabellen mit auf;
-	 * Abhaken wird verweigert, solange eine andere ausgewählte Tabelle diese
-	 * noch benötigt — dieselbe Regel, die eine automatisch mitgenommene
-	 * Tabelle von vornherein als gesperrt anzeigt (siehe buildPickerTree).
+	 * Sets whether a table is part of the project (per-row checkbox on the
+	 * tables tab, see media/project.js). Checking it automatically pulls in
+	 * every table referenced (recursively) through foreign keys; unchecking is
+	 * refused as long as another selected table still needs it — the same rule
+	 * that shows an automatically included table as locked in the first place
+	 * (see buildPickerTree).
 	 *
-	 * @returns `false` genau dann, wenn das Abhaken verweigert wurde — der
-	 * Aufrufer schickt der Webview dann den unveränderten Baum erneut, damit
-	 * die dort schon abgehakte Checkbox zurückspringt.
+	 * @returns `false` exactly when unchecking was refused — the caller then
+	 * resends the unchanged tree to the webview so the already-flipped checkbox
+	 * snaps back.
 	 */
 	private async setTableChecked(document: vscode.TextDocument, relativePath: string, checked: boolean): Promise<boolean> {
 		const state = this.readState(document);
@@ -573,11 +567,10 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	/**
-	 * Nimmt eine oder mehrere Tabellen ins Projekt auf — gemeinsame Grundlage
-	 * für das Anhaken einer einzelnen Checkbox (setTableChecked) und „Alle
-	 * auswählen“ im Kontextmenü eines Namensraum-Knotens. Wie beim einzelnen
-	 * Anhaken werden alle über Fremdschlüssel (rekursiv) referenzierten
-	 * Tabellen automatisch mit aufgenommen.
+	 * Adds one or more tables to the project — the shared basis for checking a
+	 * single checkbox (setTableChecked) and for "Select all" in a namespace
+	 * node's context menu. As with a single check, every table referenced
+	 * (recursively) through foreign keys is pulled in automatically.
 	 */
 	private async addTables(document: vscode.TextDocument, relativePaths: string[]): Promise<void> {
 		const state = this.readState(document);
@@ -609,12 +602,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	/**
-	 * Entfernt mehrere Tabellen auf einmal aus dem Projekt („Alle abwählen“
-	 * im Kontextmenü eines Namensraum-Knotens) — Gegenstück zu addTables.
-	 * Untereinander dürfen die entfernten Tabellen sich ruhig referenzieren;
-	 * nur wer von einer *verbleibenden* Tabelle über deren FK-Kette noch
-	 * benötigt wird, bleibt stillschweigend ausgewählt (dieselbe Regel, die
-	 * beim einzelnen Abhaken die Abwahl verweigert, siehe setTableChecked).
+	 * Removes several tables from the project at once ("Deselect all" in a
+	 * namespace node's context menu) — the counterpart to addTables. The removed
+	 * tables may freely reference each other; only those still needed by a
+	 * *remaining* table via its FK chain stay silently selected (the same rule
+	 * that refuses deselection of a single checkbox, see setTableChecked).
 	 */
 	private async removeTables(document: vscode.TextDocument, relativePaths: string[]): Promise<void> {
 		const state = this.readState(document);
@@ -625,8 +617,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		const toRemove = new Set(relativePaths);
 
 		let keep = project.tables.filter((t) => !toRemove.has(t.path));
-		// Fixpunkt: jede zurückbehaltene Tabelle kann ihrerseits weitere der
-		// zu entfernenden über ihre FK-Kette benötigen.
+		// Fixed point: every table kept back may in turn need further tables
+		// slated for removal via its own FK chain.
 		for (;;) {
 			const keepPaths = new Set(keep.map((t) => t.path));
 			const required = computeRequiredClosure(keepPaths, this.cachedEntries, this.cachedGenerators);
@@ -636,8 +628,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			}
 			keep = [...keep, ...addBack];
 		}
-		// Gleiche Reihenfolge wie addTables (Pfad-sortiert), damit das
-		// Zurückbehalten einzelner Tabellen keine Umsortierung im TOML erzeugt.
+		// Same ordering as addTables (sorted by path), so keeping individual
+		// tables back does not reorder the TOML.
 		keep.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
 		const newText = serializeProject({ ...project, tables: keep });
@@ -647,7 +639,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		await this.applyText(document, newText);
 	}
 
-	/** Fragt nach einem Python-Interpreter, falls das Projekt noch keinen verknüpft hat (siehe project/python.ts#ensurePythonLinked). */
+	/** Asks for a Python interpreter if the project has none linked yet (see project/python.ts#ensurePythonLinked). */
 	private async maybePromptForPython(document: vscode.TextDocument, project: Project): Promise<void> {
 		await ensurePythonLinked(project.python, async (link) => {
 			const current = this.readState(document);
@@ -666,7 +658,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		}
 	}
 
-	/** Liest und parst das Dokument; liefert entweder das Projekt-Modell oder eine lokalisierte Fehlermeldung. */
+	/** Reads and parses the document; returns either the project model or a localized error message. */
 	private readState(document: vscode.TextDocument): { project: Project } | { parseError: string } {
 		const result = this.parseDocument(document);
 		if ('project' in result) {
@@ -700,11 +692,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	/**
-	 * Schickt allen offenen Projekt-Webviews den neu berechneten Auswahlbaum
-	 * (z. B. nach Anlegen/Löschen/Umbenennen einer `.td`-Datei oder Änderung
-	 * ihrer FK-Spalten) — die Auswahl selbst (welche Pfade zum Projekt
-	 * gehören) ändert sich dadurch nicht, nur ihre Anzeige. Debouncing
-	 * übernimmt der Workspace-Index (siehe Konstruktor).
+	 * Pushes the recomputed picker tree to every open project webview (e.g.
+	 * after a `.td` file was created, deleted or renamed, or its FK columns
+	 * changed) — the selection itself (which paths belong to the project) does
+	 * not change, only its presentation. Debouncing is handled by the workspace
+	 * index (see the constructor).
 	 */
 	private async broadcastPickerTree(): Promise<void> {
 		await this.refreshEntriesCache();
@@ -760,12 +752,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 }
 
 /**
- * Berechnet für jede zum Projekt gehörende Tabelle die Anzeige-Infos für die
- * Problems-Diagnostics (siehe buildRecordsDiagnostics): ob die Datei (noch)
- * gefunden wurde und ob es sich um eine referenzierte (sekundäre) Tabelle
- * handelt — d. h. eine mit gültiger, nicht auf sich selbst zeigender
- * `fk_table`-Spalte, deren Datensatzanzahl je referenziertem Datensatz gilt
- * und auch ein Bereich sein darf.
+ * Computes, for every table belonging to the project, the display info the
+ * Problems diagnostics need (see buildRecordsDiagnostics): whether the file was
+ * still found, and whether it is a referenced (secondary) table — i.e. one with
+ * a valid `fk_table` column not pointing at itself, whose record count applies
+ * per referenced record and may also be a range.
  */
 export function buildTableRows(project: Project, entries: TableEntry[]): ProjectTableRow[] {
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
@@ -785,31 +776,30 @@ export function buildTableRows(project: Project, entries: TableEntry[]): Project
 }
 
 /**
- * Baut den vollständigen Auswahlbaum für den Tabellen-Tab: alle `.td`-Tabellen
- * des Workspace, gruppiert nach den Punkt-getrennten Segmenten ihres
- * `schema`-Felds (z. B. `ag.cor.sapbp` -> drei Ebenen tief) statt nach
- * Ordnerstruktur, samt Auswahl-/Sperr-/Datensatz-Status je Tabelle. Tabellen
- * ohne Schema (oder mit kaputtem TOML) landen auf der Wurzelebene.
+ * Builds the complete picker tree for the tables tab: all `.td` tables of the
+ * workspace, grouped by the dot-separated segments of their `schema` field
+ * (e.g. `ag.cor.sapbp` -> three levels deep) rather than by folder structure,
+ * including per-table selection, lock and record state. Tables without a schema
+ * (or with broken TOML) end up at the root level.
  */
 function buildPickerTree(project: Project, entries: TableEntry[], generators: GeneratorBase[] = []): ProjectPickerNode[] {
 	const explicit = new Set(project.tables.map((t) => t.path));
-	// Referenz-Kanten EINMAL aus den Einträgen ableiten (FK-Spalten +
-	// Generator-Referenzen auflösen ist der teure Teil) — jede der folgenden
-	// Hüllen-Berechnungen (eine je ausgewählter Tabelle, siehe
-	// isLockedSelection) ist dann reine Graph-Traversierung.
+	// Derive the reference edges from the entries ONCE (resolving FK columns +
+	// generator references is the expensive part) — each of the following
+	// closure computations (one per selected table, see isLockedSelection) is
+	// then pure graph traversal.
 	const edges = buildRequiredEdges(entries, generators);
 	const required = closureOf(explicit, edges);
 	const existingRecords = new Map(project.tables.map((t) => [t.path, t.records] as const));
 
 	/**
-	 * Gesperrt (nicht abwählbar) ist eine Tabelle, wenn die *übrigen*
-	 * ausgewählten Tabellen sie über ihre FK-Ketten (bzw. Generator-
-	 * Referenzen) weiterhin benötigen — dieselbe Regel, mit der
-	 * setTableChecked das Abwählen verweigert. Der frühere Vergleich „nur
-	 * automatisch mitgenommen, nicht explizit“ griff zu kurz: setTableChecked
-	 * schreibt beim Anhaken die komplette Hülle mit in project.tables, womit
-	 * jede automatisch mitgenommene Tabelle sofort als explizit galt und ihre
-	 * Checkbox fälschlich aktiv blieb.
+	 * A table is locked (cannot be deselected) when the *remaining* selected
+	 * tables still need it via their FK chains (or generator references) — the
+	 * same rule with which setTableChecked refuses deselection. The earlier test
+	 * "included automatically, not explicitly" fell short: on checking,
+	 * setTableChecked writes the complete closure into project.tables, which made
+	 * every automatically included table count as explicit and wrongly left its
+	 * checkbox enabled.
 	 */
 	function isLockedSelection(path: string): boolean {
 		if (!explicit.has(path)) {

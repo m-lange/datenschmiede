@@ -22,27 +22,28 @@ type WebviewToExtensionMessage =
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { table: Table } | { error: unknown };
 
-/** Schlüssel für die geräteweit (über alle .td-Dateien hinweg) gemerkten Grid-Spaltenbreiten. */
+/** Key of the grid column widths remembered per machine (across all .td files). */
 const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.columnWidths';
 
 /**
- * Ein Generator, wie ihn die Webview braucht (serialisierbare Beschreibung
- * statt der GeneratorBase-Instanz): Auswahl-Liste, Parameter-Dialog und
- * Anzeige-Text werden daraus clientseitig aufgebaut (siehe media/table.js).
+ * A generator as the webview needs it (a serializable description instead of
+ * the GeneratorBase instance): the picker list, the parameter dialog and the
+ * display text are built from it on the client side (see media/table.js).
  */
 export interface GeneratorOption {
 	id: string;
 	label: string;
 	description: string;
 	parameters: GeneratorParameter[];
-	/** Anzeige-Vorlage mit `{param}`-Platzhaltern (siehe fillDisplayTemplate in generator/types.ts). */
+	/** Display template with `{param}` placeholders (see fillDisplayTemplate in generator/types.ts). */
 	displayTemplate?: string;
-	/** `true` für benutzerdefinierte Generatoren aus `.tdgen`-Dateien. */
+	/** `true` for custom generators coming from `.tdgen` files. */
 	custom: boolean;
-	/** `true` für den Fremdschlüssel-Generator — nur für FK-Spalten wählbar. */
+	/** `true` for the foreign key generator — selectable on FK columns only. */
 	fkOnly: boolean;
 }
 
+/** Maps generator instances to their serializable webview description. */
 function toGeneratorOptions(generators: GeneratorBase[]): GeneratorOption[] {
 	return generators.map((generator) => ({
 		id: generator.id,
@@ -56,17 +57,16 @@ function toGeneratorOptions(generators: GeneratorBase[]): GeneratorOption[] {
 }
 
 /**
- * Custom-Text-Editor für .td-Dateien.
+ * Custom text editor for .td files.
  *
- * Die Datei auf der Festplatte bleibt normaler TOML-Text (siehe toml.ts).
- * Diese Klasse hält die Webview (das Formular) und das VS-Code-Textdokument
- * synchron: Änderungen im Formular werden als TOML zurückgeschrieben,
- * externe Änderungen am Text (z. B. Undo, Git, manuelles Bearbeiten) werden
- * neu geparst und an die Webview gesendet. Inhaltliche Probleme (z. B. eine
- * Fremdschlüssel-Spalte ohne referenzierte Tabelle) meldet die
- * Workspace-weite Hintergrund-Prüfung in der Problems-Ansicht (siehe
- * src/diagnostics.ts) — auch für nicht geöffnete Dateien; die Webview zeigt
- * dieselben Regeln direkt am Feld an.
+ * The file on disk stays plain TOML text (see toml.ts). This class keeps the
+ * webview (the form) and the VS Code text document in sync: changes made in the
+ * form are written back as TOML, while external changes to the text (undo, git,
+ * manual editing) are re-parsed and pushed to the webview. Content problems
+ * (e.g. a foreign key column without a referenced table) are reported in the
+ * Problems view by the workspace-wide background validation (see
+ * src/diagnostics.ts) — for unopened files as well; the webview surfaces the
+ * same rules inline on the field.
  */
 export class TableEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.tableEditor';
@@ -80,21 +80,20 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		return vscode.Disposable.from(providerRegistration, provider);
 	}
 
-	/** Alle aktuell offenen .td-Webviews, um sie bei Datei-Änderungen im Workspace zu benachrichtigen. */
+	/** All currently open .td webviews, so they can be notified about file changes in the workspace. */
 	private readonly panels = new Set<vscode.WebviewPanel>();
 	/**
-	 * Zuletzt ermittelte Tabellenliste des Workspace, für die Validierung von
-	 * FK-Referenzen (siehe validateTable). Wird bei jedem Broadcast
-	 * (Datei-Änderungen im Workspace, gemeldet vom gemeinsamen
-	 * Workspace-Index) aktualisiert; per Konstruktion also höchstens ein paar
-	 * hundert Millisekunden veraltet — für die schnelle, synchrone
-	 * Validierung bei jedem Tastendruck (onDidChangeTextDocument) ist das
-	 * nötig, ein erneutes Einlesen aller .td-Dateien wäre dort zu teuer.
+	 * Most recently determined table list of the workspace, used to validate FK
+	 * references (see validateTable). It is refreshed on every broadcast (file
+	 * changes in the workspace, reported by the shared workspace index), so by
+	 * construction it is at most a few hundred milliseconds stale — which the
+	 * fast, synchronous validation on every keystroke (onDidChangeTextDocument)
+	 * requires, as re-reading all .td files there would be far too expensive.
 	 */
 	private cachedTableOptions: TableOption[] = [];
-	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), analog zu cachedTableOptions. */
+	/** Most recently determined generator list (built-in + `.tdgen` files), analogous to cachedTableOptions. */
 	private cachedGenerators: GeneratorBase[] = [];
-	/** Zuletzt ermittelte Nachschlagelisten (.lkp), analog zu cachedTableOptions. */
+	/** Most recently determined lookup lists (.lkp), analogous to cachedTableOptions. */
 	private cachedLookups: KnownLookupRef[] = [];
 	private readonly indexSub: vscode.Disposable;
 
@@ -102,9 +101,9 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		private readonly context: vscode.ExtensionContext,
 		private readonly index: WorkspaceIndex,
 	) {
-		// Der gemeinsame Workspace-Index beobachtet alle Datenschmiede-Dateien
-		// (eigene Watcher sind nicht mehr nötig) und meldet Änderungen bereits
-		// debounced — .td/.tdgen/.lkp betreffen die drei Auswahllisten.
+		// The shared workspace index watches all Datenschmiede files (no own
+		// watchers needed) and already reports changes debounced — .td/.tdgen/.lkp
+		// are the ones affecting the three picker lists.
 		this.indexSub = index.onDidChange((kinds) => {
 			if (kinds.has('td') || kinds.has('tdgen') || kinds.has('lkp')) {
 				void this.broadcastOptions();
@@ -130,23 +129,22 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
 
 		this.panels.add(webviewPanel);
-		// Frisch einlesen statt den (evtl. noch leeren oder veralteten) Cache zu
-		// nehmen, damit beim Öffnen nicht kurz fälschlich "Tabelle nicht
-		// gefunden" aufblitzt, bevor der erste Broadcast durchgelaufen ist.
+		// Read fresh instead of using the (possibly still empty or stale) cache,
+		// so that opening the editor does not briefly flash a wrong "table not
+		// found" before the first broadcast has run.
 		void this.refreshOptionsCache();
 
-		// Zähler statt einfachem Flag: wie viele selbst angestoßene
-		// WorkspaceEdits noch "unterwegs" sind, damit deren
-		// onDidChangeTextDocument nicht an die Webview zurückgesendet wird
-		// (sie kennt den Stand ja schon -> sonst würde das Formular neu
-		// aufgebaut und Cursor/Fokus verloren gehen). Ein Flag reichte nicht:
-		// überlappen sich zwei Edits (z. B. Sofort-Commit eines Selects
-		// während ein debounce-Commit noch läuft), schluckte es nur das erste
-		// Ereignis — das zweite ersetzte den Webview-Zustand mitten in der
-		// Bearbeitung, und Folge-Eingaben (etwa im Parameter-Dialog)
-		// schrieben in ein verwaistes Objekt und gingen verloren.
+		// A counter rather than a simple flag: how many self-initiated
+		// WorkspaceEdits are still "in flight", so their onDidChangeTextDocument
+		// is not echoed back to the webview (which already knows that state ->
+		// otherwise the form would be rebuilt and cursor/focus lost). A flag was
+		// not enough: when two edits overlap (e.g. the immediate commit of a
+		// select while a debounced commit is still running) it swallowed only
+		// the first event — the second replaced the webview state mid-edit, and
+		// follow-up input (in the parameter dialog, say) wrote into an orphaned
+		// object and was lost.
 		let selfEditsPending = 0;
-		/** Zuletzt selbst angestoßener Dokumenttext — Vergleichsbasis, solange Edits unterwegs sind. */
+		/** Most recent self-initiated document text — the comparison base while edits are in flight. */
 		let lastQueuedText: string | null = null;
 
 		const postState = () => {
@@ -162,8 +160,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			if (e.document.uri.toString() !== document.uri.toString()) {
 				return;
 			}
-			// Die Auswahllisten hält der Workspace-Index aktuell (er beobachtet
-			// auch Eingaben in offenen Editoren) — hier nur den eigenen Zustand.
+			// The workspace index keeps the picker lists current (it also watches
+			// typing in open editors) — only our own state is handled here.
 			if (selfEditsPending > 0) {
 				selfEditsPending--;
 				if (selfEditsPending === 0) {
@@ -198,8 +196,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				}
 				case 'edit': {
 					const newText = serializeTable(message.table);
-					// Gegen den zuletzt selbst angestoßenen Text vergleichen, solange
-					// noch Edits unterwegs sind — document.getText() hinkt dann hinterher.
+					// Compare against the most recent self-initiated text while edits
+					// are in flight — document.getText() lags behind in that case.
 					if (newText === (lastQueuedText ?? document.getText())) {
 						break;
 					}
@@ -213,9 +211,9 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					break;
 				}
 				case 'preview': {
-					// Erzeugt 20 Datensätze mit der aktuellen Konfiguration über
-					// den Python-Läufer (siehe table/preview.ts); Fehler zeigt
-					// runTablePreview selbst als Meldung an.
+					// Generates 20 records with the current configuration through
+					// the Python runner (see table/preview.ts); runTablePreview
+					// shows any error message itself.
 					const result = await runTablePreview(this.context, document);
 					if (result) {
 						void webviewPanel.webview.postMessage({ type: 'previewResult', ...result });
@@ -225,8 +223,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					break;
 				}
 				case 'columnWidths': {
-					// Geräteweit über alle .td-Dateien hinweg gemerkt (persönliche
-					// Anzeige-Präferenz, kein Teil der Tabellendefinition selbst).
+					// Remembered per machine across all .td files (a personal display
+					// preference, not part of the table definition itself).
 					await this.context.globalState.update(COLUMN_WIDTHS_STATE_KEY, message.columnWidths);
 					break;
 				}
@@ -234,6 +232,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		});
 	}
 
+	/** Parses the document text, returning either the model or the raw parse error. */
 	private parseDocument(document: vscode.TextDocument): ParsedDocument {
 		try {
 			return { table: parseTableText(document.getText()) };
@@ -242,7 +241,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		}
 	}
 
-	/** Liest und parst das Dokument; liefert entweder das Tabellenmodell oder eine lokalisierte Fehlermeldung. */
+	/** Reads and parses the document; returns either the table model or a localized error message. */
 	private readState(document: vscode.TextDocument): { table: Table } | { parseError: string } {
 		const result = this.parseDocument(document);
 		if ('table' in result) {
@@ -255,7 +254,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		return { parseError: String(err) };
 	}
 
-	/** Holt den aktuellen Index-Stand und hält die drei Auswahllisten für die Webviews vor. */
+	/** Pulls the current index snapshot and keeps the three picker lists ready for the webviews. */
 	private async refreshOptionsCache(): Promise<void> {
 		const snapshot = await this.index.snapshot();
 		this.cachedTableOptions = toTableOptions(snapshot.tables);
@@ -264,11 +263,11 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	}
 
 	/**
-	 * Schickt allen offenen .td-Webviews die aktuellen Auswahllisten (z. B.
-	 * nach Anlegen/Löschen/Umbenennen einer Tabelle, eines Generators oder
-	 * einer Nachschlageliste); die Problems-Ansicht hält die Workspace-weite
-	 * Hintergrund-Prüfung aktuell (siehe src/diagnostics.ts). Debouncing
-	 * übernimmt der Workspace-Index (siehe Konstruktor).
+	 * Pushes the current picker lists to every open .td webview (e.g. after a
+	 * table, generator or lookup list was created, deleted or renamed); the
+	 * Problems view is kept up to date by the workspace-wide background
+	 * validation (see src/diagnostics.ts). Debouncing is handled by the
+	 * workspace index (see the constructor).
 	 */
 	private async broadcastOptions(): Promise<void> {
 		await this.refreshOptionsCache();
@@ -283,6 +282,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		}
 	}
 
+	/** Localized "Line x, column y: message" text for a TOML parse error. */
 	private formatParseError(err: ParseError): string {
 		if (err.line !== undefined && err.column !== undefined) {
 			return vscode.l10n.t('Line {0}, column {1}: {2}', err.line, err.column, err.rawMessage);
@@ -290,12 +290,14 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		return err.rawMessage;
 	}
 
+	/** Replaces the whole document with `newText` via a workspace edit (keeps undo working). */
 	private applyText(document: vscode.TextDocument, newText: string): Thenable<boolean> {
 		const edit = new vscode.WorkspaceEdit();
 		edit.replace(document.uri, fullDocumentRange(document), newText);
 		return vscode.workspace.applyEdit(edit);
 	}
 
+	/** Builds the webview HTML shell (CSP with a per-load nonce, stylesheets and the unbundled scripts). */
 	private getHtml(webview: vscode.Webview): string {
 		const nonce = getNonce();
 		const mediaUri = (...segments: string[]) =>

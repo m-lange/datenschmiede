@@ -5,8 +5,8 @@ import { TableEditorProvider } from '../editorProvider';
 import { fileExists, resolveTargetFolder } from '../../util';
 
 /**
- * Befehl "Neue Tabelle erstellen…": legt eine neue .td-Datei mit
- * einem leeren Grundgerüst an und öffnet sie direkt im Custom Editor.
+ * "New Table…" command: creates a new .td file containing an empty skeleton and
+ * opens it straight away in the custom editor.
  */
 export async function newTableCommand(target?: vscode.Uri): Promise<void> {
 	const folder = await resolveTargetFolder(target);

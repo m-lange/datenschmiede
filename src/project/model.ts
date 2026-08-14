@@ -1,51 +1,52 @@
 /**
- * Datenmodell eines .tdproject-Testdatenprojekts.
+ * Data model of a .tdproject test data project.
  *
- * Wie bei table/model.ts ist dies die "Wahrheit", mit der die Projekt-Webview
- * arbeitet; sie wird vom Extension-Host aus dem TOML-Text der Dokument-Datei
- * erzeugt (siehe project/toml.ts) und nach jeder Änderung wieder zu TOML
- * serialisiert.
+ * As with table/model.ts this is the "truth" the project webview works with;
+ * the extension host builds it from the document's TOML text (see
+ * project/toml.ts) and serializes it back to TOML after every change.
  */
 
-/** Eine der Tabellen, die zu diesem Projekt gehören (Auswahl über den Tabellenbaum, siehe project/tree.ts). */
+/** One of the tables belonging to this project (selected via the table tree, see project/tree.ts). */
 export interface ProjectTable {
-	/** Workspace-relativer Pfad (POSIX-Trenner) der zugehörigen `.td`-Datei. */
+	/** Workspace-relative path (POSIX separators) of the associated `.td` file. */
 	path: string;
 	/**
-	 * Anzahl zu erzeugender Datensätze, als kompakter String. Für Tabellen
-	 * ohne gültigen ausgehenden Fremdschlüssel (primäre Tabellen) eine feste
-	 * Zahl ("100"); für Tabellen mit ausgehendem Fremdschlüssel (referenzierte
-	 * bzw. sekundäre Tabellen) die Anzahl je Datensatz der referenzierten
-	 * Tabelle — feste Zahl ("5") oder Bereich ("1..3"), siehe
-	 * table/cardinality.ts. Pflicht für jede ausgewählte Tabelle; fehlt der
-	 * Wert, meldet der Projekt-Editor das in der Problems-Ansicht (siehe
-	 * buildRecordsDiagnostics in project/editorProvider.ts).
+	 * Number of records to generate, as a compact string. For tables without a
+	 * valid outgoing foreign key (primary tables) a fixed number ("100"); for
+	 * tables with an outgoing foreign key (referenced, i.e. secondary tables)
+	 * the count per record of the referenced table — a fixed number ("5") or a
+	 * range ("1..3"), see table/cardinality.ts. Mandatory for every selected
+	 * table; if the value is missing the project editor reports it in the
+	 * Problems view (see buildRecordsDiagnostics in project/editorProvider.ts).
 	 */
 	records?: string;
 }
 
-/** Der mit diesem Projekt verknüpfte Python-Interpreter (für den künftigen Generator-Lauf). */
+/** The Python interpreter linked to this project (used by the generator run). */
 export interface PythonLink {
-	/** Pfad zum Python-Interpreter bzw. zum Umgebungsordner. */
+	/** Path to the Python interpreter or to the environment folder. */
 	path: string;
-	/** ID der Umgebung aus der Python-Extension, falls bekannt — best effort zur Wiederauflösung (siehe project/python.ts). */
+	/** ID of the environment from the Python extension, if known — best effort for re-resolution (see project/python.ts). */
 	id?: string;
 }
 
+/** A complete `.tdproject` test data project. */
 export interface Project {
 	name: string;
 	description: string;
-	/** `null`, solange (noch) kein Python-Interpreter verknüpft wurde. */
+	/** `null` while no Python interpreter has been linked yet. */
 	python: PythonLink | null;
 	/**
-	 * Ausgabeordner des Generator-Laufs, relativ zur Projektdatei (absolute
-	 * Pfade erlaubt), als Vorlage mit `{…}`-Variablen (Datum, Zeitstempel,
-	 * Projektname, … — aufgelöst in python/generate.py). Leer -> `output`.
+	 * Output folder of the generator run, relative to the project file
+	 * (absolute paths allowed), as a template with `{…}` variables (date,
+	 * timestamp, project name, … — resolved in python/generate.py). Empty ->
+	 * `output`.
 	 */
 	outputPath: string;
 	tables: ProjectTable[];
 }
 
+/** Creates a blank project, used when a new `.tdproject` file is created. */
 export function createEmptyProject(name = ''): Project {
 	return { name, description: '', python: null, outputPath: '', tables: [] };
 }

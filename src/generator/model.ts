@@ -1,20 +1,19 @@
 /**
- * Datenmodell einer .tdgen-Datei (benutzerdefinierter Generator).
+ * Data model of a .tdgen file (a custom generator).
  *
- * Analog zu table/model.ts ist dieses Modell die "Wahrheit", mit der die
- * Generator-Editor-Webview arbeitet; es wird vom Extension-Host aus dem
- * TOML-Text erzeugt (siehe generator/toml.ts) und nach jeder Änderung wieder
- * zu TOML serialisiert.
+ * As in table/model.ts this model is the "truth" the generator editor webview
+ * works with; the extension host builds it from the TOML text (see
+ * generator/toml.ts) and serializes it back to TOML after every change.
  *
- * Der eigentliche Generier-Code steht als Python-Methodenrümpfe in `code`:
- * die Signaturen sind fest vorgegeben (siehe CODE_CELLS) und werden im
- * Editor als nicht änderbare Kopfzeile über dem editierbaren Rumpf gezeigt —
- * wie die festen Zellen eines Jupyter-Notebooks.
+ * The actual generation code lives in `code` as Python method bodies: the
+ * signatures are fixed (see the *_SIGNATURE constants) and are shown in the
+ * editor as a read-only header above the editable body — like the fixed cells
+ * of a Jupyter notebook.
  */
 
 import { GeneratorParameter } from './types';
 
-/** Ein benutzerdefinierter Generator, wie er in einer .tdgen-Datei steht. */
+/** A custom generator as stored in a .tdgen file. */
 export interface GeneratorFile {
 	name: string;
 	description: string;
@@ -22,41 +21,40 @@ export interface GeneratorFile {
 	code: GeneratorCode;
 }
 
-/** Die Python-Methodenrümpfe der Code-Zellen (nur der Rumpf, ohne die feste Signatur). */
+/** The Python method bodies of the code cells (body only, without the fixed signature). */
 export interface GeneratorCode {
 	/**
-	 * Rumpf der `parameters()`-Zelle: gibt die Parameterdefinitionen als
-	 * Literal-Liste von dicts zurück (siehe PARAMETERS_SIGNATURE). Der Code
-	 * wird verbatim gespeichert; beim Speichern des Notebooks leitet der
-	 * Serializer daraus die deklarativen `[[parameters]]`-Blöcke ab, mit
-	 * denen Table Editor, Validierung und Plan arbeiten (siehe
-	 * generator/pyliteral.ts). Leer -> die Zelle wird aus den
-	 * `[[parameters]]`-Blöcken erzeugt.
+	 * Body of the `parameters()` cell: returns the parameter definitions as a
+	 * literal list of dicts (see PARAMETERS_SIGNATURE). The code is stored
+	 * verbatim; when the notebook is saved the serializer derives the
+	 * declarative `[[parameters]]` blocks from it, which the table editor,
+	 * validation and plan work with (see generator/pyliteral.ts). Empty -> the
+	 * cell is generated from the `[[parameters]]` blocks.
 	 */
 	parameters: string;
-	/** Pflicht: erzeugt die Werte der Spalte (siehe GENERATE_SIGNATURE). */
+	/** Required: produces the column's values (see GENERATE_SIGNATURE). */
 	generate: string;
-	/** Optional: wandelt die String-Parameterwerte in typisierte Werte um, bevor generate läuft. */
+	/** Optional: converts the string parameter values into typed values before generate runs. */
 	parseParams: string;
-	/** Optional: kompakter Anzeige-Text der Konfiguration für Lauf-Protokoll und Vorschau. */
+	/** Optional: compact display text of a configuration for the run log and the preview. */
 	displayValue: string;
 	/**
-	 * Optional: eigene Prüfung der Parameterwerte — liefert eine Liste von
-	 * Warnungs-Texten (leer = alles in Ordnung). Wird von der Workspace-
-	 * Hintergrund-Prüfung für jede Spalte ausgeführt, die diesen Generator
-	 * verwendet, und erscheint an der Spalte in der Problems-Ansicht
-	 * (siehe src/diagnostics.ts).
+	 * Optional: custom validation of the parameter values — returns a list of
+	 * warning texts (empty = everything fine). The workspace background
+	 * validation executes it for every column using this generator, and the
+	 * results appear on that column in the Problems view (see
+	 * src/diagnostics.ts).
 	 */
 	validate: string;
 	/**
-	 * Freie Notebook-Zelle für Testwerte und Experimente (z. B.
-	 * `params = {...}` und `n = 10` für die Ausführung der Methoden-Zellen)
-	 * — wird gespeichert, aber vom Generator-Lauf ignoriert.
+	 * Free-form notebook cell for test values and experiments (e.g.
+	 * `params = {...}` and `n = 10` to execute the method cells) — it is saved
+	 * but ignored by the generator run.
 	 */
 	scratch: string;
 }
 
-/** Feste Python-Signaturen der Code-Zellen (im Notebook die jeweils erste Zeile der Zelle). */
+/** Fixed Python signatures of the code cells (the first line of the respective notebook cell). */
 export const PARAMETERS_SIGNATURE = 'def parameters() -> "list[dict]":';
 export const GENERATE_SIGNATURE = 'def generate(params: dict, n: int, ctx) -> "pandas.Series":';
 export const PARSE_PARAMS_SIGNATURE = 'def parse_params(params: dict[str, str]) -> dict:';
@@ -64,9 +62,9 @@ export const DISPLAY_VALUE_SIGNATURE = 'def display_value(params: dict) -> str:'
 export const VALIDATE_SIGNATURE = 'def validate(params: dict[str, str]) -> "list[str]":';
 
 /**
- * Standard-Rümpfe für eine frisch angelegte .tdgen-Datei — bewusst mit
- * Beispiel-Kommentaren, damit der Notebook-Editor die wichtigsten
- * Möglichkeiten (ctx-API, typische Muster) direkt in den Code-Zellen zeigt.
+ * Default bodies for a freshly created .tdgen file — deliberately with example
+ * comments so the notebook editor surfaces the most important capabilities (the
+ * ctx API, typical patterns) right inside the code cells.
  */
 export const DEFAULT_GENERATE_BODY = [
 	'# params: parameter values (see parse_params), n: number of records to generate',
@@ -102,6 +100,7 @@ export const DEFAULT_VALIDATE_BODY = [
 	'return []',
 ].join('\n');
 
+/** Creates a blank custom generator prefilled with the default code bodies. */
 export function createEmptyGeneratorFile(name = ''): GeneratorFile {
 	return {
 		name,
@@ -118,6 +117,7 @@ export function createEmptyGeneratorFile(name = ''): GeneratorFile {
 	};
 }
 
+/** Creates a blank parameter with the default data type. */
 export function createEmptyParameter(): GeneratorParameter {
 	return { name: '', type: 'string', description: '' };
 }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-/** Erzeugt eine zufällige Nonce für die Content-Security-Policy der Webview. */
+/** Generates a random nonce for the webview's Content Security Policy. */
 export function getNonce(): string {
 	let text = '';
 	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -10,17 +10,17 @@ export function getNonce(): string {
 	return text;
 }
 
-/** Range, die das gesamte Dokument abdeckt (für einen Voll-Ersatz des Texts). */
+/** Range covering the whole document (used to replace its text wholesale). */
 export function fullDocumentRange(document: vscode.TextDocument): vscode.Range {
 	const lastLine = document.lineCount - 1;
 	return new vscode.Range(0, 0, lastLine, document.lineAt(lastLine).text.length);
 }
 
 /**
- * Löst den Zielordner für einen "Neu…"-Befehl auf (siehe commands/newTable.ts,
- * commands/newProject.ts): der per Rechtsklick im Explorer gewählte Ordner
- * (bzw. dessen übergeordneter Ordner, falls eine Datei angeklickt wurde),
- * sonst der erste Workspace-Ordner.
+ * Resolves the target folder for a "New…" command (see commands/newTable.ts,
+ * commands/newProject.ts): the folder right-clicked in the explorer — or its
+ * parent folder if a file was clicked — and otherwise the first workspace
+ * folder.
  */
 export async function resolveTargetFolder(target: vscode.Uri | undefined): Promise<vscode.Uri | undefined> {
 	if (target) {
@@ -31,7 +31,7 @@ export async function resolveTargetFolder(target: vscode.Uri | undefined): Promi
 			}
 			return vscode.Uri.joinPath(target, '..');
 		} catch {
-			// Ziel existiert nicht (mehr) -> auf Workspace-Root zurückfallen.
+			// Target no longer exists -> fall back to the workspace root.
 		}
 	}
 
@@ -42,6 +42,7 @@ export async function resolveTargetFolder(target: vscode.Uri | undefined): Promi
 	return undefined;
 }
 
+/** Returns whether the given URI points at an existing file or folder. */
 export async function fileExists(uri: vscode.Uri): Promise<boolean> {
 	try {
 		await vscode.workspace.fs.stat(uri);

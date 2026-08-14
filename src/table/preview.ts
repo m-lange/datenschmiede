@@ -9,27 +9,28 @@ import { Plan, PlanTable, buildPlanColumns, toPlanCustomGenerators, toPlanLookup
 import { runPlanProcess, toPlanOutput, writePlanFile } from '../project/planRunner';
 import { log, showErrorWithDetails } from '../outputChannel';
 
-/** Anzahl der Datensätze einer Tabellen-Vorschau. */
+/** Number of records produced for a table preview. */
 const PREVIEW_LIMIT = 20;
 
+/** Column names and generated rows of a preview run. */
 export interface PreviewResult {
 	columns: string[];
 	rows: string[][];
 }
 
 /**
- * Vorschau für den Table Editor: erzeugt PREVIEW_LIMIT Datensätze der
- * geöffneten Tabelle mit der aktuellen Konfiguration — inklusive aller
- * Spalten — über denselben Python-Läufer wie der volle Generator-Lauf
- * (python/generate.py, Vorschau-Modus: nichts wird geschrieben).
+ * Preview for the table editor: generates PREVIEW_LIMIT records of the open
+ * table using its current configuration — including every column — through the
+ * same Python runner as a full generator run (python/generate.py, preview mode:
+ * nothing is written).
  *
- * Referenzierte Tabellen (FK-/Generator-Ketten) werden mit generiert, jede
- * mit fester Anzahl PREVIEW_LIMIT statt der Projekt-Kardinalitäten — die
- * Vorschau braucht kein Projekt und keinen verknüpften Interpreter, sondern
- * nutzt die in VS Code aktive Python-Umgebung (3.10+).
+ * Referenced tables (FK/generator chains) are generated along with it, each
+ * with the fixed count PREVIEW_LIMIT rather than the project cardinalities —
+ * the preview needs neither a project nor a linked interpreter and instead uses
+ * the Python environment active in VS Code (3.10+).
  *
- * @returns Das Ergebnis, oder `null` bei Fehlern (die Meldung zeigt diese
- * Funktion selbst an).
+ * @returns The result, or `null` on errors (this function shows the message
+ * itself).
  */
 export async function runTablePreview(
 	context: vscode.ExtensionContext,
@@ -63,8 +64,8 @@ export async function runTablePreview(
 	}
 	const targetLabel = tableLabel(target.table, target.relativePath);
 
-	// FK-/Generator-Hülle mit generieren, jede Tabelle mit fester Anzahl —
-	// die Kardinalitäten des Projekts spielen für die Vorschau keine Rolle.
+	// Generate the FK/generator closure as well, each table with a fixed count —
+	// the project's cardinalities are irrelevant for a preview.
 	const closure = computeRequiredClosure(new Set([targetPath]), entries, generators);
 	const errors: string[] = [];
 	const usedCustomGenerators = new Map<string, CustomGenerator>();
@@ -113,8 +114,8 @@ export async function runTablePreview(
 		async () => {
 			let result: PreviewResult | null = null;
 
-			// Prozess-Start, Protokoll-Parsing und die gemeinsame `log`-/
-			// `error`-Behandlung liegen im geteilten Läufer (planRunner.ts).
+			// Process start, protocol parsing and the shared `log`/`error`
+			// handling live in the common runner (planRunner.ts).
 			const run = await runPlanProcess({
 				pythonPath: interpreter.path,
 				context,

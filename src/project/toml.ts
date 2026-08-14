@@ -2,7 +2,7 @@ import { parse, TomlError } from 'smol-toml';
 import { Project, ProjectTable, PythonLink } from './model';
 import { ParseError, tomlString } from '../tomlUtil';
 
-/** Liest den TOML-Text einer .tdproject-Datei in unser Projekt-Modell ein. */
+/** Parses the TOML text of a .tdproject file into our project model. */
 export function parseProjectText(text: string): Project {
 	if (!text.trim()) {
 		return { name: '', description: '', python: null, outputPath: '', tables: [] };
@@ -39,19 +39,20 @@ export function parseProjectText(text: string): Project {
 	};
 }
 
+/** Reads one `[[tables]]` block; returns `null` for entries without a usable path. */
 function toProjectTable(raw: unknown): ProjectTable | null {
 	const t = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 	const path = toStr(t.path);
 	if (!path) {
-		// Ein Eintrag ohne Pfad kann nicht auf eine Tabelle zeigen -> überspringen
-		// statt einen kaputten Eintrag ins Modell zu übernehmen.
+		// An entry without a path cannot point at a table -> skip it instead of
+		// carrying a broken entry into the model.
 		return null;
 	}
-	// `records` ist im Modell ein String (Zahl "100" oder Bereich "1..3", siehe
-	// project/model.ts); im TOML steht eine feste Zahl unquoted (`records = 100`,
-	// auch aus älteren Dateien), ein Bereich als String (`records = "1..3"`).
-	// Ein ungültiger Wert bleibt als String erhalten, damit ihn die Validierung
-	// meldet, statt ihn stillschweigend zu verwerfen.
+	// In the model `records` is a string (a number "100" or a range "1..3", see
+	// project/model.ts); in TOML a fixed number is unquoted (`records = 100`,
+	// including in older files) while a range is a string (`records = "1..3"`).
+	// An invalid value is preserved as a string so validation can report it
+	// instead of it being silently dropped.
 	let records: string | undefined;
 	if (typeof t.records === 'number' && Number.isFinite(t.records)) {
 		records = String(t.records);
@@ -61,25 +62,25 @@ function toProjectTable(raw: unknown): ProjectTable | null {
 	return records !== undefined ? { path, records } : { path };
 }
 
+/** Coerces an unknown TOML value to a string, treating anything else as empty. */
 function toStr(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
 
-/** Zeilenposition eines `[[tables]]`-Blocks im Rohtext, für Diagnostics. */
+/** Line position of a `[[tables]]` block in the raw text, used for diagnostics. */
 export interface ProjectTableLineInfo {
-	/** 0-basierte Zeile der `[[tables]]`-Markierung dieses Blocks. */
+	/** 0-based line of this block's `[[tables]]` marker. */
 	tablesLine: number;
-	/** 0-basierte Zeile des `path`-Eintrags. */
+	/** 0-based line of the `path` entry. */
 	pathLine: number;
 }
 
 /**
- * Ermittelt für jeden `[[tables]]`-Block im Rohtext seine Zeilenposition,
- * geschlüsselt über seinen `path`-Wert statt über die Reihenfolge im Text:
- * anders als bei findColumnLineInfo in table/toml.ts kann `parseProjectText`
- * Blöcke ohne (lesbaren) Pfad überspringen, sodass Text-Reihenfolge und
- * `Project.tables`-Reihenfolge auseinanderlaufen könnten — ein Lookup über
- * den Pfad bleibt davon unabhängig richtig.
+ * Determines the line position of every `[[tables]]` block in the raw text,
+ * keyed by its `path` value rather than by its order in the text: unlike
+ * findColumnLineInfo in table/toml.ts, `parseProjectText` may skip blocks
+ * without a (readable) path, so text order and `Project.tables` order could
+ * drift apart — a lookup by path stays correct regardless.
  */
 export function findTableLineInfo(text: string): Map<string, ProjectTableLineInfo> {
 	const lines = text.split('\n');
@@ -107,7 +108,7 @@ export function findTableLineInfo(text: string): Map<string, ProjectTableLineInf
 	return result;
 }
 
-/** Bewusst nur die einfachen Fälle, die serializeProject selbst je schreibt (`"..."`) plus TOML-Literal-Strings (`'...'`); alles andere liefert `null` statt zu raten. */
+/** Deliberately only the simple cases serializeProject itself ever writes (`"..."`) plus TOML literal strings (`'...'`); anything else returns `null` rather than guessing. */
 function parseTomlStringLiteral(raw: string): string | null {
 	try {
 		if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
@@ -117,14 +118,14 @@ function parseTomlStringLiteral(raw: string): string | null {
 			return raw.slice(1, -1);
 		}
 	} catch {
-		// Ungültiges Escape o. Ä. -> keine Position ermitteln, lieber als nicht gefunden behandeln.
+		// Invalid escape or similar -> determine no position, treat it as not found.
 	}
 	return null;
 }
 
 /**
- * Schreibt unser Projekt-Modell als TOML-Text — analog zu toml.ts#serializeTable
- * bewusst ein schlankes, festes Format statt der generischen smol-toml-Ausgabe.
+ * Writes our project model as TOML text — like toml.ts#serializeTable this
+ * deliberately emits a lean, fixed format instead of smol-toml's generic output.
  */
 export function serializeProject(project: Project): string {
 	const lines: string[] = [];
@@ -138,7 +139,7 @@ export function serializeProject(project: Project): string {
 		}
 	}
 	if (project.outputPath.trim()) {
-		// Nur geschrieben, wenn gesetzt — leer gilt der Standard `output`.
+		// Only written when set — empty means the default `output`.
 		lines.push(`output_path = ${tomlString(project.outputPath)}`);
 	}
 
@@ -147,8 +148,8 @@ export function serializeProject(project: Project): string {
 		lines.push('[[tables]]');
 		lines.push(`path = ${tomlString(table.path)}`);
 		if (table.records !== undefined) {
-			// Feste Zahl unquoted (wie bisher), Bereich ("1..3") als TOML-String
-			// — Gegenstück zu toProjectTable.
+			// Fixed number unquoted (as before), a range ("1..3") as a TOML
+			// string — the counterpart to toProjectTable.
 			lines.push(/^\d+$/.test(table.records) ? `records = ${table.records}` : `records = ${tomlString(table.records)}`);
 		}
 	}

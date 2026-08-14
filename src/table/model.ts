@@ -1,14 +1,14 @@
 /**
- * Datenmodell einer .td-Tabellendefinition.
+ * Data model of a .td table definition.
  *
- * Dieses Modell ist die "Wahrheit", mit der die Webview arbeitet. Es wird vom
- * Extension-Host aus dem TOML-Text der Dokument-Datei erzeugt (siehe
- * table/toml.ts) und nach jeder Änderung wieder zu TOML serialisiert.
+ * This model is the "truth" the webview works with. The extension host builds
+ * it from the document's TOML text (see table/toml.ts) and serializes it back
+ * to TOML after every change.
  */
 
 import type { GeneratorConfig } from '../generator/types';
 
-/** Vordefinierte, gebräuchliche Datentypen für synthetische Testdaten. */
+/** Predefined, commonly used data types for synthetic test data. */
 export const COLUMN_TYPES = [
 	'string',
 	'text',
@@ -26,66 +26,68 @@ export const COLUMN_TYPES = [
 
 export type ColumnType = (typeof COLUMN_TYPES)[number];
 
+/** A single column of a table definition. */
 export interface Column {
 	name: string;
 	type: string;
 	pk: boolean;
 	fk: boolean;
-	/** Logische Identität (`schema.name`) der referenzierten Tabelle (nur relevant, wenn `fk` true ist). */
+	/** Logical identity (`schema.name`) of the referenced table (only relevant while `fk` is true). */
 	fkTable: string;
-	/** Name der referenzierten Spalte in dieser Tabelle (nur relevant, wenn `fk` true ist). */
+	/** Name of the referenced column in that table (only relevant while `fk` is true). */
 	fkColumn: string;
 	description: string;
 	/**
-	 * Ausgeblendete Spalte: überall in der Extension sichtbar (Editor, FK-Ziele,
-	 * Vorschau) und beim Generator-Lauf ganz normal generiert — nur in die
-	 * Ausgabedatei wird sie nicht geschrieben (siehe python/generate.py). So
-	 * lassen sich Hilfsspalten erzeugen, deren Werte z. B. als FK-Quelle dienen.
+	 * Hidden column: still visible everywhere in the extension (editor, FK
+	 * targets, preview) and generated as usual during a generator run — it is
+	 * merely omitted from the output file (see python/generate.py). This allows
+	 * helper columns whose values serve as an FK source, for example.
 	 */
 	hidden: boolean;
 	/**
-	 * Generator dieser Spalte (siehe src/generator/) — `undefined`, solange
-	 * keiner gewählt ist; beim Generator-Lauf greift dann ein Standard je
-	 * Datentyp (FK-Spalten bekommen den Fremdschlüssel-Generator automatisch).
+	 * Generator of this column (see src/generator/) — `undefined` while none is
+	 * selected; a generator run then falls back to a per-data-type default (FK
+	 * columns automatically get the foreign key generator).
 	 */
 	generator?: GeneratorConfig;
 }
 
-/** Einstellungen der CSV-Ausgabe einer Tabelle (siehe python/generate.py fürs Gegenstück). */
+/** CSV output settings of a table (see python/generate.py for the counterpart). */
 export interface CsvOptions {
-	/** Spaltentrenner, z. B. ";" oder ",". */
+	/** Column separator, e.g. ";" or ",". */
 	delimiter: string;
-	/** Jeden Wert in doppelte Anführungszeichen setzen (sonst nur bei Bedarf). */
+	/** Wrap every value in double quotes (otherwise only where required). */
 	quoteAll: boolean;
-	/** Dezimaltrenner für Zahlenwerte, "." oder ",". */
+	/** Decimal separator for numeric values, "." or ",". */
 	decimal: string;
-	/** Datumsformat (Python strftime, z. B. "%Y-%m-%d"). */
+	/** Date format (Python strftime, e.g. "%Y-%m-%d"). */
 	dateFormat: string;
-	/** Zeitstempelformat (Python strftime, z. B. "%Y-%m-%d %H:%M:%S"). */
+	/** Timestamp format (Python strftime, e.g. "%Y-%m-%d %H:%M:%S"). */
 	datetimeFormat: string;
-	/** Kopfzeile mit den Spaltennamen schreiben. */
+	/** Write a header row containing the column names. */
 	includeHeader: boolean;
-	/** Datei-Encoding, z. B. "utf-8". */
+	/** File encoding, e.g. "utf-8". */
 	encoding: string;
 }
 
-/** Ausgabe-Einstellungen einer Tabelle: Dateiname (mit `{…}`-Variablen) und Dateityp-Konfiguration. */
+/** Output settings of a table: file name (with `{…}` variables) and file-type configuration. */
 export interface OutputConfig {
 	/**
-	 * Dateiname ohne Endung, als Vorlage mit `{…}`-Variablen — konstante
-	 * Textteile plus dynamische Teile wie `{date}`, `{timestamp}` oder
-	 * `{column:name}` (Wert der Spalte aus dem ersten generierten Datensatz),
-	 * siehe FILE_NAME_VARIABLES. Leer -> beim Lauf `schema_name`.
+	 * File name without extension, as a template with `{…}` variables —
+	 * constant text plus dynamic parts such as `{date}`, `{timestamp}` or
+	 * `{column:name}` (that column's value from the first generated record),
+	 * see FILE_NAME_VARIABLES. Empty -> `schema_name` at run time.
 	 */
 	fileName: string;
-	/** Dateityp der Ausgabe — vorerst ausschließlich "csv". */
+	/** Output file type — for now exclusively "csv". */
 	format: string;
 	csv: CsvOptions;
 }
 
-/** Eingebaute Dateinamen-Variablen (`{…}`), die der Generator-Lauf beim Schreiben auflöst. */
+/** Built-in file name variables (`{…}`) that a generator run resolves while writing. */
 export const FILE_NAME_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'schema', 'table', 'records'] as const;
 
+/** Output configuration used for newly created tables. */
 export function createDefaultOutput(): OutputConfig {
 	return {
 		fileName: '',
@@ -102,6 +104,7 @@ export function createDefaultOutput(): OutputConfig {
 	};
 }
 
+/** A complete `.td` table definition. */
 export interface Table {
 	schema: string;
 	name: string;
@@ -110,16 +113,17 @@ export interface Table {
 	output: OutputConfig;
 }
 
+/** Creates a blank table, used when a new `.td` file is created. */
 export function createEmptyTable(name = ''): Table {
 	return { schema: '', name, description: '', columns: [], output: createDefaultOutput() };
 }
 
 /**
- * Logische Tabellen-Identität `schema.name` (bzw. nur `name`, falls kein Schema
- * gesetzt ist), wie sie in `fk_table` gespeichert wird — leer, solange die Tabelle
- * (noch) keinen Namen hat. Bewusst frei von jeder vscode-/Dateisystem-Abhängigkeit,
- * damit sie sowohl vom Extension-Host (siehe table/repository.ts) als auch von den
- * vscode-freien Prüfungen in table/validation.ts genutzt werden kann.
+ * Logical table identity `schema.name` (or just `name` if no schema is set), as
+ * stored in `fk_table` — empty while the table has no name yet. Deliberately
+ * free of any vscode/file system dependency so it can be used both by the
+ * extension host (see table/repository.ts) and by the vscode-free checks in
+ * table/validation.ts.
  */
 export function logicalTableName(table: Table): string {
 	const name = table.name.trim();
@@ -130,6 +134,7 @@ export function logicalTableName(table: Table): string {
 	return schema ? `${schema}.${name}` : name;
 }
 
+/** Creates a blank column with the default data type. */
 export function createEmptyColumn(): Column {
 	return {
 		name: '',

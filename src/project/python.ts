@@ -3,22 +3,22 @@ import { PythonExtension, type Environment } from '@vscode/python-extension';
 import { PythonLink } from './model';
 
 /**
- * Verbindung zwischen einem Testdatenprojekt und einem Python-Interpreter
- * (`ms-python.python`, siehe `package.json` `extensionDependencies` — wird
- * zusammen mit dieser Extension installiert/aktiviert). Nutzt bewusst die
- * offizielle, typisierte `@vscode/python-extension`-API statt selbst
- * `python`/`python3` aufzurufen oder Interpreter-Pfade zu raten.
+ * Link between a test data project and a Python interpreter
+ * (`ms-python.python`, see `extensionDependencies` in `package.json` — it is
+ * installed/activated together with this extension). Deliberately uses the
+ * official, typed `@vscode/python-extension` API instead of invoking
+ * `python`/`python3` directly or guessing interpreter paths.
  */
 
-/** Von dieser Extension vorausgesetzte Mindestversion (siehe README-Begründung). */
+/** Minimum version required by this extension (see the rationale in the README). */
 const MIN_PYTHON = { major: 3, minor: 10 };
 
 let cachedApi: Promise<PythonExtension | undefined> | undefined;
 
 /**
- * Holt die API der Python-Extension. Defensiv gehalten: liefert `undefined`
- * statt zu werfen, falls die Extension (noch) nicht aktiviert werden konnte —
- * Aufrufer zeigen in dem Fall selbst eine passende Meldung.
+ * Fetches the Python extension's API. Kept defensive: returns `undefined`
+ * instead of throwing if the extension could not be activated — callers show a
+ * suitable message themselves in that case.
  */
 export function getPythonApi(): Promise<PythonExtension | undefined> {
 	if (!cachedApi) {
@@ -32,6 +32,7 @@ export function getPythonApi(): Promise<PythonExtension | undefined> {
 	return cachedApi;
 }
 
+/** Whether an environment's version is at least `min` (unknown versions count as too old). */
 function versionAtLeast(version: Environment['version'], min: { major: number; minor: number }): boolean {
 	if (!version || version.major === undefined || version.minor === undefined) {
 		return false;
@@ -39,6 +40,7 @@ function versionAtLeast(version: Environment['version'], min: { major: number; m
 	return version.major > min.major || (version.major === min.major && version.minor >= min.minor);
 }
 
+/** "major.minor.micro" for display; unknown parts render as "?". */
 function formatVersion(version: Environment['version']): string {
 	if (!version || version.major === undefined) {
 		return vscode.l10n.t('unknown version');
@@ -46,19 +48,19 @@ function formatVersion(version: Environment['version']): string {
 	return `${version.major}.${version.minor ?? '?'}.${version.micro ?? '?'}`;
 }
 
+/** Display label of an environment: its name (or type) plus the version. */
 function environmentLabel(env: Environment): string {
 	const name = env.environment?.name?.trim();
 	return `${name || env.environment?.type || vscode.l10n.t('Interpreter')} — ${formatVersion(env.version)}`;
 }
 
 /**
- * Öffnet eine QuickPick-Auswahl über alle von der Python-Extension bekannten
- * Umgebungen — Erkennung/Auflösung übernimmt vollständig sie selbst, hier
- * wird nur eine eigene, kompakte Liste gebaut (statt z. B. den eingebauten
- * Befehl `python.setInterpreter` zu delegieren), weil das Ergebnis in die
- * `.tdproject`-Datei geschrieben wird, nicht in die Workspace-weite
- * Interpreter-Einstellung. Gültige (>= Python 3.10) Umgebungen erscheinen
- * zuerst.
+ * Opens a QuickPick over every environment the Python extension knows about —
+ * discovery and resolution are entirely its job; a compact list of our own is
+ * built here (rather than delegating to the built-in `python.setInterpreter`
+ * command) because the result is written into the `.tdproject` file, not into
+ * the workspace-wide interpreter setting. Valid (>= Python 3.10) environments
+ * are listed first.
  */
 export async function pickPythonInterpreter(): Promise<PythonLink | undefined> {
 	const api = await getPythonApi();
@@ -105,9 +107,9 @@ export async function pickPythonInterpreter(): Promise<PythonLink | undefined> {
 }
 
 /**
- * Fragt beim Öffnen eines Projekts nach einem Python-Interpreter, falls noch
- * keiner verknüpft ist. `applyLink` übernimmt das eigentliche Schreiben in
- * die `.tdproject`-Datei (WorkspaceEdit liegt bei project/editorProvider.ts).
+ * Asks for a Python interpreter when a project is opened and none is linked
+ * yet. `applyLink` performs the actual write into the `.tdproject` file (the
+ * WorkspaceEdit lives in project/editorProvider.ts).
  */
 export async function ensurePythonLinked(
 	current: PythonLink | null,
@@ -132,17 +134,18 @@ export async function ensurePythonLinked(
 	}
 }
 
-/** Anzeige-taugliche Auflösung eines gespeicherten `PythonLink`, für die Übersicht der Projekt-Webview. */
+/** Display-ready resolution of a stored `PythonLink`, for the project webview's overview. */
 export interface ResolvedPythonStatus {
 	path: string;
-	/** Anzeigename inkl. Version, oder — falls nicht auflösbar — einfach der gespeicherte Pfad. */
+	/** Display name including the version, or — if unresolvable — simply the stored path. */
 	label: string;
-	/** `true`, wenn die Python-Extension den gespeicherten Pfad einer bekannten Umgebung zuordnen konnte. */
+	/** `true` if the Python extension could map the stored path to a known environment. */
 	resolved: boolean;
-	/** `true`, wenn aufgelöst UND mindestens Python 3.10. */
+	/** `true` if resolved AND at least Python 3.10. */
 	ok: boolean;
 }
 
+/** Resolves a project's stored interpreter link into its display status. */
 export async function resolveLinkedInterpreter(link: PythonLink): Promise<ResolvedPythonStatus> {
 	const api = await getPythonApi();
 	if (!api) {
@@ -160,10 +163,10 @@ export async function resolveLinkedInterpreter(link: PythonLink): Promise<Resolv
 }
 
 /**
- * Bester verfügbarer Interpreter ohne Projekt-Bezug (für die
- * Tabellen-Vorschau, siehe table/preview.ts): zuerst die in VS Code aktive
- * Umgebung, sonst die erste bekannte Umgebung mit Python 3.10+. `null`,
- * wenn keine nutzbare Umgebung gefunden wurde.
+ * Best available interpreter without a project context (for the table preview,
+ * see table/preview.ts): first the environment active in VS Code, otherwise the
+ * first known environment with Python 3.10+. `null` if no usable environment
+ * was found.
  */
 export async function resolveAnyInterpreter(): Promise<ResolvedPythonStatus | null> {
 	const api = await getPythonApi();
@@ -176,34 +179,33 @@ export async function resolveAnyInterpreter(): Promise<ResolvedPythonStatus | nu
 			return { path: active.path, label: environmentLabel(active), resolved: true, ok: true };
 		}
 	} catch {
-		// Aktive Umgebung nicht auflösbar -> unten auf die bekannte Liste zurückfallen.
+		// Active environment not resolvable -> fall back to the known list below.
 	}
 	const known = api.environments.known.find((env) => versionAtLeast(env.version, MIN_PYTHON));
 	return known ? { path: known.path, label: environmentLabel(known), resolved: true, ok: true } : null;
 }
 
 /**
- * Best-effort-Prüfung beim Aktivieren der Extension: warnt (einmal pro
- * Sitzung), falls keine Python-3.10+-Installation gefunden werden konnte. Sie
- * selbst zu installieren gibt es keine VS-Code-API dafür — stattdessen wird
- * auf python.org verwiesen ("if possible" aus der Anforderung).
+ * Best-effort check on extension activation: warns (once per session) if no
+ * Python 3.10+ installation could be found. There is no VS Code API to install
+ * one, so the user is pointed at python.org instead.
  */
 export async function checkPython310Available(): Promise<void> {
 	const api = await getPythonApi();
 	if (!api) {
 		return;
 	}
-	// Kennt die Python-Extension bereits eine moderne Umgebung (ihr
-	// persistierter Stand), ist nichts zu tun — der volle Umgebungs-Scan
-	// (refreshEnvironments, teuer: durchsucht die Platte) läuft nur noch in
-	// dem Fall, in dem sonst fälschlich gewarnt würde.
+	// If the Python extension already knows a modern environment (from its
+	// persisted state) there is nothing to do — the full environment scan
+	// (refreshEnvironments, expensive: it searches the disk) only runs in the
+	// case where we would otherwise warn incorrectly.
 	if (api.environments.known.some((env) => versionAtLeast(env.version, MIN_PYTHON))) {
 		return;
 	}
 	try {
 		await api.environments.refreshEnvironments();
 	} catch {
-		// Scan konnte nicht abgeschlossen werden -> mit dem bereits bekannten Stand weiterarbeiten.
+		// The scan could not complete -> continue with the state already known.
 	}
 	const hasModernPython = api.environments.known.some((env) => versionAtLeast(env.version, MIN_PYTHON));
 	if (hasModernPython) {

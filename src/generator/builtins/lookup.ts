@@ -1,12 +1,11 @@
 import { GeneratorBase } from '../base';
 
 /**
- * Eingebauter Generator: zieht Werte aus einer Nachschlageliste (.lkp) des
- * Workspace, gewichtet nach deren Gewichtsspalte. Je Datensatz wird EINE
- * Listen-Zeile gezogen: alle Spalten, die aus derselben Liste ziehen —
- * auch in per Fremdschlüssel verbundenen Tabellen — lesen dieselbe Zeile
- * (z. B. `code` „DE“ beim Kunden und `currency` „EUR“ derselben Zeile in
- * seiner Bestellung). Python-Gegenstück: `lookup_indices` in
+ * Built-in generator: draws values from a lookup list (.lkp) of the workspace,
+ * weighted by its weight column. ONE list row is drawn per record: every column
+ * drawing from the same list — including in tables related via foreign keys —
+ * reads the same row (e.g. `code` "DE" on the customer and `currency` "EUR"
+ * from that same row on their order). Python counterpart: `lookup_indices` in
  * python/generate.py.
  */
 class LookupGenerator extends GeneratorBase {

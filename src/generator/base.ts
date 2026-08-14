@@ -1,18 +1,17 @@
 /**
- * Basisklasse aller Generatoren (eingebaut wie benutzerdefiniert).
+ * Base class of all generators (built-in and custom alike).
  *
- * Jeder Generator ist selbst verantwortlich für:
- * - das Lesen/Schreiben seines Teils im `.td`-TOML (parseParams/encodeParams),
- * - seinen Anzeige-Text im Table Editor (displayString),
- * - die Prüfung der aktuellen Konfiguration (validate → Warnungen für die
- *   Problems-Ansicht),
- * - die Liste der benötigten Tabellen/Spalten/Nachschlagelisten
- *   (requiredRefs → Generier-Reihenfolge und Tabellen-Mitnahme im Projekt).
+ * Every generator is itself responsible for:
+ * - reading/writing its part of the `.td` TOML (parseParams/encodeParams),
+ * - its display text in the table editor (displayString),
+ * - validating the current configuration (validate → warnings for the Problems
+ *   view),
+ * - the list of required tables/columns/lookup lists (requiredRefs →
+ *   generation order and automatic table inclusion in the project).
  *
- * Die Standard-Implementierungen arbeiten generisch über die deklarative
- * Parameterliste; einzelne Generatoren überschreiben nur, was bei ihnen
- * abweicht (siehe src/generator/builtins/). Bewusst frei von jeder
- * vscode-Abhängigkeit.
+ * The default implementations work generically off the declarative parameter
+ * list; individual generators only override what differs for them (see
+ * src/generator/builtins/). Deliberately free of any vscode dependency.
  */
 
 import {
@@ -25,20 +24,21 @@ import {
 	fillDisplayTemplate,
 } from './types';
 
-/** Deklarative Beschreibung eines Generators, aus der die Basisklasse alles Weitere ableitet. */
+/** Declarative description of a generator, from which the base class derives everything else. */
 export interface GeneratorSpec {
-	/** Stabile Kennung, wie sie als `generator = "..."` im `.td`-TOML steht (bei benutzerdefinierten `custom:<name>`). */
+	/** Stable identifier as written as `generator = "..."` in the `.td` TOML (`custom:<name>` for custom ones). */
 	id: string;
 	name: string;
 	description: string;
 	parameters: GeneratorParameter[];
 	/**
-	 * Anzeige-Vorlage mit `{param}`-Platzhaltern (siehe fillDisplayTemplate);
-	 * ohne Vorlage wird generisch `Name (param: wert, …)` angezeigt.
+	 * Display template with `{param}` placeholders (see fillDisplayTemplate);
+	 * without a template a generic `Name (param: value, …)` is shown.
 	 */
 	displayTemplate?: string;
 }
 
+/** Default behaviour shared by every generator; subclasses override only what differs. */
 export class GeneratorBase {
 	public readonly id: string;
 	public readonly name: string;
@@ -55,11 +55,10 @@ export class GeneratorBase {
 	}
 
 	/**
-	 * Liest die Parameterwerte dieses Generators aus dem rohen
-	 * `generator_params`-Objekt einer `[[columns]]`-Tabelle. Standard: alle
-	 * deklarierten Parameter als String übernehmen; unbekannte Schlüssel
-	 * bleiben erhalten (z. B. nach Umbenennen eines Parameters in einer
-	 * `.tdgen`-Datei), damit nichts stillschweigend verloren geht.
+	 * Reads this generator's parameter values from the raw `generator_params`
+	 * object of a `[[columns]]` table. Default: take over every declared
+	 * parameter as a string; unknown keys are preserved (e.g. after a parameter
+	 * was renamed in a `.tdgen` file) so nothing is silently lost.
 	 */
 	public parseParams(raw: Record<string, unknown>): Record<string, string> {
 		const params: Record<string, string> = {};
@@ -74,10 +73,9 @@ export class GeneratorBase {
 	}
 
 	/**
-	 * Schreibt die Parameterwerte für das `.td`-TOML — Gegenstück zu
-	 * parseParams. Standard: nur nicht-leere Werte, in der deklarierten
-	 * Parameter-Reihenfolge (stabil, git-diff-freundlich), unbekannte
-	 * Schlüssel dahinter.
+	 * Writes the parameter values for the `.td` TOML — the counterpart to
+	 * parseParams. Default: only non-empty values, in the declared parameter
+	 * order (stable, git-diff-friendly), with unknown keys appended.
 	 */
 	public encodeParams(params: Record<string, string>): Record<string, string> {
 		const encoded: Record<string, string> = {};
@@ -96,7 +94,7 @@ export class GeneratorBase {
 		return encoded;
 	}
 
-	/** Anzeige-Text für den Table Editor (statt des bloßen Generator-Namens). */
+	/** Display text for the table editor (instead of the bare generator name). */
 	public displayString(config: GeneratorConfig, _ctx: GeneratorContext): string {
 		if (this.displayTemplate) {
 			return `${this.name}: ${fillDisplayTemplate(this.displayTemplate, config.params)}`;
@@ -111,11 +109,11 @@ export class GeneratorBase {
 	}
 
 	/**
-	 * Prüft die aktuelle Konfiguration und liefert Warnungen für die
-	 * Problems-Ansicht. Standard: Pflichtparameter müssen gesetzt sein,
-	 * Zahlen-Parameter müssen lesbare Zahlen sein, Referenz-Parameter
-	 * (`table`/`column`/`lookup`) müssen auf (noch) Vorhandenes zeigen —
-	 * auch wenn das Ziel erst nach der Konfiguration umbenannt/gelöscht wurde.
+	 * Validates the current configuration and returns warnings for the Problems
+	 * view. Default: mandatory parameters must be set, numeric parameters must
+	 * parse as numbers, and reference parameters (`table`/`column`/`lookup`)
+	 * must point at something that still exists — including when the target was
+	 * renamed or deleted after being configured.
 	 */
 	public validate(config: GeneratorConfig, ctx: GeneratorContext): GeneratorIssue[] {
 		const issues: GeneratorIssue[] = [];
@@ -132,7 +130,7 @@ export class GeneratorBase {
 		return issues;
 	}
 
-	/** Prüft einen einzelnen, nicht-leeren Parameterwert (Baustein von validate). */
+	/** Validates a single, non-empty parameter value (building block of validate). */
 	protected validateParamValue(
 		parameter: GeneratorParameter,
 		value: string,
@@ -164,7 +162,7 @@ export class GeneratorBase {
 			case 'column': {
 				const target = this.boundReferenceValue(parameter, config);
 				if (!target) {
-					// Ohne gewählte Tabelle/Liste wäre das nur eine Folgemeldung.
+					// Without a chosen table/list this would only be a follow-up message.
 					return [];
 				}
 				if (target.kind === 'table') {
@@ -186,8 +184,8 @@ export class GeneratorBase {
 				}
 				return [];
 			case 'own_column':
-				// Eine Spalte der eigenen Tabelle: muss existieren und darf nicht
-				// die generierte Spalte selbst sein.
+				// A column of the own table: must exist and must not be the
+				// generated column itself.
 				if (value === ctx.ownColumnName || !ctx.ownColumns.includes(value)) {
 					return [{ kind: 'gen-own-column-not-found', paramName: parameter.name, detail: value }];
 				}
@@ -201,11 +199,11 @@ export class GeneratorBase {
 	}
 
 	/**
-	 * Benötigte Referenzen der aktuellen Konfiguration. Standard: jeder
-	 * gesetzte `table`-Parameter benötigt seine Tabelle, jedes
-	 * `table`+`column`-Paar die konkrete Spalte, jeder `lookup`-Parameter
-	 * seine Nachschlageliste, jeder `own_column`-Parameter die Spalte der
-	 * eigenen Tabelle (sie wird dadurch garantiert *vor* dieser generiert).
+	 * References required by the current configuration. Default: every set
+	 * `table` parameter requires its table, every `table`+`column` pair the
+	 * specific column, every `lookup` parameter its lookup list, and every
+	 * `own_column` parameter the column of the own table (which is thereby
+	 * guaranteed to be generated *before* this one).
 	 */
 	public requiredRefs(config: GeneratorConfig, ctx: GeneratorContext): RequiredRefs {
 		const refs = emptyRequiredRefs();
@@ -233,9 +231,9 @@ export class GeneratorBase {
 	}
 
 	/**
-	 * Ermittelt, worauf sich ein `column`-Parameter bezieht: der Wert des
-	 * nächsten davorstehenden `table`- bzw. `lookup`-Parameters (analog zum
-	 * Paar fk_table/fk_column). `null`, solange dort (noch) nichts gewählt ist.
+	 * Determines what a `column` parameter refers to: the value of the nearest
+	 * preceding `table` or `lookup` parameter (mirroring the fk_table/fk_column
+	 * pair). `null` while nothing has been selected there yet.
 	 */
 	protected boundReferenceValue(
 		columnParameter: GeneratorParameter,

@@ -1,43 +1,41 @@
 import { LookupList, LookupRow } from './model';
-// ParseError ist trotz seines Wohnorts in tomlUtil.ts formatunabhängig (nur
-// Meldung + Position) und wird hier für CSV wiederverwendet, damit der
-// Editor-Provider Parse-Fehler aller drei Dateiformate gleich behandeln kann.
+// Despite living in tomlUtil.ts, ParseError is format-agnostic (message +
+// position only) and is reused here for CSV so the editor providers can handle
+// parse errors of all three file formats identically.
 import { ParseError } from '../tomlUtil';
 
 /**
- * Lesen/Schreiben des CSV-Formats einer .lkp-Nachschlageliste.
+ * Reading/writing the CSV format of a .lkp lookup list.
  *
- * Das Format ist bewusst einfach gehalten (Gegenstück im td-Generator):
- * Semikolon-getrennt, jeder Wert in doppelten Anführungszeichen, erste
- * Datenzeile ist die Kopfzeile, deren letzte Spalte immer die feste
- * Gewichtsspalte "weight" ist. Name und Beschreibung der Liste stehen —
- * da CSV selbst keinen Platz für Metadaten hat — in `#`-Kommentarzeilen
- * am Dateianfang (Zeilenumbrüche der Beschreibung als `\n` escaped):
+ * The format is deliberately kept simple (mirrored by the td generator):
+ * semicolon-separated, every value in double quotes, the first data line is the
+ * header whose last column is always the fixed weight column "weight". Since
+ * CSV itself has no room for metadata, the list's name and description live in
+ * `#` comment lines at the top of the file (line breaks in the description
+ * escaped as `\n`):
  *
  *   # Datenschmiede Nachschlageliste
  *   # name: Currencies
- *   # description: Erste Zeile\nzweite Zeile
+ *   # description: First line\nsecond line
  *   "code";"name";"weight"
  *   "EUR";"Euro";"40"
  *   "USD";"US Dollar";"60"
  */
 
-/** Name der festen Gewichtsspalte in der CSV-Kopfzeile. */
+/** Name of the fixed weight column in the CSV header. */
 export const WEIGHT_COLUMN = 'weight';
 
-/** Ein roher CSV-Datensatz samt 0-basierter Startzeile im Text (für Diagnostics). */
+/** A raw CSV record together with its 0-based start line in the text (for diagnostics). */
 interface CsvRecord {
 	fields: string[];
 	line: number;
 }
 
 /**
- * Zerlegt den Rohtext in CSV-Datensätze: Semikolon-getrennt, Werte in
- * doppelten Anführungszeichen (`""` als escaptes Anführungszeichen, auch
- * Zeilenumbrüche innerhalb von Anführungszeichen sind erlaubt). Unquotierte
- * Werte werden beim Lesen toleriert — geschrieben wird immer quotiert
- * (siehe serializeLookup). Leere Zeilen und `#`-Kommentarzeilen werden
- * übersprungen.
+ * Splits the raw text into CSV records: semicolon-separated, values in double
+ * quotes (`""` as an escaped quote; line breaks inside quotes are allowed too).
+ * Unquoted values are tolerated while reading — writing always quotes (see
+ * serializeLookup). Empty lines and `#` comment lines are skipped.
  */
 function scanRecords(text: string): CsvRecord[] {
 	const records: CsvRecord[] = [];
@@ -48,7 +46,7 @@ function scanRecords(text: string): CsvRecord[] {
 	let column = 0;
 	type State = 'fieldStart' | 'unquoted' | 'quoted' | 'afterQuoted';
 	let state: State = 'fieldStart';
-	/** `true`, sobald der aktuelle Datensatz Inhalt hat (auch ein leeres erstes Feld durch ein führendes `;`). */
+	/** `true` as soon as the current record has content (including an empty first field from a leading `;`). */
 	let recordStarted = false;
 
 	const pushField = () => {
@@ -79,14 +77,14 @@ function scanRecords(text: string): CsvRecord[] {
 				field += c;
 			}
 		} else if (c === '\r') {
-			// \r\n wie \n behandeln — das nachfolgende \n schließt den Datensatz ab.
+			// Treat \r\n like \n — the following \n closes the record.
 		} else if (c === '\n') {
 			if (recordStarted) {
 				pushRecord();
 			}
 		} else if (state === 'fieldStart') {
 			if (c === '#' && !recordStarted) {
-				// Kommentarzeile (nur am Zeilenanfang): bis zum Zeilenende überspringen.
+				// Comment line (only at the start of a line): skip to end of line.
 				while (i < text.length && text[i] !== '\n') {
 					i++;
 				}
@@ -114,7 +112,7 @@ function scanRecords(text: string): CsvRecord[] {
 				field += c;
 			}
 		} else {
-			// afterQuoted: bis zum Trenner/Zeilenende sind nur Leerzeichen erlaubt.
+			// afterQuoted: only whitespace is allowed up to the separator/end of line.
 			if (c === ';') {
 				pushField();
 				state = 'fieldStart';
@@ -147,7 +145,7 @@ function scanRecords(text: string): CsvRecord[] {
 	return records;
 }
 
-/** Liest die Metadaten-Kommentare (`# name:`, `# description:`) am Dateianfang. */
+/** Reads the metadata comments (`# name:`, `# description:`) at the top of the file. */
 function readMeta(text: string): { name: string; description: string } {
 	let name = '';
 	let description = '';
@@ -157,7 +155,7 @@ function readMeta(text: string): { name: string; description: string } {
 			continue;
 		}
 		if (!trimmed.startsWith('#')) {
-			// Metadaten stehen nur vor der ersten Datenzeile.
+			// Metadata only appears before the first data line.
 			break;
 		}
 		const nameMatch = /^#\s*name:\s?(.*)$/.exec(trimmed);
@@ -173,11 +171,12 @@ function readMeta(text: string): { name: string; description: string } {
 	return { name, description };
 }
 
-/** Escaped einen Metadaten-Wert für seine `#`-Kommentarzeile (Zeilenumbrüche als `\n`). */
+/** Escapes a metadata value for its `#` comment line (line breaks as `\n`). */
 function escapeMetaValue(value: string): string {
 	return (value ?? '').replace(/\\/g, '\\\\').replace(/\r\n?|\n/g, '\\n');
 }
 
+/** Reverses {@link escapeMetaValue}. */
 function unescapeMetaValue(value: string): string {
 	let result = '';
 	for (let i = 0; i < value.length; i++) {
@@ -194,7 +193,7 @@ function unescapeMetaValue(value: string): string {
 	return result;
 }
 
-/** Liest den CSV-Text einer .lkp-Datei in unser Nachschlagelisten-Modell ein. */
+/** Parses the CSV text of a .lkp file into our lookup list model. */
 export function parseLookupText(text: string): LookupList {
 	const { name, description } = readMeta(text);
 	const records = scanRecords(text);
@@ -203,25 +202,25 @@ export function parseLookupText(text: string): LookupList {
 	}
 
 	const header = records[0].fields.map((h) => h.trim());
-	// Die Gewichtsspalte ist per Format immer die letzte Kopfspalte; fehlt sie
-	// (von Hand bearbeitete Datei), gelten alle Spalten als Wertespalten und
-	// die Gewichte bleiben leer — die Validierung meldet sie dann als fehlend.
+	// By format the weight column is always the last header column; if it is
+	// missing (hand-edited file), all columns count as value columns and the
+	// weights stay empty — validation then reports them as missing.
 	const weightIndex = header.length > 0 && header[header.length - 1].toLowerCase() === WEIGHT_COLUMN ? header.length - 1 : -1;
 	const columns = weightIndex >= 0 ? header.slice(0, weightIndex) : header.slice();
 
 	const rows: LookupRow[] = records.slice(1).map((record) => {
 		const fields = record.fields;
 		if (weightIndex >= 0 && fields.length > weightIndex) {
-			// Überzählige Felder hinter der Gewichtsspalte werden als weitere
-			// Werte übernommen (statt sie stillschweigend zu verwerfen) — die
-			// Spaltenliste wächst dafür unten entsprechend mit.
+			// Surplus fields behind the weight column are taken over as further
+			// values (rather than being dropped silently) — the column list
+			// grows accordingly below.
 			return { values: [...fields.slice(0, weightIndex), ...fields.slice(weightIndex + 1)], weight: fields[weightIndex].trim() };
 		}
 		return { values: fields.slice(), weight: '' };
 	});
 
-	// Spalten und Zeilen auf eine gemeinsame Breite bringen: zu kurze Zeilen
-	// auffüllen, für überlange Zeilen zusätzliche (namenlose) Spalten anlegen.
+	// Bring columns and rows to a common width: pad short rows, and add extra
+	// (unnamed) columns for rows that are too long.
 	const columnCount = Math.max(columns.length, ...rows.map((row) => row.values.length));
 	while (columns.length < columnCount) {
 		columns.push('');
@@ -236,9 +235,8 @@ export function parseLookupText(text: string): LookupList {
 }
 
 /**
- * Schreibt unser Nachschlagelisten-Modell als CSV-Text — analog zu
- * table/toml.ts#serializeTable ein schlankes, festes Format: jeder Wert
- * quotiert, die Gewichtsspalte immer als letzte Spalte.
+ * Writes our lookup list model as CSV text — like table/toml.ts#serializeTable a
+ * lean, fixed format: every value quoted, the weight column always last.
  */
 export function serializeLookup(list: LookupList): string {
 	const lines: string[] = [];
@@ -254,24 +252,26 @@ export function serializeLookup(list: LookupList): string {
 	return lines.join('\n');
 }
 
+/** Quotes one CSV field, doubling any embedded quote. */
 function csvField(value: string): string {
 	return `"${(value ?? '').replace(/"/g, '""')}"`;
 }
 
-/** Zeilenpositionen der Datensätze im Rohtext, für Diagnostics (Gegenstück zu findColumnLineInfo in table/toml.ts). */
+/** Line positions of the records in the raw text, for diagnostics (counterpart to findColumnLineInfo in table/toml.ts). */
 export interface LookupLineInfo {
-	/** 0-basierte Zeile der Kopfzeile. */
+	/** 0-based line of the header row. */
 	headerLine: number;
-	/** 0-basierte Startzeile jeder Wertezeile, in der Reihenfolge von `LookupList.rows`. */
+	/** 0-based start line of every value row, in the order of `LookupList.rows`. */
 	rowLines: number[];
 }
 
+/** Determines the line positions of header and value rows; falls back to zeros on broken CSV. */
 export function findLookupLineInfo(text: string): LookupLineInfo {
 	try {
 		const records = scanRecords(text);
 		return { headerLine: records[0]?.line ?? 0, rowLines: records.slice(1).map((record) => record.line) };
 	} catch {
-		// Kaputtes CSV -> der Syntaxfehler selbst wird bereits als Diagnostic gemeldet.
+		// Broken CSV -> the syntax error itself is already reported as a diagnostic.
 		return { headerLine: 0, rowLines: [] };
 	}
 }

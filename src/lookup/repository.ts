@@ -6,26 +6,26 @@ import { ParseError } from '../tomlUtil';
 import { KnownLookupRef } from '../generator/types';
 
 /**
- * Eine `.lkp`-Datei im Workspace, roh eingelesen und geparst — Gegenstück zu
- * TableEntry in table/repository.ts für Nachschlagelisten. Grundlage für den
- * Nachschlagelisten-Generator (Auswahl + Validierung im Table Editor) und
- * die Plan-Erstellung des Generator-Laufs.
+ * A `.lkp` file in the workspace, read raw and parsed — the lookup list
+ * counterpart to TableEntry in table/repository.ts. Basis for the lookup
+ * generator (picker + validation in the table editor) and for building the
+ * generator run's plan.
  */
 export interface LookupEntry {
 	uri: vscode.Uri;
-	/** Workspace-relativer Pfad (POSIX-Trenner), via `vscode.workspace.asRelativePath`. */
+	/** Workspace-relative path (POSIX separators), via `vscode.workspace.asRelativePath`. */
 	relativePath: string;
-	/** Rohtext zum Zeitpunkt des Einlesens — für Diagnostics ohne erneutes Lesen/Parsen. */
+	/** Raw text at the time it was read — lets diagnostics work without reading/parsing again. */
 	text: string;
-	/** Geparste Liste, oder `null`, wenn die Datei kein gültiges CSV enthält (oder nicht lesbar war). */
+	/** The parsed list, or `null` if the file is not valid CSV (or could not be read). */
 	lookup: LookupList | null;
-	/** Der Parse-Fehler samt Position, falls das CSV kaputt ist (nicht gesetzt bei Lese-Fehlern). */
+	/** The parse error including its position if the CSV is broken (unset for read errors). */
 	error: ParseError | null;
-	/** Referenzierbarer Name: der `# name:`-Metadaten-Wert, sonst der Dateiname ohne Endung. */
+	/** Referenceable name: the `# name:` metadata value, otherwise the file name without its extension. */
 	name: string;
 }
 
-/** Baut den Eintrag einer `.lkp`-Datei aus ihrem Rohtext (`text: null` = nicht lesbar) — siehe buildTableEntry. */
+/** Builds the entry for a `.lkp` file from its raw text (`text: null` = unreadable) — see buildTableEntry. */
 export function buildLookupEntry(uri: vscode.Uri, relativePath: string, text: string | null): LookupEntry {
 	const fallbackName = relativePath.replace(/^.*\//, '').replace(/\.lkp$/, '');
 	if (text === null) {
@@ -41,9 +41,9 @@ export function buildLookupEntry(uri: vscode.Uri, relativePath: string, text: st
 }
 
 /**
- * Liest und parst alle `.lkp`-Dateien im Workspace ein (inklusive
- * ungesicherter Inhalte offener Editoren). Für die laufend benötigten Listen
- * hält der Workspace-Index (src/workspaceIndex.ts) einen gemeinsamen Cache.
+ * Reads and parses every `.lkp` file in the workspace (including unsaved
+ * contents of open editors). For the lists needed continuously, the workspace
+ * index (src/workspaceIndex.ts) keeps a shared cache.
  */
 export async function listLookups(): Promise<LookupEntry[]> {
 	const uris = await vscode.workspace.findFiles('**/*.lkp', '**/node_modules/**');
@@ -57,9 +57,9 @@ export async function listLookups(): Promise<LookupEntry[]> {
 }
 
 /**
- * Verdichtet Einträge zu den Referenz-Infos der Validierung/Auswahl (eine
- * Zeile je Name, Duplikate auf den ersten Treffer reduziert, nach Name
- * sortiert). Nur benannte Wertespalten werden angeboten.
+ * Condenses entries into the reference info used by validation and the pickers
+ * (one row per name, duplicates collapsed to the first match, sorted by name).
+ * Only named value columns are offered.
  */
 export function toLookupRefs(entries: LookupEntry[]): KnownLookupRef[] {
 	const byName = new Map<string, KnownLookupRef>();

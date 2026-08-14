@@ -11,18 +11,17 @@ type WebviewToExtensionMessage =
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { lookup: LookupList } | { error: unknown };
 
-/** Schlüssel für die geräteweit (über alle .lkp-Dateien hinweg) gemerkten Grid-Spaltenbreiten. */
+/** Key of the grid column widths remembered per machine (across all .lkp files). */
 const COLUMN_WIDTHS_STATE_KEY = 'datenschmiede.lookupColumnWidths';
 
 /**
- * Custom-Text-Editor für .lkp-Dateien (Nachschlagelisten des Testdaten-Generators).
+ * Custom text editor for .lkp files (the test data generator's lookup lists).
  *
- * Die Datei auf der Festplatte bleibt normaler CSV-Text (siehe lookup/csv.ts);
- * wie in table/editorProvider.ts hält diese Klasse Webview und
- * VS-Code-Textdokument synchron. Inhaltliche Probleme (fehlende/ungültige
- * Gewichte) meldet die Workspace-weite Hintergrund-Prüfung in der
- * Problems-Ansicht (siehe src/diagnostics.ts) — auch für nicht geöffnete
- * Dateien.
+ * The file on disk stays plain CSV text (see lookup/csv.ts); as in
+ * table/editorProvider.ts this class keeps the webview and the VS Code text
+ * document in sync. Content problems (missing or invalid weights) are reported
+ * in the Problems view by the workspace-wide background validation (see
+ * src/diagnostics.ts) — for unopened files as well.
  */
 export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.lookupEditor';
@@ -53,12 +52,12 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 		};
 		webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
 
-		// Zähler statt einfachem Flag für selbst angestoßene WorkspaceEdits —
-		// siehe table/editorProvider.ts für die ausführliche Begründung
-		// (überlappende Edits würden sonst den Webview-Zustand mitten in der
-		// Bearbeitung ersetzen und Folge-Eingaben verlieren).
+		// A counter rather than a simple flag for self-initiated WorkspaceEdits —
+		// see table/editorProvider.ts for the detailed rationale (overlapping
+		// edits would otherwise replace the webview state mid-edit and lose
+		// follow-up input).
 		let selfEditsPending = 0;
-		/** Zuletzt selbst angestoßener Dokumenttext — Vergleichsbasis, solange Edits unterwegs sind. */
+		/** Most recent self-initiated document text — the comparison base while edits are in flight. */
 		let lastQueuedText: string | null = null;
 
 		const postState = () => {
@@ -98,8 +97,8 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 				}
 				case 'edit': {
 					const newText = serializeLookup(message.lookup);
-					// Gegen den zuletzt selbst angestoßenen Text vergleichen, solange
-					// noch Edits unterwegs sind — document.getText() hinkt dann hinterher.
+					// Compare against the most recent self-initiated text while edits
+					// are in flight — document.getText() lags behind in that case.
 					if (newText === (lastQueuedText ?? document.getText())) {
 						break;
 					}
@@ -113,8 +112,8 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 					break;
 				}
 				case 'columnWidths': {
-					// Geräteweit über alle .lkp-Dateien hinweg gemerkt (persönliche
-					// Anzeige-Präferenz, kein Teil der Liste selbst).
+					// Remembered per machine across all .lkp files (a personal display
+					// preference, not part of the list itself).
 					await this.context.globalState.update(COLUMN_WIDTHS_STATE_KEY, message.columnWidths);
 					break;
 				}
@@ -122,6 +121,7 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 		});
 	}
 
+	/** Parses the document text, returning either the model or the raw parse error. */
 	private parseDocument(document: vscode.TextDocument): ParsedDocument {
 		try {
 			return { lookup: parseLookupText(document.getText()) };
@@ -130,7 +130,7 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 		}
 	}
 
-	/** Liest und parst das Dokument; liefert entweder das Listen-Modell oder eine lokalisierte Fehlermeldung. */
+	/** Reads and parses the document; returns either the list model or a localized error message. */
 	private readState(document: vscode.TextDocument): { lookup: LookupList } | { parseError: string } {
 		const result = this.parseDocument(document);
 		if ('lookup' in result) {
@@ -143,6 +143,7 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 		return { parseError: String(err) };
 	}
 
+	/** Localized "Line x, column y: message" text for a CSV parse error. */
 	private formatParseError(err: ParseError): string {
 		if (err.line !== undefined && err.column !== undefined) {
 			return vscode.l10n.t('Line {0}, column {1}: {2}', err.line, err.column, err.rawMessage);
@@ -150,12 +151,14 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 		return err.rawMessage;
 	}
 
+	/** Replaces the whole document with `newText` via a workspace edit (keeps undo working). */
 	private applyText(document: vscode.TextDocument, newText: string): Thenable<boolean> {
 		const edit = new vscode.WorkspaceEdit();
 		edit.replace(document.uri, fullDocumentRange(document), newText);
 		return vscode.workspace.applyEdit(edit);
 	}
 
+	/** Builds the webview HTML shell (CSP with a per-load nonce, stylesheets and the unbundled scripts). */
 	private getHtml(webview: vscode.Webview): string {
 		const nonce = getNonce();
 		const mediaUri = (...segments: string[]) =>

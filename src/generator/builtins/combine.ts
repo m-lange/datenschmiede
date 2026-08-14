@@ -1,10 +1,10 @@
 import { GeneratorBase } from '../base';
 import { GeneratorConfig, GeneratorContext, GeneratorIssue, RequiredRefs, emptyRequiredRefs } from '../types';
 
-/** Platzhalter `{spaltenname}` in der Kombinations-Vorlage. */
+/** Placeholder `{column_name}` in the combine template. */
 const PLACEHOLDER_PATTERN = /\{([^{}]+)\}/g;
 
-/** Extrahiert die referenzierten Spaltennamen aus einer Kombinations-Vorlage. */
+/** Extracts the referenced column names from a combine template. */
 export function combineTemplateColumns(template: string): string[] {
 	const names: string[] = [];
 	for (const match of template.matchAll(PLACEHOLDER_PATTERN)) {
@@ -17,12 +17,11 @@ export function combineTemplateColumns(template: string): string[] {
 }
 
 /**
- * Eingebauter Generator: kombiniert die (von ihren eigenen Generatoren
- * erzeugten) Werte anderer Spalten derselben Tabelle zu einem String —
- * `{spaltenname}`-Platzhalter in der Vorlage werden je Datensatz durch den
- * Wert der Spalte ersetzt (z. B. `"{first_name}.{last_name}@example.com"`).
- * Die referenzierten Spalten müssen deshalb vor dieser Spalte generiert
- * werden (siehe requiredRefs → Generier-Reihenfolge).
+ * Built-in generator: combines the values of other columns of the same table
+ * (as produced by their own generators) into a string — `{column_name}`
+ * placeholders in the template are replaced per record by that column's value
+ * (e.g. `"{first_name}.{last_name}@example.com"`). The referenced columns must
+ * therefore be generated before this one (see requiredRefs → generation order).
  */
 class CombineGenerator extends GeneratorBase {
 	constructor() {
@@ -55,8 +54,8 @@ class CombineGenerator extends GeneratorBase {
 			return issues;
 		}
 		for (const column of combineTemplateColumns(template)) {
-			// Eine Spalte kann nicht sich selbst kombinieren; nicht (mehr)
-			// vorhandene Spalten (z. B. nach Umbenennen) werden gemeldet.
+			// A column cannot combine itself; columns that no longer exist (e.g.
+			// after a rename) are reported.
 			if (column === ctx.ownColumnName || !ctx.ownColumns.includes(column)) {
 				issues.push({ kind: 'gen-own-column-not-found', paramName: 'template', detail: column });
 			}

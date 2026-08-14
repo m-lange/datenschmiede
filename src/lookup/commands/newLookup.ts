@@ -5,9 +5,9 @@ import { LookupEditorProvider } from '../editorProvider';
 import { fileExists, resolveTargetFolder } from '../../util';
 
 /**
- * Befehl "Neue Nachschlageliste erstellen…": legt eine neue .lkp-Datei mit
- * einem leeren Grundgerüst an und öffnet sie direkt im Custom Editor —
- * analog zu table/commands/newTable.ts.
+ * "New Lookup List…" command: creates a new .lkp file containing an empty
+ * skeleton and opens it straight away in the custom editor — analogous to
+ * table/commands/newTable.ts.
  */
 export async function newLookupCommand(target?: vscode.Uri): Promise<void> {
 	const folder = await resolveTargetFolder(target);
@@ -37,8 +37,8 @@ export async function newLookupCommand(target?: vscode.Uri): Promise<void> {
 	}
 
 	const listName = fileName.replace(/\.lkp$/, '');
-	// Mit einer ersten Wertespalte starten, damit das Grid direkt benutzbar
-	// ist — der technische Spaltenname ist bewusst nicht lokalisiert (Daten).
+	// Start with a first value column so the grid is usable right away — the
+	// technical column name is deliberately not localized (it is data).
 	const content = serializeLookup({ ...createEmptyLookup(listName), columns: ['value'] });
 	await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
 

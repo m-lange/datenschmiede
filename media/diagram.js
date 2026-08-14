@@ -1,14 +1,14 @@
 // @ts-check
-// ER-Diagramm des Projekt-Editors (Tab „Diagramm“): zeichnet die ausgewählten
-// Tabellen des Projekts mit ihren Beziehungs-Spalten und FK-Kanten als rein
-// lesendes SVG — keine Bearbeitung, kein Ziehen. Das Layout ist
-// vollautomatisch (Sugiyama-Ansatz wie das Lineage-Diagramm des MLA-Projekts):
-// Längster-Pfad-Schichtung (referenzierte Tabellen links, referenzierende
-// rechts), Barycenter-Sweeps zur Kreuzungsminimierung und eine vertikale
-// Relaxation, die Kästen in die Nähe ihrer Nachbarn zieht. Alle Farben kommen
-// ausschließlich aus VS-Code-Theme-Variablen (siehe .er-* in main.css), damit
-// helle, dunkle und High-Contrast-Themes gleichermaßen passen. Eingebunden
-// vor project.js (siehe getHtml in project/editorProvider.ts).
+// ER diagram of the project editor (the "ER Diagram" tab): draws the project's
+// selected tables with their relationship columns and FK edges as a read-only
+// SVG — no editing, no dragging. The layout is fully automatic (a Sugiyama
+// approach, like the lineage diagram of the MLA project): longest-path layering
+// (referenced tables on the left, referencing ones on the right), barycenter
+// sweeps to minimize crossings, and a vertical relaxation that pulls boxes
+// close to their neighbours. All colours come exclusively from VS Code theme
+// variables (see .er-* in main.css), so light, dark and high-contrast themes
+// all work. Loaded before project.js (see getHtml in
+// project/editorProvider.ts).
 (function () {
 	'use strict';
 
@@ -18,16 +18,16 @@
 	/** @typedef {{tables:DiagramTable[],edges:DiagramEdge[],lastRunAt?:number}} ProjectDiagram */
 	/**
 	 * @typedef {Object} DiagramOptions
-	 * @property {any} strings Übersetzte Texte (siehe project/webviewStrings.ts).
-	 * @property {(n: number) => string} formatNumber Zahl mit Tausendertrennzeichen der Webview-Sprache.
-	 * @property {(path: string) => void} onOpenTable Öffnet die `.td`-Datei eines Kastens.
+	 * @property {any} strings Translated texts (see project/webviewStrings.ts).
+	 * @property {(n: number) => string} formatNumber Number with the webview language's thousands separator.
+	 * @property {(path: string) => void} onOpenTable Opens the `.td` file of a box.
 	 */
 
 	const SVG_NS = 'http://www.w3.org/2000/svg';
 
 	// ---------------------------------------------------------------------
-	// Geometrie — Zeilenhöhe/Kopfhöhe müssen zu den Schriftgrößen der
-	// .er-*-Klassen in main.css passen (siehe FONT_* unten).
+	// Geometry — row height and header height must match the font sizes of the
+	// .er-* classes in main.css (see FONT_* below).
 	// ---------------------------------------------------------------------
 
 	const ROW_H = 22;
@@ -38,18 +38,18 @@
 	const MIN_BOX_W = 200;
 	const MAX_BOX_W = 320;
 	const PILL_H = 20;
-	/** X-Position der Spaltennamen — lässt links Platz für das PK-/FK-Icon. */
+	/** X position of the column names — leaves room on the left for the PK/FK icon. */
 	const COL_TEXT_X = 30;
 
 	// ---------------------------------------------------------------------
-	// Textbreiten: einmalig über ein Canvas gemessen, mit denselben
-	// Schriftgrößen wie die .er-*-Klassen in main.css — nur so stimmen
-	// Kastenbreite und Abschneiden mit dem tatsächlichen Rendering überein.
+	// Text widths: measured once via a canvas, using the same font sizes as the
+	// .er-* classes in main.css — only then do box width and truncation match
+	// the actual rendering.
 	// ---------------------------------------------------------------------
 
 	const measureCtx = /** @type {CanvasRenderingContext2D} */ (document.createElement('canvas').getContext('2d'));
 
-	/** Schrift-Strings für measure() — Familie kommt vom Editor-Body (VS-Code-Theme). */
+	/** Font strings for measure() — the family comes from the editor body (VS Code theme). */
 	function fontSet() {
 		const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
 		return {
@@ -63,6 +63,7 @@
 	}
 
 	/**
+	 * Measures the pixel width of `text` in `font` (cached canvas context).
 	 * @param {string} text
 	 * @param {string} font
 	 */
@@ -72,7 +73,7 @@
 	}
 
 	/**
-	 * Kürzt `text` mit „…“ auf `maxWidth` Pixel (in `font`).
+	 * Truncates `text` with an ellipsis to `maxWidth` pixels (in `font`).
 	 * @param {string} text
 	 * @param {string} font
 	 * @param {number} maxWidth
@@ -89,10 +90,10 @@
 	}
 
 	/**
-	 * Das Schriftzeichen eines Codicons (z. B. "key"), zur Anzeige in SVG-Text
-	 * mit `font-family: codicon`. Aus dem ::before-Inhalt der geladenen
-	 * codicon.css gelesen statt hart kodiert — so bleiben die Codepoints auch
-	 * nach einem Codicon-Update korrekt.
+	 * The glyph of a codicon (e.g. "key"), for display in SVG text with
+	 * `font-family: codicon`. Read from the ::before content of the loaded
+	 * codicon.css instead of being hard-coded — this keeps the code points
+	 * correct across codicon updates.
 	 * @param {string} name
 	 */
 	function codiconChar(name) {
@@ -103,11 +104,12 @@
 		document.body.appendChild(probe);
 		const content = getComputedStyle(probe, '::before').content;
 		probe.remove();
-		// content hat die Form '"…"' — das Zeichen selbst steht in der Mitte.
+		// content has the form '"…"' — the glyph itself sits in the middle.
 		return content && content.length >= 3 ? content.slice(1, -1) : '';
 	}
 
 	/**
+	 * Creates an SVG element with the given attributes.
 	 * @param {string} tag
 	 * @param {Record<string, string | number>} [attrs]
 	 */
@@ -122,6 +124,7 @@
 	}
 
 	/**
+	 * Appends a <title> child, which the browser shows as a native tooltip.
 	 * @param {SVGElement} parent
 	 * @param {string} text
 	 */
@@ -132,16 +135,16 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Automatisches Layout (Sugiyama-Ansatz) — Portierung des Layouts aus dem
-	// MLA-Lineage-Diagramm (lineage_svg.py): Schichtung, Barycenter-Ordnung,
-	// vertikale Relaxation.
+	// Automatic layout (Sugiyama approach) — a port of the layout from the MLA
+	// lineage diagram (lineage_svg.py): layering, barycenter ordering, vertical
+	// relaxation.
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Längster-Pfad-Schichtung: referenzierte (Eltern-)Tabellen links,
-	 * referenzierende (Kind-)Tabellen rechts. `layoutEdges` zeigen dafür von
-	 * der Eltern- zur Kind-Tabelle. Zyklen (über von Hand gebaute TOML
-	 * möglich) brechen auf Schicht 0 ab.
+	 * Longest-path layering: referenced (parent) tables on the left, referencing
+	 * (child) tables on the right. `layoutEdges` therefore point from the parent
+	 * to the child table. Cycles (possible with hand-written TOML) fall back to
+	 * layer 0.
 	 * @param {{src:string,tgt:string}[]} layoutEdges
 	 * @param {string[]} tables
 	 * @returns {Map<string, number>}
@@ -162,6 +165,7 @@
 		/** @type {Map<string, number>} */
 		const layers = new Map();
 		/**
+		 * Layer of one table = 1 + the maximum layer of its parents (memoized).
 		 * @param {string} table
 		 * @param {Set<string>} path
 		 * @returns {number}
@@ -194,9 +198,9 @@
 	}
 
 	/**
-	 * Positionen aller Kästen: Schichten von links nach rechts, innerhalb
-	 * jeder Schicht per Barycenter-Sweeps sortiert (weniger Kreuzungen) und
-	 * anschließend vertikal in Richtung der Nachbarn relaxiert.
+	 * Positions of all boxes: layers from left to right, ordered inside each
+	 * layer by barycenter sweeps (fewer crossings) and then relaxed vertically
+	 * towards their neighbours.
 	 * @param {{src:string,tgt:string}[]} layoutEdges
 	 * @param {string[]} tables
 	 * @param {Map<string, number>} heights
@@ -218,10 +222,11 @@
 		}
 		const levels = [...byLayer.keys()].sort((a, b) => a - b);
 
-		// Gewichtete Nachbarschaft: Anzahl Spalten-Kanten zwischen zwei Tabellen.
+		// Weighted adjacency: the number of column edges between two tables.
 		/** @type {Map<string, Map<string, number>>} */
 		const neighbors = new Map();
 		/**
+		 * Records one edge between `a` and `b` in the (symmetric) adjacency map.
 		 * @param {string} a
 		 * @param {string} b
 		 */
@@ -240,7 +245,7 @@
 			}
 		}
 
-		// Kreuzungsminimierung: abwechselnde Barycenter-Sweeps.
+		// Crossing minimization: alternating barycenter sweeps.
 		/** @type {Map<string, number>} */
 		const order = new Map();
 		for (const level of levels) {
@@ -251,7 +256,7 @@
 			const sweepLevels = sweep % 2 ? [...levels].reverse() : levels;
 			for (const level of sweepLevels) {
 				const list = /** @type {string[]} */ (byLayer.get(level));
-				/** @param {string} table */
+				/** Barycenter of a table = mean order index of its neighbours. @param {string} table */
 				const barycenter = (table) => {
 					const map = neighbors.get(table);
 					let weighted = 0;
@@ -274,7 +279,7 @@
 			}
 		}
 
-		// Vertikale Startpositionen: einfache Stapelung in Sweep-Reihenfolge.
+		// Vertical starting positions: simple stacking in sweep order.
 		/** @type {Map<string, number>} */
 		const y = new Map();
 		for (const level of levels) {
@@ -285,8 +290,8 @@
 			}
 		}
 
-		// Relaxation: jeden Kasten Richtung Mittelwert seiner Nachbarn ziehen,
-		// Reihenfolge und Mindestabstand innerhalb der Schicht erhalten.
+		// Relaxation: pull every box towards the mean of its neighbours while
+		// preserving order and minimum spacing inside the layer.
 		for (let iteration = 0; iteration < 8; iteration++) {
 			for (const level of levels) {
 				const list = /** @type {string[]} */ (byLayer.get(level));
@@ -315,7 +320,7 @@
 					cursor = next + /** @type {number} */ (heights.get(table)) + GAP_Y;
 				});
 			}
-			// Gemeinsames Abdriften nach unten wieder ausgleichen.
+			// Compensate for the whole layer drifting downwards.
 			const shift = Math.min(...y.values()) - PAD;
 			if (shift > 0) {
 				for (const table of y.keys()) {
@@ -345,12 +350,12 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Zeichnen
+	// Drawing
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Kubische Bézier-Kante zwischen zwei Ankern; `dir` gibt je Seite an, in
-	 * welche Richtung die Kurve aus dem Kasten austritt (+1 rechts, -1 links).
+	 * Cubic Bézier edge between two anchors; `dir` states, per side, in which
+	 * direction the curve leaves the box (+1 right, -1 left).
 	 * @param {number} x1 @param {number} y1 @param {number} dir1
 	 * @param {number} x2 @param {number} y2 @param {number} dir2
 	 */
@@ -360,7 +365,7 @@
 	}
 
 	/**
-	 * Punkt der kubischen Bézier-Kurve bei t=0,5 — Position der Kanten-Beschriftung.
+	 * Point of the cubic Bézier curve at t=0.5 — the position of the edge label.
 	 * @param {number} x1 @param {number} y1 @param {number} dir1
 	 * @param {number} x2 @param {number} y2 @param {number} dir2
 	 */
@@ -374,7 +379,7 @@
 		};
 	}
 
-	/** Pfeilspitzen-Marker (normal + hervorgehoben) — Farben über CSS (siehe main.css). */
+	/** Arrowhead markers (normal + highlighted) — colours via CSS (see main.css). */
 	function buildDefs() {
 		const defs = svgEl('defs');
 		for (const id of ['er-arrow', 'er-arrow-hot']) {
@@ -394,8 +399,8 @@
 	}
 
 	/**
-	 * Zeichnet das komplette Diagramm und liefert das fertige Element für den
-	 * Tab-Inhalt: Legende plus horizontal scrollbares SVG.
+	 * Draws the complete diagram and returns the finished element for the tab
+	 * content: legend plus a horizontally scrollable SVG.
 	 * @param {ProjectDiagram} diagram
 	 * @param {DiagramOptions} options
 	 */
@@ -405,10 +410,10 @@
 		const iconChars = { key: codiconChar('key'), references: codiconChar('references') };
 
 		/**
-		 * Anzeige-Text der Datensatzanzahl eines Kastens: bevorzugt die echte
-		 * Anzahl aus dem letzten Generator-Lauf ("812"), sonst die berechnete
-		 * Von/Bis-Anzahl ("100..300") bzw. der konfigurierte Wert; leer ohne
-		 * Angabe. @param {DiagramTable} table
+		 * Display text of a box's record count: preferably the real count from
+		 * the last generator run ("812"), otherwise the estimated min/max count
+		 * ("100..300") or the configured value; empty when nothing is known.
+		 * @param {DiagramTable} table
 		 */
 		function recordsText(table) {
 			if (table.lastRunRecords !== undefined) {
@@ -423,8 +428,8 @@
 			return /^\d+$/.test(raw) ? formatNumber(Number(raw)) : raw;
 		}
 
-		// Zeitpunkt des letzten Laufs, formatiert in der Webview-Sprache — für
-		// die Tooltips der Zähler mit echten Anzahlen.
+		// Time of the last run, formatted in the webview language — for the
+		// tooltips of counters showing real counts.
 		const lastRunText = diagram.lastRunAt
 			? new Intl.DateTimeFormat(document.documentElement.lang === 'de' ? 'de-DE' : 'en-US', {
 					dateStyle: 'short',
@@ -432,7 +437,7 @@
 				}).format(new Date(diagram.lastRunAt))
 			: '';
 
-		// --- Kastenbreite aus den Inhalten ableiten (einheitlich für alle) ---
+		// --- Derive the box width from the contents (uniform for all boxes) ---
 		let needed = MIN_BOX_W;
 		for (const table of diagram.tables) {
 			const pillW = recordsText(table) ? measure(recordsText(table), fonts.pill) + 16 : 0;
@@ -447,7 +452,7 @@
 		}
 		const boxW = Math.min(MAX_BOX_W, Math.ceil(needed));
 
-		// --- Layout: Kanten für die Schichtung zeigen Eltern -> Kind ---
+		// --- Layout: edges used for layering point parent -> child ---
 		const labels = diagram.tables.map((table) => table.label);
 		const layoutEdges = diagram.edges.map((edge) => ({ src: edge.toTable, tgt: edge.fromTable }));
 		/** @type {Map<string, number>} */
@@ -457,8 +462,8 @@
 		}
 		const { pos, width, height } = layout(layoutEdges, labels, heights, boxW);
 
-		// --- Zeilen-Anker der Spalten (für spaltengenaue Kanten) ---
-		/** @type {Map<string, number>} `label|spalte` -> Zeilen-Index */
+		// --- Row anchors of the columns (for column-precise edges) ---
+		/** @type {Map<string, number>} `label|column` -> row index */
 		const rowIndex = new Map();
 		/** @type {Map<string, DiagramTable>} */
 		const byLabel = new Map();
@@ -467,7 +472,7 @@
 			table.columns.forEach((column, index) => rowIndex.set(`${table.label}|${column.name}`, index));
 		}
 		/**
-		 * Y-Anker einer Spalte (Zeilenmitte) — ohne (gefundene) Spalte die Kopfmitte.
+		 * Y anchor of a column (row centre) — the header centre if the column was not found.
 		 * @param {string} label
 		 * @param {string} column
 		 */
@@ -486,7 +491,7 @@
 		});
 		svg.appendChild(buildDefs());
 
-		// --- Kanten (unter den Kästen) ---
+		// --- Edges (drawn beneath the boxes) ---
 		const edgeLayer = svgEl('g');
 		svg.appendChild(edgeLayer);
 		/** @type {{group: SVGElement, path: SVGElement, from: string, to: string}[]} */
@@ -497,15 +502,15 @@
 			if (!childPos || !parentPos) {
 				continue;
 			}
-			// Anker auf den einander zugewandten Seiten; bei gleicher Schicht
-			// (Zyklus-Notfall) beide rechts als Schleife.
+			// Anchors on the sides facing each other; within the same layer (the
+			// cycle fallback) both on the right, drawn as a loop.
 			let x1;
 			let dir1;
 			let x2;
 			let dir2;
 			if (childPos.x > parentPos.x) {
-				// Normalfall: Eltern-Tabelle liegt links — Kante verlässt das
-				// Kind links und trifft die Eltern-Tabelle rechts.
+				// Normal case: the parent table is on the left — the edge leaves
+				// the child on its left and meets the parent on its right.
 				x1 = childPos.x;
 				dir1 = -1;
 				x2 = parentPos.x + boxW;
@@ -526,8 +531,8 @@
 
 			const group = svgEl('g', { class: 'er-edge-group' });
 			const d = edgePath(x1, y1, dir1, x2, y2, dir2);
-			// Unsichtbarer breiter Zwilling als Hover-Fläche — die sichtbare
-			// Kante selbst wäre mit 1,6px kaum zu treffen.
+			// An invisible wide twin serves as the hover target — the visible
+			// edge itself would be nearly impossible to hit at 1.6px.
 			group.appendChild(svgEl('path', { class: 'er-edge-hit', d }));
 			const path = svgEl('path', { class: 'er-edge', d, 'marker-end': 'url(#er-arrow)' });
 			group.appendChild(path);
@@ -547,10 +552,10 @@
 			edgeItems.push({ group, path, from: edge.fromTable, to: edge.toTable });
 		}
 
-		// --- Hervorheben: Kasten-Hover zeigt seine Kanten, dimmt den Rest ---
+		// --- Highlighting: hovering a box reveals its edges and dims the rest ---
 		/** @type {Map<string, SVGElement>} */
 		const tableGroups = new Map();
-		/** @param {string | null} label */
+		/** Highlights one table and its edges; `null` resets the highlight. @param {string | null} label */
 		function highlight(label) {
 			/** @type {Set<string>} */
 			const connected = new Set();
@@ -572,13 +577,13 @@
 			}
 		}
 
-		// --- Kästen ---
+		// --- Boxes ---
 		const accentByPrefix = new Map();
 		for (const table of diagram.tables) {
 			const position = /** @type {{x:number,y:number}} */ (pos.get(table.label));
 			const boxH = /** @type {number} */ (heights.get(table.label));
 
-			// Akzentfarbe je oberstem Schema-Segment (stabil über die Kästen hinweg).
+			// Accent colour per top-level schema segment (stable across boxes).
 			const prefix = table.schema ? table.schema.split('.')[0] : '';
 			if (!accentByPrefix.has(prefix)) {
 				accentByPrefix.set(prefix, accentByPrefix.size % 6);
@@ -597,8 +602,8 @@
 			group.appendChild(svgEl('rect', { class: 'er-box', width: boxW, height: boxH, rx: 8 }));
 			group.appendChild(svgEl('rect', { class: 'er-head', width: boxW, height: HEAD_H, rx: 8 }));
 			if (table.columns.length > 0) {
-				// Untere Rundung des Kopf-Rechtecks wieder eckig machen — nur der
-				// Kasten selbst hat unten runde Ecken.
+				// Square off the bottom corners of the header rectangle again —
+				// only the box itself has rounded corners at the bottom.
 				group.appendChild(svgEl('rect', { class: 'er-head', y: HEAD_H - 10, width: boxW, height: 10 }));
 			}
 			group.appendChild(svgEl('rect', { class: `er-stripe er-accent-${accent}`, y: HEAD_H - 2, width: boxW, height: 2 }));
@@ -617,8 +622,8 @@
 
 			if (pillText) {
 				const pillGroup = svgEl('g', { class: 'er-pill-group' });
-				// Konfigurierter Wert als Text — bei referenzierten Tabellen samt
-				// „je Datensatz von …“, sonst die feste Anzahl.
+				// The configured value as text — for referenced tables including
+				// "per record of …", otherwise the fixed count.
 				const configured = table.records
 					? table.secondary
 						? `${table.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', table.referencedTable || '')}`
@@ -667,7 +672,7 @@
 				}
 				const row = svgEl('g', { class: 'er-col' + (column.hidden ? ' er-col-hidden' : '') });
 
-				// Tooltip der Zeile: Name (Typ) plus PK-/FK-Erklärung.
+				// Tooltip of the row: name (type) plus the PK/FK explanation.
 				const lines = [`${column.name}${column.type ? ` (${column.type})` : ''}`];
 				if (column.pk) {
 					lines.push(strings.diagramLegendPk);
@@ -682,8 +687,8 @@
 				}
 				appendTitle(row, lines.join('\n'));
 
-				// PK-/FK-Icon (dieselben Codicons wie die Legende); PK gewinnt bei
-				// Brücken-Spalten, die beides sind.
+				// PK/FK icon (the same codicons as in the legend); PK wins for
+				// bridge columns that are both.
 				const iconChar = column.pk ? iconChars.key : column.fk ? iconChars.references : '';
 				if (iconChar) {
 					const icon = svgEl('text', {
@@ -727,7 +732,7 @@
 			svg.appendChild(group);
 		}
 
-		// Einzelne Kante unterm Zeiger ebenfalls hervorheben.
+		// Highlight an individual edge under the pointer as well.
 		for (const item of edgeItems) {
 			item.group.addEventListener('mouseenter', () => {
 				item.group.classList.add('er-hot');
@@ -739,13 +744,14 @@
 			});
 		}
 
-		// --- Legende + scrollbarer Diagramm-Bereich ---
+		// --- Legend + scrollable diagram area ---
 		const wrap = document.createElement('div');
 		wrap.className = 'er-wrap';
 
 		const legend = document.createElement('div');
 		legend.className = 'er-legend';
 		/**
+		 * One legend entry: codicon plus explanatory text.
 		 * @param {string} icon
 		 * @param {string} text
 		 * @param {string} iconClass
@@ -782,6 +788,6 @@
 		return wrap;
 	}
 
-	// @ts-ignore — bewusst als globales Modul für project.js (Webviews sind ungebündelt).
+	// @ts-ignore — deliberately exposed as a global module for project.js (webviews are unbundled).
 	window.DatenschmiedeDiagram = { renderErDiagram };
 })();

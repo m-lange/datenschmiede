@@ -6,11 +6,13 @@ import { TableEntry, buildTableEntry, readFileText } from './table/repository';
 import { GeneratorEntry, buildGeneratorEntry } from './generator/repository';
 import { LookupEntry, buildLookupEntry } from './lookup/repository';
 
-/** Alle Dateitypen dieser Extension, die der Index beobachtet. */
+/** Every file type of this extension that the index watches. */
 const WATCH_PATTERN = '**/*.{td,tdproject,lkp,tdgen}';
 
-/** Dateiart nach Endung — für gezielte Benachrichtigung der Abnehmer. */
+/** File kind derived from the extension — lets consumers be notified selectively. */
 export type IndexedFileKind = 'td' | 'tdgen' | 'lkp' | 'tdproject';
+
+/** Maps a URI to its indexed file kind, or `null` for unrelated files. */
 
 function kindOf(uri: vscode.Uri): IndexedFileKind | null {
 	const path = uri.path;
@@ -29,19 +31,20 @@ function kindOf(uri: vscode.Uri): IndexedFileKind | null {
 	return null;
 }
 
-/** Eine `.tdproject`-Datei im Workspace — Gegenstück zu TableEntry für Projekte (nur von den Diagnostics benötigt). */
+/** A `.tdproject` file in the workspace — the project counterpart to TableEntry (only needed by the diagnostics). */
 export interface ProjectEntry {
 	uri: vscode.Uri;
-	/** Workspace-relativer Pfad (POSIX-Trenner), via `vscode.workspace.asRelativePath`. */
+	/** Workspace-relative path (POSIX separators), via `vscode.workspace.asRelativePath`. */
 	relativePath: string;
-	/** Rohtext zum Zeitpunkt des Einlesens. */
+	/** Raw text at the time it was read. */
 	text: string;
-	/** Geparstes Projekt, oder `null`, wenn die Datei kein gültiges TOML enthält (oder nicht lesbar war). */
+	/** The parsed project, or `null` if the file is not valid TOML (or could not be read). */
 	project: Project | null;
-	/** Der Parse-Fehler samt Position, falls das TOML kaputt ist (nicht gesetzt bei Lese-Fehlern). */
+	/** The parse error including its position if the TOML is broken (unset for read errors). */
 	error: ParseError | null;
 }
 
+/** Parses one `.tdproject` file into a {@link ProjectEntry}, capturing parse errors instead of throwing. */
 function buildProjectEntry(uri: vscode.Uri, relativePath: string, text: string | null): ProjectEntry {
 	if (text === null) {
 		return { uri, relativePath, text: '', project: null, error: null };
@@ -54,7 +57,7 @@ function buildProjectEntry(uri: vscode.Uri, relativePath: string, text: string |
 	}
 }
 
-/** Ein vollständiger, in sich konsistenter Stand aller Datenschmiede-Dateien des Workspace. */
+/** A complete, internally consistent view of every Datenschmiede file in the workspace. */
 export interface WorkspaceSnapshot {
 	tables: TableEntry[];
 	generators: GeneratorEntry[];
@@ -63,23 +66,21 @@ export interface WorkspaceSnapshot {
 }
 
 /**
- * Gemeinsamer Workspace-Index für alle `.td`-, `.tdgen`-, `.lkp`- und
- * `.tdproject`-Dateien: EIN Watcher-Satz, EIN (gebündelter, debouncter)
- * Änderungs-Event und EIN gecachter Einlese-Stand (Rohtext + geparstes
- * Modell je Datei) — statt dass Diagnostics, Table Editor und Projekt-Editor
- * jeweils eigene Watcher halten und den Workspace unabhängig voneinander
- * mehrfach neu einlesen.
+ * Shared workspace index for all `.td`, `.tdgen`, `.lkp` and `.tdproject`
+ * files: ONE set of watchers, ONE (batched, debounced) change event and ONE
+ * cached read (raw text + parsed model per file) — instead of diagnostics,
+ * table editor and project editor each keeping their own watchers and
+ * re-reading the workspace independently.
  *
- * Getriggert wird die Invalidierung von Datei-Änderungen auf der Festplatte
- * (Watcher), von Eingaben in offenen Editoren (onDidChangeTextDocument —
- * gelesen wird immer der aktuelle Buffer-Stand, siehe readFileText) und vom
- * Schließen eines Editors (zurück zum Festplatten-Stand). `snapshot()`
- * liest bei Bedarf neu ein; solange nichts invalidiert wurde, teilen sich
- * alle Aufrufer denselben Stand.
+ * Invalidation is triggered by file changes on disk (watcher), by typing in
+ * open editors (onDidChangeTextDocument — the current buffer contents are
+ * always what gets read, see readFileText) and by closing an editor (back to
+ * the on-disk state). `snapshot()` re-reads on demand; as long as nothing has
+ * been invalidated, all callers share the same state.
  */
 export class WorkspaceIndex implements vscode.Disposable {
 	private readonly emitter = new vscode.EventEmitter<ReadonlySet<IndexedFileKind>>();
-	/** Feuert (debounced) nach Änderungen an Index-Dateien — mit den betroffenen Dateiarten seit dem letzten Event. */
+	/** Fires (debounced) after indexed files change — carrying the file kinds affected since the last event. */
 	public readonly onDidChange = this.emitter.event;
 
 	private readonly disposables: vscode.Disposable[] = [];
@@ -111,8 +112,8 @@ export class WorkspaceIndex implements vscode.Disposable {
 	}
 
 	/**
-	 * Aktueller Einlese-Stand — gecacht bis zur nächsten Invalidierung;
-	 * parallele Aufrufer teilen sich denselben (laufenden) Einlese-Vorgang.
+	 * The current read state — cached until the next invalidation; concurrent
+	 * callers share the same (in-flight) read.
 	 */
 	public snapshot(): Promise<WorkspaceSnapshot> {
 		if (!this.snapshotPromise) {
@@ -121,7 +122,7 @@ export class WorkspaceIndex implements vscode.Disposable {
 		return this.snapshotPromise;
 	}
 
-	/** Cache verwerfen und die Abnehmer (debounced) benachrichtigen. */
+	/** Drops the cache and notifies consumers (debounced). */
 	private invalidate(kind: IndexedFileKind | null): void {
 		if (!kind) {
 			return;
@@ -131,8 +132,8 @@ export class WorkspaceIndex implements vscode.Disposable {
 		if (this.notifyTimer) {
 			clearTimeout(this.notifyTimer);
 		}
-		// Debounced, damit z. B. Tippen in einem offenen Editor nicht bei jedem
-		// Anschlag alle Abnehmer den Workspace neu verarbeiten lässt.
+		// Debounced so that, for example, typing in an open editor does not make
+		// every consumer reprocess the workspace on each keystroke.
 		this.notifyTimer = setTimeout(() => {
 			this.notifyTimer = undefined;
 			const kinds = new Set(this.pendingKinds);
@@ -141,12 +142,12 @@ export class WorkspaceIndex implements vscode.Disposable {
 		}, 400);
 	}
 
-	/** Liest alle Index-Dateien mit EINEM findFiles-Durchlauf neu ein (parallel gelesen, Ergebnis in stabiler Pfad-Reihenfolge). */
+	/** Re-reads all indexed files with ONE findFiles pass (read in parallel, result in stable path order). */
 	private async load(): Promise<WorkspaceSnapshot> {
 		const uris = await vscode.workspace.findFiles(WATCH_PATTERN, '**/node_modules/**');
-		// Stabile Reihenfolge, damit „erster Treffer gewinnt“-Deduplizierungen
-		// (doppelte logische Namen, siehe toTableOptions & Co.) über Snapshots
-		// hinweg dieselbe Datei wählen — findFiles garantiert keine Ordnung.
+		// Stable ordering so that "first match wins" deduplication (duplicate
+		// logical names, see toTableOptions and friends) picks the same file
+		// across snapshots — findFiles guarantees no particular order.
 		const read = await Promise.all(
 			uris.map(async (uri) => ({
 				uri,

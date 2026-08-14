@@ -8,24 +8,24 @@ import { readFileText } from '../table/repository';
 import { ParseError } from '../tomlUtil';
 
 /**
- * Eine `.tdgen`-Datei im Workspace, roh eingelesen und geparst — Gegenstück
- * zu TableEntry in table/repository.ts für benutzerdefinierte Generatoren.
+ * A `.tdgen` file in the workspace, read raw and parsed — the custom generator
+ * counterpart to TableEntry in table/repository.ts.
  */
 export interface GeneratorEntry {
 	uri: vscode.Uri;
-	/** Workspace-relativer Pfad (POSIX-Trenner), via `vscode.workspace.asRelativePath`. */
+	/** Workspace-relative path (POSIX separators), via `vscode.workspace.asRelativePath`. */
 	relativePath: string;
-	/** Rohtext zum Zeitpunkt des Einlesens — für Diagnostics ohne erneutes Lesen/Parsen. */
+	/** Raw text at the time it was read — lets diagnostics work without reading/parsing again. */
 	text: string;
-	/** Geparster Generator, oder `null`, wenn die Datei kein gültiges TOML enthält (oder nicht lesbar war). */
+	/** The parsed generator, or `null` if the file is not valid TOML (or could not be read). */
 	file: GeneratorFile | null;
-	/** Der Parse-Fehler samt Position, falls das TOML kaputt ist (nicht gesetzt bei Lese-Fehlern). */
+	/** The parse error including its position if the TOML is broken (unset for read errors). */
 	error: ParseError | null;
-	/** Aufgelöster Generator (nur wenn `file` lesbar ist und einen Namen hat). */
+	/** The resolved generator (only when `file` is readable and has a name). */
 	generator: CustomGenerator | null;
 }
 
-/** Baut den Eintrag einer `.tdgen`-Datei aus ihrem Rohtext (`text: null` = nicht lesbar) — siehe buildTableEntry. */
+/** Builds the entry for a `.tdgen` file from its raw text (`text: null` = unreadable) — see buildTableEntry. */
 export function buildGeneratorEntry(uri: vscode.Uri, relativePath: string, text: string | null): GeneratorEntry {
 	if (text === null) {
 		return { uri, relativePath, text: '', file: null, error: null, generator: null };
@@ -41,11 +41,11 @@ export function buildGeneratorEntry(uri: vscode.Uri, relativePath: string, text:
 }
 
 /**
- * Liest und parst alle `.tdgen`-Dateien im Workspace ein — wie
- * table/repository.ts#listTables inklusive der noch ungesicherten Inhalte
- * offener Editoren; Dateien mit kaputtem TOML bleiben (mit `file: null`) in
- * der Liste. Für die laufend benötigten Listen hält der Workspace-Index
- * (src/workspaceIndex.ts) einen gemeinsamen Cache.
+ * Reads and parses every `.tdgen` file in the workspace — like
+ * table/repository.ts#listTables including the unsaved contents of open
+ * editors; files with broken TOML stay in the list (with `file: null`). For the
+ * lists needed continuously, the workspace index (src/workspaceIndex.ts) keeps
+ * a shared cache.
  */
 export async function listGenerators(): Promise<GeneratorEntry[]> {
 	const uris = await vscode.workspace.findFiles('**/*.tdgen', '**/node_modules/**');
@@ -59,11 +59,11 @@ export async function listGenerators(): Promise<GeneratorEntry[]> {
 }
 
 /**
- * Verdichtet Workspace-Einträge zur vollständigen Generator-Liste
- * (eingebaute zuerst, danach die benutzerdefinierten nach Name sortiert;
- * Duplikate — zwei Dateien mit demselben Namen — werden auf den ersten
- * Treffer reduziert). Grundlage für Generator-Auswahl und Validierung im
- * Table Editor sowie die Plan-Erstellung des Generator-Laufs.
+ * Condenses workspace entries into the complete generator list (built-in ones
+ * first, then the custom ones sorted by name; duplicates — two files with the
+ * same name — collapse to the first match). Basis for the generator picker and
+ * validation in the table editor as well as for building the generator run's
+ * plan.
  */
 export function toGeneratorList(entries: GeneratorEntry[]): GeneratorBase[] {
 	const customs = new Map<string, CustomGenerator>();

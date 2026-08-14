@@ -17,41 +17,40 @@ import { customGeneratorName, isCustomGeneratorId } from './generator/custom';
 import { parametersFromBody } from './generator/notebookCells';
 import { ProjectEntry, WorkspaceIndex } from './workspaceIndex';
 
-/** Eine geprüfte `.td`-Datei: Eintrag aus dem Index plus abgeleitete Zeilen-Infos und die (noch erweiterbare) Diagnostics-Liste. */
+/** A checked `.td` file: the index entry plus derived line info and the (still growing) diagnostics list. */
 interface TableCheck {
 	entry: TableEntry;
 	lines: string[];
-	/** Zeilenpositionen der `[[columns]]`-Blöcke — einmal je Datei berechnet, von Grund- und Python-Prüfung gemeinsam genutzt. */
+	/** Line positions of the `[[columns]]` blocks — computed once per file, shared by the basic and the Python checks. */
 	columnLines: ColumnLineInfo[];
 	diagnostics: vscode.Diagnostic[];
 }
 
-/** Eine geprüfte `.tdgen`-Datei — Gegenstück zu TableCheck. */
+/** A checked `.tdgen` file — the counterpart to TableCheck. */
 interface GeneratorCheck {
 	entry: GeneratorEntry;
 	lines: string[];
 	diagnostics: vscode.Diagnostic[];
 }
 
-/** Ergebnis der gebündelten Python-Prüfung (siehe runPythonCodeChecks). */
+/** Result of the batched Python check (see runPythonCodeChecks). */
 interface PythonCheckResult {
 	syntax: { id: number; cell: string; line: number; message: string }[];
 	validations: { id: number; messages: string[] }[];
 }
 
 /**
- * Workspace-weite Hintergrund-Prüfung: validiert *alle* `.td`-, `.tdproject`-,
- * `.lkp`- und `.tdgen`-Dateien des Workspace und trägt Probleme in die
- * Problems-Ansicht ein — auch für Dateien, die in keinem Editor geöffnet
- * sind. Die früher in den vier Editor-Providern verstreute Diagnostics-Logik
- * lebt jetzt ausschließlich hier (eine Quelle, keine doppelten Meldungen);
- * die Webviews zeigen dieselben Regeln weiterhin direkt am Feld an.
+ * Workspace-wide background validation: validates *all* `.td`, `.tdproject`,
+ * `.lkp` and `.tdgen` files of the workspace and reports problems in the
+ * Problems view — including files that are not open in any editor. The
+ * diagnostics logic that used to be scattered across the four editor providers
+ * now lives here exclusively (one source, no duplicate messages); the webviews
+ * still surface the same rules inline on the respective field.
  *
- * Eingelesen wird nichts mehr selbst: der gemeinsame Workspace-Index
- * (src/workspaceIndex.ts) liefert Rohtext und geparste Modelle aller Dateien
- * und meldet (debounced) jede Änderung — von Datei-Änderungen auf der
- * Festplatte über Eingaben in offenen Editoren bis zum Schließen eines
- * Editors.
+ * Nothing is read here directly: the shared workspace index
+ * (src/workspaceIndex.ts) supplies raw text and parsed models for all files and
+ * reports (debounced) every change — from file changes on disk through typing
+ * in open editors to closing an editor.
  */
 export class WorkspaceDiagnostics implements vscode.Disposable {
 	public static register(_context: vscode.ExtensionContext, index: WorkspaceIndex): vscode.Disposable {
@@ -60,13 +59,13 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 
 	private readonly collection = vscode.languages.createDiagnosticCollection('datenschmiede');
 	private readonly changeSub: vscode.Disposable;
-	/** Reentranz-Schutz: läuft bereits ein Scan, wird höchstens ein weiterer vorgemerkt. */
+	/** Reentrancy guard: while a scan is running, at most one further scan is queued. */
 	private refreshing = false;
 	private refreshQueued = false;
 
 	constructor(private readonly index: WorkspaceIndex) {
 		this.changeSub = index.onDidChange(() => void this.refreshAll());
-		// Initialer Scan direkt beim Aktivieren.
+		// Initial scan right on activation.
 		void this.refreshAll();
 	}
 
@@ -75,6 +74,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		this.changeSub.dispose();
 	}
 
+	/** Re-validates the entire workspace and replaces the diagnostic collection wholesale. */
 	private async refreshAll(): Promise<void> {
 		if (this.refreshing) {
 			this.refreshQueued = true;
@@ -107,11 +107,10 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				this.checkGenerator(check);
 			}
 
-			// Python-Prüfungen der Code-Zellen (gebündelt in einem einzigen
-			// Python-Aufruf): Syntaxfehler je .tdgen plus die eigene
-			// validate-Prüfung jedes Generators für jede Spalte, die ihn
-			// verwendet — hängt Warnungen an die bereits gesammelten
-			// Diagnostics der jeweiligen Datei an.
+			// Python checks of the code cells (batched into a single Python
+			// invocation): syntax errors per .tdgen plus each generator's own
+			// validate check for every column that uses it — appends warnings to
+			// the diagnostics already collected for the respective file.
 			await this.runPythonCodeChecks(generatorChecks, tableChecks);
 
 			const results: [vscode.Uri, vscode.Diagnostic[]][] = [];
@@ -128,7 +127,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				results.push([entry.uri, this.checkProject(entry, snapshot.tables)]);
 			}
 
-			// Kompletter Austausch: entfernt auch Einträge gelöschter Dateien.
+			// Full replacement: also drops entries for files that were deleted.
 			this.collection.clear();
 			this.collection.set(results);
 		} finally {
@@ -141,15 +140,16 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	// ------------------------------------------------------------------
-	// Bausteine
+	// Building blocks
 	// ------------------------------------------------------------------
 
-	/** Range einer 0-basierten Zeile im Rohtext (geklemmt auf gültige Zeilen). */
+	/** Range of a 0-based line in the raw text (clamped to valid lines). */
 	private lineRange(lines: string[], line: number): vscode.Range {
 		const index = Math.min(Math.max(0, line), Math.max(0, lines.length - 1));
 		return new vscode.Range(index, 0, index, lines[index]?.length ?? 0);
 	}
 
+	/** Creates a diagnostic tagged with this extension's source and the given rule code. */
 	private diagnostic(range: vscode.Range, message: string, code: string, warning: boolean): vscode.Diagnostic {
 		const diagnostic = new vscode.Diagnostic(
 			range,
@@ -161,7 +161,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		return diagnostic;
 	}
 
-	/** Syntaxfehler (kaputtes TOML/CSV) an seiner Position — aus dem im Index-Eintrag festgehaltenen Parse-Fehler. */
+	/** Syntax error (broken TOML/CSV) at its position — derived from the parse error recorded in the index entry. */
 	private parseErrorDiagnostics(err: ParseError, lines: string[]): vscode.Diagnostic[] {
 		if (err.line !== undefined && err.column !== undefined) {
 			const lineIndex = Math.min(Math.max(0, err.line - 1), Math.max(0, lines.length - 1));
@@ -174,9 +174,10 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	// ------------------------------------------------------------------
-	// .td — Tabellendefinitionen
+	// .td — table definitions
 	// ------------------------------------------------------------------
 
+	/** Validates one table file and appends its diagnostics to {@link TableCheck.diagnostics}. */
 	private checkTable(
 		check: TableCheck,
 		ctx: {
@@ -193,7 +194,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		}
 		const table = entry.table;
 		if (!table) {
-			// Nicht lesbare Datei — dafür gibt es keine sinnvolle Meldung im Text.
+			// Unreadable file — there is no meaningful position in the text to report.
 			return;
 		}
 
@@ -206,9 +207,9 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			);
 		}
 
-		// Zyklische Referenzen: über FK-/Generator-Ketten zwischen Tabellen
-		// bzw. zwischen den Spalten dieser Tabelle — dann lässt sich keine
-		// Generier-Reihenfolge auflösen.
+		// Circular references: via FK/generator chains between tables, or between
+		// the columns of this table — in either case no generation order can be
+		// resolved.
 		const ownLabel = `${table.schema.trim() ? `${table.schema.trim()}.` : ''}${table.name.trim()}`;
 		if (table.name.trim()) {
 			const cycle = findTableCycle(ownLabel, ctx.edges);
@@ -244,6 +245,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		}
 	}
 
+	/** Turns a validation {@link Issue} into the localized message shown in the Problems view. */
 	private formatTableIssueMessage(issue: Issue): string {
 		const label = issue.columnName.trim() || vscode.l10n.t('column {0}', issue.columnIndex + 1);
 		switch (issue.kind) {
@@ -327,9 +329,10 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	// ------------------------------------------------------------------
-	// .tdproject — Testdatenprojekte
+	// .tdproject — test data projects
 	// ------------------------------------------------------------------
 
+	/** Validates one project file (record counts, missing table files). */
 	private checkProject(entry: ProjectEntry, tableEntries: TableEntry[]): vscode.Diagnostic[] {
 		const lines = entry.text.split('\n');
 		if (entry.error) {
@@ -354,6 +357,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		});
 	}
 
+	/** Turns a {@link ProjectIssue} into the localized message shown in the Problems view. */
 	private formatProjectIssueMessage(issue: ProjectIssue): string {
 		switch (issue.kind) {
 			case 'missing-records':
@@ -378,9 +382,10 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	// ------------------------------------------------------------------
-	// .lkp — Nachschlagelisten
+	// .lkp — lookup lists
 	// ------------------------------------------------------------------
 
+	/** Validates one lookup list: every row needs a parseable weight. */
 	private checkLookup(entry: LookupEntry): vscode.Diagnostic[] {
 		const lines = entry.text.split('\n');
 		if (entry.error) {
@@ -412,19 +417,19 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	// ------------------------------------------------------------------
-	// .tdgen — Python-Syntaxprüfung der Code-Zellen
+	// .tdgen — Python syntax check of the code cells
 	// ------------------------------------------------------------------
 
 	/**
-	 * Aufgelöster Interpreter für die Syntaxprüfung. Anders als früher wird
-	 * ein Fehlschlag NICHT für immer gecacht: solange kein Interpreter
-	 * gefunden wurde, wird bei jedem Scan erneut (billig, über die Python-
-	 * Extension-API) nachgefragt — wer Python erst nach dem Start installiert
-	 * oder verknüpft, bekommt die Prüfungen ohne Reload.
+	 * Resolved interpreter for the syntax check. A failure is deliberately NOT
+	 * cached forever: as long as no interpreter has been found, every scan asks
+	 * again (cheap, via the Python extension API) — so installing or selecting
+	 * Python after startup enables the checks without a reload.
 	 */
 	private pythonPath: string | null = null;
 	private resolvingPython: Promise<string | null> | null = null;
 
+	/** Returns the interpreter path, resolving it at most once concurrently. */
 	private getPythonPath(): Promise<string | null> {
 		if (this.pythonPath) {
 			return Promise.resolve(this.pythonPath);
@@ -440,28 +445,28 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	/**
-	 * Eingabe (defs + checks als JSON) und Ergebnis des letzten erfolgreichen
-	 * Python-Laufs: ändert ein Scan weder Generator-Code noch die geprüften
-	 * Spalten-Parameter (der Normalfall beim Tippen in `.td`-Beschreibungen
-	 * o. Ä.), wird das Ergebnis wiederverwendet statt erneut einen
-	 * Python-Prozess zu starten. Die Zeilenpositionen werden ohnehin bei
-	 * jedem Scan gegen den aktuellen Text neu berechnet.
+	 * Input (defs + checks as JSON) and result of the last successful Python
+	 * run: if a scan changes neither the generator code nor the checked column
+	 * parameters (the common case while typing in `.td` descriptions and the
+	 * like), the previous result is reused instead of starting another Python
+	 * process. Line positions are recomputed against the current text on every
+	 * scan anyway.
 	 */
 	private lastPythonPayload = '';
 	private lastPythonFindings: PythonCheckResult = { syntax: [], validations: [] };
 
 	/**
-	 * Gebündelte Python-Prüfung der Code-Zellen (EIN Python-Aufruf für den
-	 * ganzen Workspace):
+	 * Batched Python check of the code cells (ONE Python invocation for the
+	 * whole workspace):
 	 *
-	 * 1. **Syntax**: jeder Zellen-Rumpf jeder `.tdgen`-Datei wird kompiliert
-	 *    (mit derselben Signatur-Umhüllung wie python/generate.py);
-	 *    Syntaxfehler erscheinen als Warnung an der passenden Zeile.
-	 * 2. **Eigene validate-Prüfung**: hat ein Generator eine `validate`-Zelle,
-	 *    wird sie für JEDE Spalte ausgeführt, die den Generator verwendet
-	 *    (mit deren rohen Parameterwerten) — zurückgegebene Warnungs-Texte
-	 *    erscheinen an der Spalte in der `.td`-Datei. Der Code stammt aus dem
-	 *    eigenen Workspace (dieselbe Vertrauensstufe wie der Generator-Lauf).
+	 * 1. **Syntax**: every cell body of every `.tdgen` file is compiled (using
+	 *    the same signature wrapper as python/generate.py); syntax errors show
+	 *    up as a warning on the matching line.
+	 * 2. **Custom validate check**: if a generator has a `validate` cell, it is
+	 *    executed for EVERY column that uses the generator (with that column's
+	 *    raw parameter values) — the returned warning texts are reported on the
+	 *    column in the `.td` file. The code comes from the user's own workspace
+	 *    (the same trust level as an actual generator run).
 	 */
 	private async runPythonCodeChecks(generatorChecks: GeneratorCheck[], tableChecks: TableCheck[]): Promise<void> {
 		interface CodeDef {
@@ -478,7 +483,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		for (const check of generatorChecks) {
 			const generator = check.entry.file;
 			if (!generator) {
-				// Kaputtes TOML wird bereits gemeldet.
+				// Broken TOML is already reported elsewhere.
 				continue;
 			}
 			if (generator.name.trim() && !defIndexByName.has(generator.name.trim())) {
@@ -498,8 +503,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			return;
 		}
 
-		// Spalten einsammeln, deren benutzerdefinierter Generator eine
-		// validate-Zelle hat.
+		// Collect the columns whose custom generator provides a validate cell.
 		interface ValidationCheck {
 			id: number;
 			def_id: number;
@@ -541,8 +545,8 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 
 		let findings: PythonCheckResult;
 		if (payloadJson === this.lastPythonPayload) {
-			// Unveränderte Eingabe -> Ergebnis des letzten Laufs wiederverwenden
-			// (kein Python-Prozess nötig).
+			// Unchanged input -> reuse the previous run's result (no Python
+			// process required).
 			findings = this.lastPythonFindings;
 		} else {
 			const pythonPath = await this.getPythonPath();
@@ -551,7 +555,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			}
 			const outcome = await this.spawnPythonCheck(pythonPath, payloadJson);
 			if (outcome.spawnFailed) {
-				// Interpreter nicht (mehr) startbar -> beim nächsten Scan neu auflösen.
+				// Interpreter can no longer be started -> re-resolve on the next scan.
 				this.pythonPath = null;
 			}
 			if (!outcome.result) {
@@ -567,8 +571,8 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			if (!target) {
 				continue;
 			}
-			// Zeile des `<zelle> = """`-Schlüssels; der Rumpf beginnt in der
-			// Zeile darunter (mehrzeiliger TOML-String, siehe serializeGenerator).
+			// Line of the `<cell> = """` key; the body starts on the line below
+			// it (multi-line TOML string, see serializeGenerator).
 			const keyLine = target.lines.findIndex((line) => new RegExp(`^\\s*${finding.cell}\\s*=`).test(line));
 			const bodyLine = keyLine >= 0 ? keyLine + Math.max(1, finding.line) : 0;
 			target.diagnostics.push(
@@ -603,7 +607,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		}
 	}
 
-	/** Startet den gebündelten Python-Prüflauf; `result: null` bei jedem Fehlschlag (Start, Absturz, unlesbare Ausgabe). */
+	/** Runs the batched Python check; `result: null` on any failure (spawn, crash, unparseable output). */
 	private spawnPythonCheck(
 		pythonPath: string,
 		payloadJson: string,
@@ -676,9 +680,10 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	}
 
 	// ------------------------------------------------------------------
-	// .tdgen — benutzerdefinierte Generatoren
+	// .tdgen — custom generators
 	// ------------------------------------------------------------------
 
+	/** Validates one generator file: name, parameter list and the code cells' contract. */
 	private checkGenerator(check: GeneratorCheck): void {
 		const { entry, lines, diagnostics } = check;
 		if (entry.error) {
@@ -691,7 +696,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		}
 
 		if (!generator.name.trim()) {
-			// Ohne Name ist der Generator nicht referenzierbar (siehe generator/custom.ts).
+			// Without a name the generator cannot be referenced (see generator/custom.ts).
 			diagnostics.push(
 				this.diagnostic(
 					this.lineRange(lines, 0),
@@ -747,10 +752,10 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			);
 		}
 
-		// Die parameters()-Zelle muss ein *Literal* zurückgeben, damit der
-		// Notebook-Serializer daraus die [[parameters]]-Blöcke ableiten kann
-		// (siehe generator/notebookCells.ts) — sonst bleibt die abgeleitete
-		// Liste auf dem letzten gültigen Stand.
+		// The parameters() cell must return a *literal* so the notebook
+		// serializer can derive the [[parameters]] blocks from it (see
+		// generator/notebookCells.ts) — otherwise the derived list stays at its
+		// last valid state.
 		if (generator.code.parameters.trim() && parametersFromBody(generator.code.parameters) === null) {
 			const keyLine = lines.findIndex((line) => /^\s*parameters\s*=/.test(line));
 			diagnostics.push(

@@ -5,15 +5,15 @@ import type { Plan, PlanTable } from './run';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 
 /**
- * Gemeinsame Bausteine für die beiden Aufrufer des Python-Läufers
- * (python/generate.py): der volle Generator-Lauf (project/run.ts) und die
- * Tabellen-Vorschau (table/preview.ts). Hier liegt alles, was beide gleich
- * machen — Plan-Datei schreiben, Prozess starten, JSON-Zeilen-Protokoll
- * lesen, `log`-/`error`-Events behandeln, aufräumen — damit es nicht in
- * beiden Dateien doppelt gepflegt werden muss.
+ * Shared building blocks for the two callers of the Python runner
+ * (python/generate.py): the full generator run (project/run.ts) and the table
+ * preview (table/preview.ts). Everything both do identically lives here —
+ * writing the plan file, starting the process, reading the JSON-lines protocol,
+ * handling `log`/`error` events, cleaning up — so it does not have to be
+ * maintained twice.
  */
 
-/** Ausgabe-Konfiguration einer Tabelle im Plan-Format (Gegenstück zu Table.output, snake_case für Python). */
+/** A table's output configuration in plan format (counterpart to Table.output, snake_case for Python). */
 export function toPlanOutput(table: Table): PlanTable['output'] {
 	return {
 		file_name: table.output.fileName,
@@ -30,7 +30,7 @@ export function toPlanOutput(table: Table): PlanTable['output'] {
 	};
 }
 
-/** Schreibt den Plan als JSON in den globalen Extension-Speicher (kein Teil des Workspace); gelöscht wird er von runPlanProcess. */
+/** Writes the plan as JSON into the extension's global storage (not part of the workspace); runPlanProcess deletes it again. */
 export async function writePlanFile(
 	context: vscode.ExtensionContext,
 	plan: Plan,
@@ -42,46 +42,48 @@ export async function writePlanFile(
 	return planUri;
 }
 
+/** Everything runPlanProcess needs to start and supervise one runner process. */
 export interface PlanProcessOptions {
-	/** Interpreter, mit dem python/generate.py gestartet wird. */
+	/** Interpreter used to start python/generate.py. */
 	pythonPath: string;
 	context: vscode.ExtensionContext;
-	/** Die von writePlanFile geschriebene Plan-Datei — wird nach dem Lauf gelöscht. */
+	/** The plan file written by writePlanFile — deleted once the run finishes. */
 	planUri: vscode.Uri;
-	/** Arbeitsverzeichnis des Läufers (Ordner der Projekt-/Tabellendatei). */
+	/** Working directory of the runner (folder of the project/table file). */
 	cwd: string;
-	/** Abbruch über die VS-Code-Fortschrittsanzeige (nur beim vollen Lauf). */
+	/** Cancellation via the VS Code progress indicator (full run only). */
 	token?: vscode.CancellationToken;
-	/** Zusätzliches Protokoll beim Abbruch (z. B. „Run … cancelled“). */
+	/** Extra log output on cancellation (e.g. "Run … cancelled"). */
 	onCancel?: () => void;
-	/** Formatiert die Notification eines `error`-Events (Details stehen im Output-Channel). */
+	/** Formats the notification for an `error` event (details go to the output channel). */
 	errorMessage: (message: string) => string;
-	/** Alle übrigen Events (table_start, table_done, done, preview, …) — `log` und `error` behandelt der Läufer selbst. */
+	/** All other events (table_start, table_done, done, preview, …) — `log` and `error` are handled by the runner itself. */
 	onEvent: (event: Record<string, unknown>) => void;
 }
 
+/** Outcome of one runner process. */
 export interface PlanProcessResult {
 	code: number | null;
 	cancelled: boolean;
-	/** `true`, wenn bereits eine Fehlermeldung angezeigt wurde (error-Event oder Startfehler) — dann keine zweite zeigen. */
+	/** `true` if an error message was already shown (error event or spawn failure) — do not show a second one. */
 	reportedError: boolean;
 	stderrText: string;
 }
 
 /**
- * Startet python/generate.py mit einer Plan-Datei und übersetzt sein
- * JSON-Zeilen-Protokoll (stdout):
+ * Starts python/generate.py with a plan file and interprets its JSON-lines
+ * protocol (stdout):
  *
- * - `log`-Events (ctx.log(...) aus benutzerdefinierten Generatoren) landen
- *   im Output-Channel „Datenschmiede“, ebenso der komplette stderr.
- * - `error`-Events werden als Notification gemeldet (Wortlaut über
- *   `errorMessage`), inklusive Traceback im Output-Channel; fehlen
- *   Python-Pakete (`missing-packages`), bietet die Notification an, sie
- *   sichtbar in einem Terminal mit genau diesem Interpreter zu installieren.
- * - alles andere geht an `onEvent`.
+ * - `log` events (ctx.log(...) from custom generators) go to the
+ *   "Datenschmiede" output channel, as does the complete stderr.
+ * - `error` events are surfaced as a notification (wording via `errorMessage`),
+ *   with the traceback in the output channel; if Python packages are missing
+ *   (`missing-packages`), the notification offers to install them visibly in a
+ *   terminal using exactly this interpreter.
+ * - everything else is forwarded to `onEvent`.
  *
- * Die Plan-Datei wird am Ende gelöscht; ob danach noch eine „ohne Ergebnis
- * beendet“-Meldung nötig ist, entscheidet der Aufrufer anhand des Ergebnisses.
+ * The plan file is deleted at the end; whether an additional "finished without
+ * a result" message is needed is decided by the caller from the result.
  */
 export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcessResult> {
 	const channel = getOutputChannel();
@@ -113,15 +115,15 @@ export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcess
 			}
 			switch (event.event) {
 				case 'log': {
-					// ctx.log(...) aus (benutzerdefinierten) Generatoren.
+					// ctx.log(...) from (custom) generators.
 					channel.appendLine(`    » ${String(event.message ?? '')}`);
 					break;
 				}
 				case 'error': {
 					reportedError = true;
-					// Vollständige Details (inkl. Python-Traceback) in den
-					// Output-Channel — die Notification bietet dafür
-					// „Details anzeigen“ an.
+					// Full details (including the Python traceback) go to the
+					// output channel — the notification offers "Show Details"
+					// for exactly that.
 					log(`ERROR: ${String(event.message ?? '')}`);
 					if (typeof event.traceback === 'string' && event.traceback.trim()) {
 						channel.appendLine(event.traceback);
@@ -134,9 +136,9 @@ export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcess
 							installLabel,
 						).then((choice) => {
 							if (choice === installLabel) {
-								// Installation bewusst sichtbar in einem Terminal statt
-								// versteckt im Hintergrund — der verwendete Interpreter
-								// wird direkt angesprochen.
+								// Installation deliberately visible in a terminal rather
+								// than hidden in the background — the interpreter in use
+								// is addressed directly.
 								const terminal = vscode.window.createTerminal(vscode.l10n.t('Datenschmiede: Install packages'));
 								terminal.show();
 								terminal.sendText(`& "${options.pythonPath}" -m pip install ${packages}`);
@@ -164,8 +166,8 @@ export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcess
 		child.stderr.on('data', (chunk: Buffer) => {
 			const text = chunk.toString('utf8');
 			stderrText += text;
-			// Python-stderr (Warnungen, unerwartete Ausgaben) landet
-			// vollständig im Output-Channel „Datenschmiede“.
+			// Python stderr (warnings, unexpected output) goes to the
+			// "Datenschmiede" output channel in full.
 			channel.append(text);
 		});
 

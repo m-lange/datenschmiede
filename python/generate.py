@@ -1,29 +1,28 @@
-# Datenschmiede Testdaten-Generator — Python-Laufzeit.
+# Datenschmiede test data generator — Python runtime.
 #
-# Wird vom Extension-Host mit dem Pfad einer Plan-JSON-Datei aufgerufen
-# (siehe src/project/run.ts, dort wird der Plan aus .tdproject/.td/.lkp/
-# .tdgen-Dateien gebaut). Erzeugt fuer jede Tabelle des Plans synthetische
-# Datensaetze — hochgradig vektorisiert ueber numpy/pandas, damit auch grosse
-# Datenmengen schnell entstehen — und schreibt sie als CSV gemaess der
-# Ausgabe-Konfiguration der Tabelle.
+# Invoked by the extension host with the path of a plan JSON file (see
+# src/project/run.ts, where the plan is built from the .tdproject/.td/.lkp/
+# .tdgen files). Produces synthetic records for every table of the plan —
+# heavily vectorized via numpy/pandas so that even large data volumes are
+# generated quickly — and writes them as CSV according to the table's output
+# configuration.
 #
-# Ablauf:
-#   1. Tabellen topologisch sortieren (Fremdschluessel- und
-#      Generator-Referenzen), danach je Tabelle die Spalten — Spalte fuer
-#      Spalte, soweit die Abhaengigkeiten (z. B. Kombinations-Vorlagen) es
-#      erlauben.
-#   2. Zeilenanzahl bestimmen: primaere Tabellen aus der festen Anzahl,
-#      referenzierte Tabellen ueber die Kardinalitaet je Datensatz der
-#      referenzierten Tabelle (die treibende FK-Spalte entsteht dabei gleich
-#      mit, via numpy.repeat).
-#   3. Jede Spalte mit ihrem Generator fuellen (eingebaute direkt hier,
-#      benutzerdefinierte aus dem im Plan mitgelieferten Python-Code).
-#   4. CSV schreiben (Trenner, Quoting, Dezimal-/Datumsformate, Encoding
-#      gemaess Konfiguration), Dateiname aus der {…}-Vorlage aufloesen.
+# Flow:
+#   1. Sort the tables topologically (foreign key and generator references),
+#      then the columns of each table — column by column, as far as the
+#      dependencies (e.g. combine templates) allow.
+#   2. Determine the row count: primary tables from their fixed count,
+#      referenced tables from the cardinality per record of the referenced
+#      table (the driving FK column is produced along the way, via
+#      numpy.repeat).
+#   3. Fill every column with its generator (built-in ones directly here,
+#      custom ones from the Python code shipped in the plan).
+#   4. Write the CSV (separator, quoting, decimal/date formats, encoding as
+#      configured) and resolve the file name from its {…} template.
 #
-# Fortschritt und Ergebnis werden als JSON-Zeilen auf stdout gemeldet
-# (events: start / table_start / table_done / done / error) — der
-# Extension-Host uebersetzt sie in die VS-Code-Fortschrittsanzeige.
+# Progress and result are reported as JSON lines on stdout (events: start /
+# table_start / table_done / done / error) — the extension host translates them
+# into the VS Code progress indicator.
 
 import json
 import re
@@ -33,16 +32,18 @@ from datetime import datetime, timedelta
 
 
 def emit(event, **payload):
+    """Writes one event of the stdout protocol read by the extension host."""
     print(json.dumps({"event": event, **payload}, ensure_ascii=False), flush=True)
 
 
 def fail(message, **payload):
+    """Reports an error event and terminates the run."""
     emit("error", message=str(message), **payload)
     sys.exit(2)
 
 
-# Abhaengigkeiten frueh und gesammelt pruefen, damit die Meldung im
-# Extension-Host einen konkreten Installationshinweis zeigen kann.
+# Check dependencies early and all at once, so the message in the extension
+# host can offer a concrete installation hint.
 _missing = []
 try:
     import numpy as np
@@ -66,7 +67,7 @@ _faker_instances = {}
 
 
 def get_faker(locale):
-    """Faker-Instanz je Locale (Import erst bei Bedarf, mit klarer Fehlermeldung)."""
+    """Faker instance per locale (imported lazily, with a clear error message)."""
     key = locale or "en_US"
     if key not in _faker_instances:
         try:
@@ -80,7 +81,7 @@ def get_faker(locale):
 
 
 class Context:
-    """`ctx`-Objekt fuer benutzerdefinierte Generatoren (siehe .tdgen-Editor)."""
+    """The `ctx` object handed to custom generators (see the .tdgen editor)."""
 
     def __init__(self, runner, table):
         self.rng = RNG
@@ -94,16 +95,15 @@ class Context:
 
     def log(self, *args):
         """
-        Schreibt eine Meldung ins Lauf-Protokoll (Output-Channel
-        "Datenschmiede" in VS Code). Bewusst statt print(): stdout ist fuer
-        das JSON-Ereignis-Protokoll reserviert — rohe print()-Zeilen werden
-        dort verworfen (print(..., file=sys.stderr) landet ebenfalls im
-        Output-Channel).
+        Writes a message to the run log (the "Datenschmiede" output channel in
+        VS Code). Deliberately provided instead of print(): stdout is reserved
+        for the JSON event protocol — raw print() lines are discarded there
+        (print(..., file=sys.stderr) also ends up in the output channel).
         """
         emit("log", table=self._table["label"], message=" ".join(str(a) for a in args))
 
     def column(self, name):
-        """Bereits generierte Werte einer anderen Spalte dieser Tabelle."""
+        """Already generated values of another column of this table."""
         data = self._runner.data.get(self._table["label"], {})
         if name not in data:
             raise RuntimeError(
@@ -113,7 +113,7 @@ class Context:
         return data[name]
 
     def table(self, label, column):
-        """Bereits generierte Werte einer Spalte einer anderen Tabelle des Plans."""
+        """Already generated values of a column of another table in the plan."""
         data = self._runner.data.get(label)
         if data is None or column not in data:
             raise RuntimeError(f'ctx.table("{label}", "{column}"): values are not available (yet)')
@@ -121,17 +121,17 @@ class Context:
 
     def related(self, fk_path, column):
         """
-        Zeilen-genau zugeordnete Werte einer referenzierten (fuehrenden)
-        Tabelle: fuer jeden Datensatz dieser Tabelle der Wert von `column`
-        aus GENAU dem Datensatz, auf den die FK-Spalte zeigt — ein Join
-        ueber fk_table/fk_column statt einer Zufallsstichprobe (ctx.table).
+        Row-accurate values of a referenced (parent) table: for every record of
+        this table the value of `column` from EXACTLY the record its FK column
+        points at — a join over fk_table/fk_column rather than a random sample
+        (ctx.table).
 
-        `fk_path` darf auch ein Punkt-getrennter Pfad ueber MEHRERE
-        FK-Spalten sein — jeder weitere Teil ist eine FK-Spalte der zuvor
-        erreichten Tabelle. Beispiele (in `shipments`):
+        `fk_path` may also be a dot-separated path across SEVERAL FK columns —
+        each further part is an FK column of the table reached before it.
+        Examples (in `shipments`):
 
-            ctx.related("order_id", "status")                # Bestellung
-            ctx.related("order_id.customer_id", "country")   # -> Kunde
+            ctx.related("order_id", "status")                # the order
+            ctx.related("order_id.customer_id", "country")   # -> the customer
         """
         parts = [p.strip() for p in str(fk_path).split(".") if p.strip()]
         if not parts:
@@ -150,11 +150,11 @@ class Context:
             if part not in data:
                 raise RuntimeError(f'ctx.related("{fk_path}", ...): column {table_def["label"]}.{part} is not generated yet')
             if keys is None:
-                # Erster Sprung: die eigenen FK-Werte identifizieren die Datensaetze der naechsten Tabelle.
+                # First hop: our own FK values identify the records of the next table.
                 keys = pd.Series(data[part])
             else:
-                # Weiterer Sprung: die bisherigen Schluessel in die FK-Werte
-                # der gerade erreichten Tabelle uebersetzen.
+                # Further hop: translate the keys collected so far into the FK
+                # values of the table just reached.
                 mapping = pd.Series(data[part].values, index=data[parent_key].values)
                 mapping = mapping[~mapping.index.duplicated(keep="first")]
                 keys = keys.map(mapping)
@@ -174,21 +174,21 @@ class Context:
         return pd.Series(keys).map(mapping)
 
     def lookup(self, name, column):
-        """Alle (rohen) Werte einer Spalte einer Nachschlageliste (.lkp) — ohne Ziehung/Gewichtung."""
+        """All (raw) values of a column of a lookup list (.lkp) — no drawing, no weighting."""
         values, _weights = self._runner.lookup_column(name, column)
-        # Kopie, damit Custom-Code die Liste gefahrlos veraendern kann — die
-        # Original-Liste liegt im Cache des Runners (siehe lookup_column).
+        # A copy, so custom code can modify the list safely — the original list
+        # lives in the runner's cache (see lookup_column).
         return list(values)
 
     def lookup_value(self, name, column):
         """
-        EIN Wert je Datensatz aus der konsistent gezogenen Listen-Zeile —
-        exakt derselbe Mechanismus wie der eingebaute Lookup-Generator
-        (siehe Runner.lookup_indices): alle Spalten derselben Liste (auch
-        Lookup-Generator-Spalten und ueber FK verbundene Tabellen) lesen
-        dieselbe Zeile. Beispiel: zieht der Kunde code "CH", liefert
-        ctx.lookup_value("countries", "currency") in seiner Bestellung
-        "CHF" aus derselben Zeile.
+        ONE value per record from the consistently drawn list row — exactly the
+        same mechanism as the built-in lookup generator (see
+        Runner.lookup_indices): every column of the same list (including lookup
+        generator columns and tables related via FK) reads the same row.
+        Example: if the customer draws code "CH", then
+        ctx.lookup_value("countries", "currency") on their order returns "CHF"
+        from that same row.
         """
         n = self._runner.row_counts.get(self._table["label"])
         if n is None:
@@ -202,11 +202,12 @@ class Context:
 
 
 def indent_body(body):
+    """Indents a method body so it can be compiled under a generated signature."""
     return "\n".join("    " + line for line in (body or "pass").split("\n"))
 
 
 def build_custom_functions(defn):
-    """Baut generate/parse_params aus dem im Plan mitgelieferten Code einer .tdgen-Datei."""
+    """Builds generate/parse_params from the .tdgen code shipped in the plan."""
     namespace = {"np": np, "pd": pd}
     source = (
         f'def generate(params, n, ctx):\n{indent_body(defn.get("generate"))}\n\n'
@@ -220,18 +221,21 @@ def build_custom_functions(defn):
 
 
 def sanitize_filename(name):
+    """Replaces characters that are invalid in file names; never returns an empty name."""
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip().strip(".")
     return name or "output"
 
 
 def sanitize_path_segment(part):
-    """Wie sanitize_filename, aber fuer einzelne Ordner-Segmente (laesst `.`/`..` durch)."""
+    """Like sanitize_filename, but for individual folder segments (lets `.`/`..` through)."""
     if part in (".", ".."):
         return part
     return re.sub(r'[<>:"|?*\x00-\x1f]', "_", part).strip() or "_"
 
 
 class Runner:
+    """Executes one plan: ordering, generation and writing of all tables."""
+
     def __init__(self, plan):
         self.plan = plan
         self.tables = {t["label"]: t for t in plan["tables"]}
@@ -239,26 +243,25 @@ class Runner:
         self.custom = {}
         for defn in plan.get("custom_generators", []):
             self.custom[defn["name"]] = defn
-        # label -> {spaltenname -> pd.Series} der bereits generierten Werte
+        # label -> {column name -> pd.Series} of the values generated so far
         self.data = {}
-        # label -> Zeilenanzahl
+        # label -> row count
         self.row_counts = {}
-        # (tabellen_label, listen_name) -> gezogene Zeilen-Indizes der
-        # Nachschlageliste je Datensatz: alle Spalten, die aus derselben
-        # Liste ziehen, lesen so dieselbe Zeile — auch ueber FK-verbundene
-        # Tabellen hinweg (siehe lookup_indices).
+        # (table_label, list_name) -> the lookup list row indices drawn per
+        # record: this way every column drawing from the same list reads the
+        # same row — across FK-related tables as well (see lookup_indices).
         self.lookup_row_indices = {}
-        # listen_name -> {"values": {spalte: [...]}, "weights": [...]} —
-        # einmal extrahierte Spaltenwerte/geparste Gewichte je Liste, statt
-        # sie fuer jede Spalte, die aus der Liste zieht, neu aufzubauen.
+        # list_name -> {"values": {column: [...]}, "weights": [...]} — the
+        # column values/parsed weights extracted once per list, instead of
+        # rebuilding them for every column that draws from the list.
         self._lookup_cache = {}
 
     # ------------------------------------------------------------------
-    # Reihenfolge
+    # Ordering
     # ------------------------------------------------------------------
 
     def table_dependencies(self, table):
-        """Labels der Tabellen (im Plan), von denen diese Tabelle abhaengt."""
+        """Labels of the tables (in the plan) this table depends on."""
         deps = set()
         for column in table["columns"]:
             if column.get("fk") and column.get("fk_table") in self.tables and column["fk_table"] != table["label"]:
@@ -271,7 +274,7 @@ class Runner:
         return deps
 
     def sorted_tables(self):
-        """Topologische Sortierung der Tabellen; bricht bei Zyklen mit einer klaren Meldung ab."""
+        """Topological sort of the tables; aborts with a clear message on cycles."""
         remaining = dict(self.tables)
         ordered = []
         while remaining:
@@ -285,11 +288,10 @@ class Runner:
 
     def sorted_columns(self, table):
         """
-        Spalten-Reihenfolge innerhalb einer Tabelle: die treibende FK-Spalte
-        entsteht bereits beim Zeilen-Aufbau; danach Spalte fuer Spalte,
-        Kombinations-Spalten erst nach ihren referenzierten Spalten,
-        benutzerdefinierte Generatoren zuletzt (ihr Code kann per
-        ctx.column(...) auf alles Bisherige zugreifen).
+        Column order within a table: the driving FK column is produced during
+        row construction already; then column by column, combine columns only
+        after the columns they reference, and custom generators last (their code
+        can reach everything generated so far via ctx.column(...)).
         """
         columns = [c for c in table["columns"] if c["name"] != table.get("driving_fk_column")]
 
@@ -301,11 +303,12 @@ class Runner:
             return deps
 
         remaining = {c["name"]: c for c in columns}
-        # Definierte Spaltenreihenfolge einmal als Index-Map (list.index je
-        # Sortierschluessel waere quadratisch).
+        # The declared column order as an index map, built once (calling
+        # list.index per sort key would be quadratic).
         order_index = {c["name"]: i for i, c in enumerate(table["columns"])}
         ordered = []
-        # Erst alle ohne eigene Abhaengigkeiten und ohne Custom-Code, dann der Rest.
+        # First everything without own dependencies and without custom code,
+        # then the rest.
         while remaining:
             ready = [
                 c for c in remaining.values()
@@ -324,17 +327,18 @@ class Runner:
         return ordered
 
     # ------------------------------------------------------------------
-    # Nachschlagelisten
+    # Lookup lists
     # ------------------------------------------------------------------
 
     def lookup_column(self, name, column):
+        """Values and weights of one lookup list column (cached per list)."""
         lookup = self.lookups.get(name)
         if lookup is None:
             raise RuntimeError(f'Lookup list "{name}" was not found')
         if column not in lookup["columns"]:
             raise RuntimeError(f'Lookup list "{name}" has no column "{column}"')
-        # Spaltenwerte und Gewichte je Liste nur einmal aufbauen — jede
-        # weitere Spalte, die aus derselben Liste zieht, liest den Cache.
+        # Build column values and weights only once per list — every further
+        # column drawing from the same list reads the cache.
         cache = self._lookup_cache.setdefault(name, {"values": {}, "weights": None})
         if column not in cache["values"]:
             index = lookup["columns"].index(column)
@@ -354,17 +358,16 @@ class Runner:
 
     def lookup_indices(self, table, name, n):
         """
-        Gezogene Zeilen-Indizes einer Nachschlageliste fuer eine Tabelle —
-        je Datensatz EINE Zeile, die alle Spalten derselben Liste gemeinsam
-        lesen (z. B. code "DE" und currency "EUR" aus derselben Zeile):
+        The lookup list row indices drawn for a table — ONE row per record,
+        read jointly by every column of the same list (e.g. code "DE" and
+        currency "EUR" from the same row):
 
-        1. Hat diese Tabelle bereits Indizes fuer die Liste (eine andere
-           Spalte zog zuerst), werden sie wiederverwendet.
-        2. Sonst: Hat eine per FK referenzierte Tabelle Indizes fuer die
-           Liste, werden sie zeilengenau uebernommen (Join ueber die
-           FK-Spalte) — zusammengehoerige Datensaetze lesen so ueber
-           Tabellengrenzen hinweg dieselbe Listen-Zeile.
-        3. Sonst wird frisch gewichtet gezogen.
+        1. If this table already has indices for the list (another column drew
+           first), they are reused.
+        2. Otherwise: if a table referenced via FK has indices for the list,
+           they are taken over row-accurately (a join over the FK column) — so
+           related records read the same list row across table boundaries.
+        3. Otherwise a fresh weighted draw is made.
         """
         key = (table["label"], name)
         if key in self.lookup_row_indices:
@@ -382,8 +385,8 @@ class Runner:
             mapping = mapping[~mapping.index.duplicated(keep="first")]
             mapped = pd.Series(own_fk).map(mapping)
             if mapped.isna().any():
-                # FK-Werte ohne Treffer (sollte nicht vorkommen) -> nicht raten,
-                # sondern unten frisch ziehen.
+                # FK values without a match (should not happen) -> do not guess,
+                # draw fresh below instead.
                 break
             indices = mapped.to_numpy(dtype=np.int64)
             self.lookup_row_indices[key] = indices
@@ -405,17 +408,18 @@ class Runner:
         return indices
 
     # ------------------------------------------------------------------
-    # Generatoren
+    # Generators
     # ------------------------------------------------------------------
 
     def generate_column(self, table, column, n):
+        """Produces the `n` values of one column using its configured generator."""
         generator = column.get("generator")
         gen_id = (generator or {}).get("id", "")
         params = (generator or {}).get("params", {})
 
         if gen_id == "default":
-            # Explizit gewaehlter Standard je Datentyp — identisch zu einer
-            # Spalte ganz ohne Generator.
+            # The explicitly chosen per-data-type default — identical to a
+            # column without any generator at all.
             return self.default_by_type(table, column, n)
 
         if gen_id == "foreign-key" or (column.get("fk") and not gen_id):
@@ -450,9 +454,9 @@ class Runner:
             return pd.Series([method() for _ in range(n)], dtype=object)
 
         if gen_id == "lookup":
-            # Je Datensatz wird EINE Listen-Zeile gezogen (siehe
-            # lookup_indices) — alle Spalten derselben Liste, auch in
-            # FK-verbundenen Tabellen, lesen dieselbe Zeile.
+            # ONE list row is drawn per record (see lookup_indices) — every
+            # column of the same list, including in FK-related tables, reads
+            # that same row.
             list_name = params.get("list", "")
             values, _weights = self.lookup_column(list_name, params.get("column", ""))
             if not values:
@@ -483,8 +487,8 @@ class Runner:
                 return pd.Series([""] * n, dtype=object)
             if len(pieces) == 1:
                 return pieces[0]
-            # Alle Teile in EINEM Durchlauf verketten, statt paarweise immer
-            # neue Zwischen-Serien zu erzeugen.
+            # Concatenate all parts in ONE pass, instead of repeatedly creating
+            # intermediate series pairwise.
             return pieces[0].str.cat(pieces[1:])
 
         if gen_id.startswith("custom:"):
@@ -507,24 +511,25 @@ class Runner:
                 )
             return series
 
-        # Kein (bekannter) Generator konfiguriert -> sinnvoller Standard je Datentyp.
+        # No (known) generator configured -> a sensible default per data type.
         return self.default_by_type(table, column, n)
 
     def default_by_type(self, table, column, n):
+        """Default values per data type — also used for columns without a generator."""
         ctype = column.get("type", "string")
         name = column.get("name", "value")
         if ctype == "integer":
-            # Laufende Nummer — als PK direkt eindeutig.
+            # A running number — unique out of the box when used as a PK.
             return pd.Series(np.arange(1, n + 1, dtype=np.int64))
         if ctype in ("float", "decimal"):
             return pd.Series(np.round(RNG.uniform(0, 1000, size=n), 2))
         if ctype == "boolean":
             return pd.Series(RNG.integers(0, 2, size=n).astype(bool))
         if ctype == "uuid":
-            # Vektorisiertes UUID4 aus Zufalls-Bytes (deutlich schneller als
-            # uuid.uuid4 je Zeile). Der komplette Puffer wird in EINEM
-            # C-Aufruf zu Hex (statt einer Python-Callback je Zeile, wie es
-            # apply_along_axis taete) und dann in 32-Zeichen-Stuecke zerlegt.
+            # Vectorized UUID4 from random bytes (much faster than uuid.uuid4
+            # per row). The complete buffer is hex-encoded in ONE C call
+            # (instead of a Python callback per row, as apply_along_axis would
+            # do) and then split into 32-character chunks.
             b = RNG.integers(0, 256, size=(n, 16), dtype=np.uint8)
             b[:, 6] = (b[:, 6] & 0x0F) | 0x40
             b[:, 8] = (b[:, 8] & 0x3F) | 0x80
@@ -553,14 +558,15 @@ class Runner:
             return pd.Series([f"user{i}@example.com" for i in nums], dtype=object)
         if ctype == "json":
             return pd.Series(["{}"] * n, dtype=object)
-        # string / text / Unbekanntes
+        # string / text / anything unknown
         return pd.Series([f"{name}_{i}" for i in range(1, n + 1)], dtype=object)
 
     # ------------------------------------------------------------------
-    # Tabellen-Lauf
+    # Table run
     # ------------------------------------------------------------------
 
     def run_table(self, table):
+        """Generates all rows of one table and returns their count."""
         label = table["label"]
         self.data[label] = {}
 
@@ -575,9 +581,9 @@ class Runner:
             lo, hi = int(table["records"]["min"]), int(table["records"]["max"])
             counts = RNG.integers(lo, hi + 1, size=len(parent_values))
             n = int(counts.sum())
-            # Die treibende FK-Spalte entsteht direkt beim Zeilen-Aufbau:
-            # jeder Datensatz der referenzierten Tabelle bekommt `counts`
-            # zugehoerige Datensaetze.
+            # The driving FK column is produced right during row construction:
+            # every record of the referenced table gets `counts` related
+            # records.
             self.data[label][table["driving_fk_column"]] = pd.Series(
                 np.repeat(parent_values.to_numpy(), counts)
             )
@@ -588,21 +594,21 @@ class Runner:
 
         for column in self.sorted_columns(table):
             self.data[label][column["name"]] = self.generate_column(table, column, n).reset_index(drop=True)
-            # Spalte-fuer-Spalte-Fortschritt fuers Lauf-Protokoll (Output-Channel).
+            # Column-by-column progress for the run log (output channel).
             emit("column_done", table=label, column=column["name"], records=n)
 
         return n
 
     # ------------------------------------------------------------------
-    # Ausgabe
+    # Output
     # ------------------------------------------------------------------
 
     def resolve_output_dir(self):
         """
-        Loest den Ausgabeordner des Plans auf: die `{…}`-Variablen der
-        Vorlage (Datum/Zeit/Zeitstempel/Projektname) werden ersetzt, jedes
-        Pfad-Segment bereinigt; relative Pfade beziehen sich auf den Ordner
-        der Projektdatei. Leer -> `output`.
+        Resolves the plan's output folder: the template's `{…}` variables
+        (date/time/timestamp/project name) are substituted and every path
+        segment is sanitized; relative paths are resolved against the folder of
+        the project file. Empty -> `output`.
         """
         import os
 
@@ -623,8 +629,8 @@ class Runner:
             return ""
 
         resolved = re.sub(r"\{([^{}]+)\}", replace, template)
-        # Trenner (und ein fuehrendes Laufwerk wie `C:`) erhalten, jedes
-        # Segment einzeln bereinigen.
+        # Preserve separators (and a leading drive such as `C:`), sanitizing
+        # each segment individually.
         parts = re.split(r"([\\/]+)", resolved)
         cleaned = "".join(
             part if re.fullmatch(r"[\\/]+", part) or re.fullmatch(r"[A-Za-z]:", part) else sanitize_path_segment(part)
@@ -634,6 +640,7 @@ class Runner:
         return os.path.normpath(os.path.join(self.plan.get("project_dir", "."), cleaned or "output"))
 
     def resolve_filename(self, table, n, df):
+        """Resolves a table's file name template (without extension) for this run."""
         template = (table["output"].get("file_name") or "").strip()
         if not template:
             schema = (table.get("schema") or "").strip()
@@ -665,13 +672,13 @@ class Runner:
         return sanitize_filename(re.sub(r"\{([^{}]+)\}", replace, template))
 
     def format_dataframe(self, table, df):
-        """Datums-/Zeit-Spalten gemaess der konfigurierten Formate als Text (gemeinsam fuer CSV und Vorschau)."""
+        """Renders date/time columns as text per the configured formats (shared by CSV and preview)."""
         csv_cfg = table["output"].get("csv", {})
         date_fmt = csv_cfg.get("date_format") or "%Y-%m-%d"
         datetime_fmt = csv_cfg.get("datetime_format") or "%Y-%m-%d %H:%M:%S"
-        # Flache Kopie genuegt: unten werden nur ganze Spalten NEU zugewiesen
-        # (das laesst das Original unberuehrt) — eine tiefe Kopie wuerde bei
-        # grossen Laeufen den Speicherbedarf unnoetig verdoppeln.
+        # A shallow copy suffices: below, only whole columns are REASSIGNED
+        # (which leaves the original untouched) — a deep copy would needlessly
+        # double the memory footprint on large runs.
         out = df.copy(deep=False)
         for column in table["columns"]:
             cname, ctype = column["name"], column.get("type")
@@ -688,12 +695,13 @@ class Runner:
                         base = pd.Timestamp("1970-01-01") + series
                         out[cname] = base.dt.strftime("%H:%M:%S")
             except (ValueError, TypeError):
-                # Werte, die sich nicht als Datum/Zeit lesen lassen (z. B. aus
-                # einem Custom-Generator), unveraendert lassen.
+                # Leave values that cannot be read as a date/time (e.g. coming
+                # from a custom generator) unchanged.
                 pass
         return out
 
     def write_csv(self, table, df, n):
+        """Writes one table as CSV and returns the path of the file created."""
         import os
 
         csv_cfg = table["output"].get("csv", {})
@@ -702,9 +710,10 @@ class Runner:
         out = self.format_dataframe(table, df)
         file_name = self.resolve_filename(table, n, out) + ".csv"
         path = os.path.join(self.out_dir, file_name)
-        # Ausgeblendete Spalten (hidden = true) erst jetzt entfernen: sie sind
-        # generiert und stehen bis hierher bereit (FK-Quelle anderer Tabellen,
-        # {column:...}-Dateinamen) — nur in die Datei geschrieben werden sie nicht.
+        # Hidden columns (hidden = true) are dropped only now: they are
+        # generated and available up to this point (as an FK source for other
+        # tables, for {column:...} file names) — they are merely not written to
+        # the file.
         visible = [c["name"] for c in table["columns"] if not c.get("hidden") and c["name"] in out.columns]
         out = out[visible]
         out.to_csv(
@@ -719,6 +728,7 @@ class Runner:
         return path
 
     def run(self):
+        """Runs the whole plan: every table in dependency order, then the output."""
         ordered = self.sorted_tables()
         preview = self.plan.get("preview")
         self.out_dir = self.resolve_output_dir()
@@ -727,11 +737,11 @@ class Runner:
         for index, table in enumerate(ordered):
             emit("table_start", table=table["label"], index=index, total=len(ordered))
             n = self.run_table(table)
-            # Spaltenreihenfolge der Tabellendefinition beibehalten.
+            # Keep the column order of the table definition.
             df = pd.DataFrame({c["name"]: self.data[table["label"]][c["name"]] for c in table["columns"]})
             if preview:
-                # Vorschau-Modus: nichts schreiben; nur die Ziel-Tabelle wird
-                # am Ende zurueckgemeldet.
+                # Preview mode: write nothing; only the target table is
+                # reported back at the end.
                 if table["label"] == preview.get("table"):
                     out = self.format_dataframe(table, df).head(int(preview.get("limit", 20)))
                     emit(
@@ -749,6 +759,7 @@ class Runner:
 
 
 def main():
+    """Entry point: reads the plan file passed as an argument and runs it."""
     if len(sys.argv) < 2:
         fail("Usage: generate.py <plan.json>")
     try:
@@ -759,11 +770,11 @@ def main():
     try:
         Runner(plan).run()
     except RuntimeError as err:
-        # Auch fuer "erwartete" Fehler den Traceback mitgeben — bei Fehlern
-        # aus Custom-Generator-Code zeigt er die betroffene Zeile
-        # (<tdgen:name>-Frames), siehe Output-Channel im Extension-Host.
+        # Include the traceback even for "expected" errors — for failures in
+        # custom generator code it points at the offending line
+        # (<tdgen:name> frames), see the output channel in the extension host.
         fail(err, traceback=traceback.format_exc())
-    except Exception as err:  # noqa: BLE001 — jede unerwartete Ausnahme sauber als Event melden
+    except Exception as err:  # noqa: BLE001 — report every unexpected exception cleanly as an event
         fail(f"{type(err).__name__}: {err}", traceback=traceback.format_exc())
 
 

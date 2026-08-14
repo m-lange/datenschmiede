@@ -1,30 +1,31 @@
 import * as vscode from 'vscode';
 
 /**
- * Merkt sich je Projekt das Ergebnis des letzten Generator-Laufs — die
- * *echte* Datensatzanzahl je Tabelle (bei Kardinalitäts-Bereichen wie "1..3"
- * würfelt der Lauf, die tatsächliche Anzahl steht erst hinterher fest).
- * Gespeichert im workspaceState (geräte-/workspace-lokal, kein Teil der
- * `.tdproject`-Datei — ein Lauf-Artefakt, keine Konfiguration); angezeigt im
- * ER-Diagramm des Projekt-Editors (siehe project/diagram.ts). Das Event
- * verbindet den Lauf-Befehl (project/run.ts) mit den offenen
- * Projekt-Webviews (project/editorProvider.ts), ohne dass beide sich kennen.
+ * Remembers, per project, the result of the last generator run — the *real*
+ * record count per table (with cardinality ranges such as "1..3" the run rolls
+ * the dice, so the actual count is only known afterwards). Stored in the
+ * workspaceState (machine/workspace-local, not part of the `.tdproject` file —
+ * a run artifact, not configuration); displayed in the project editor's ER
+ * diagram (see project/diagram.ts). The event connects the run command
+ * (project/run.ts) with the open project webviews
+ * (project/editorProvider.ts) without either knowing about the other.
  */
 
+/** The stored outcome of one generator run. */
 export interface RunResult {
-	/** Zeitpunkt des Laufendes (Epoch-Millisekunden). */
+	/** Time the run finished (epoch milliseconds). */
 	finishedAt: number;
-	/** Echte Datensatzanzahl je logischer Tabellen-Identität (`schema.name`). */
+	/** Real record count per logical table identity (`schema.name`). */
 	counts: Record<string, number>;
 }
 
 const STATE_KEY = 'datenschmiede.lastRunResults';
 
 const emitter = new vscode.EventEmitter<vscode.Uri>();
-/** Feuert nach jedem gespeicherten Lauf-Ergebnis mit der Projekt-URI. */
+/** Fires with the project URI after every stored run result. */
 export const onDidSaveRunResult = emitter.event;
 
-/** Speichert das Ergebnis eines erfolgreichen Laufs und benachrichtigt offene Projekt-Webviews. */
+/** Stores the result of a successful run and notifies open project webviews. */
 export async function saveRunResult(
 	context: vscode.ExtensionContext,
 	projectUri: vscode.Uri,
@@ -40,7 +41,7 @@ export async function saveRunResult(
 	emitter.fire(projectUri);
 }
 
-/** Das gespeicherte Ergebnis des letzten Laufs eines Projekts, oder `null` ohne bisherigen Lauf. */
+/** The stored result of a project's last run, or `null` if it has never run. */
 export function getRunResult(context: vscode.ExtensionContext, projectUri: vscode.Uri): RunResult | null {
 	const all = context.workspaceState.get<Record<string, RunResult>>(STATE_KEY, {});
 	return all[projectUri.toString()] ?? null;

@@ -1,16 +1,17 @@
 // @ts-check
-// Gemeinsame, zustandslose Webview-Bausteine für Table Editor (table.js) und
-// Projekt-Editor (project.js): generische DOM-Helfer, das Markdown-
-// Vorschau-/Editor-Feld und der eigene Select-Chevron. Bewusst als
-// eigenständiges, unkompiliertes Skript gehalten (wie table.js/project.js
-// selbst) und vor ihnen eingebunden (siehe getHtml in
-// table/editorProvider.ts/project/editorProvider.ts) — exportiert seine
-// Funktionen auf `window.DatenschmiedeCommon`, da Webviews hier ohne
-// Modul-Bundling auskommen.
+// Shared, stateless webview building blocks for the table editor (table.js) and
+// the project editor (project.js): generic DOM helpers, the markdown
+// preview/editor field and the custom select chevron. Deliberately kept as a
+// standalone, uncompiled script (like table.js/project.js themselves) and
+// loaded before them (see getHtml in
+// table/editorProvider.ts/project/editorProvider.ts) — it exports its functions
+// on `window.DatenschmiedeCommon`, since the webviews here work without module
+// bundling.
 (function () {
 	'use strict';
 
 	/**
+	 * Creates an element with an optional class name and text content.
 	 * @param {string} tag
 	 * @param {{ className?: string, text?: string }} [opts]
 	 */
@@ -26,10 +27,9 @@
 	}
 
 	/**
-	 * Bindet ein Text-Eingabefeld (input/textarea) an eine Setter-Funktion:
-	 * tippen aktualisiert den lokalen Zustand sofort und meldet die Änderung
-	 * über `commitDebounced`, blur/Verlassen des Felds meldet sie sofort über
-	 * `commit`.
+	 * Binds a text input (input/textarea) to a setter function: typing updates
+	 * the local state immediately and reports the change via `commitDebounced`,
+	 * while blurring (leaving the field) reports it right away via `commit`.
 	 * @param {HTMLInputElement | HTMLTextAreaElement} field
 	 * @param {(value: string) => void} onChange
 	 * @param {() => void} commitDebounced
@@ -47,8 +47,8 @@
 	}
 
 	/**
-	 * Verzögert einen Aufruf, bis `delayMs` lang kein weiterer kam — z. B. für
-	 * das debouncte Zurückschreiben ins Dokument beim Tippen (postEdit).
+	 * Delays a call until no further one arrived for `delayMs` — e.g. for the
+	 * debounced write-back into the document while typing (postEdit).
 	 * @param {() => void} fn
 	 * @param {number} delayMs
 	 */
@@ -67,8 +67,8 @@
 	}
 
 	/**
-	 * Beschriftetes Text-Eingabefeld (Name, Schema, …) — gemeinsame Grundlage
-	 * der Übersicht-Tabs von Table-, Projekt- und Lookup-Editor.
+	 * Labelled text input (name, schema, …) — the shared basis of the overview
+	 * tabs of the table, project and lookup editors.
 	 * @param {string} id
 	 * @param {string} labelText
 	 * @param {string} value
@@ -96,8 +96,8 @@
 	}
 
 	/**
-	 * Beschriftetes Markdown-Beschreibungsfeld (siehe renderMarkdownField) —
-	 * gemeinsame Grundlage der Übersicht-Tabs aller drei Editoren.
+	 * Labelled markdown description field (see renderMarkdownField) — the shared
+	 * basis of the overview tabs of all three editors.
 	 * @param {string} labelText
 	 * @param {string} placeholder
 	 * @param {string} value
@@ -119,11 +119,11 @@
 	}
 
 	/**
-	 * Anzeigename einer `{…}`-Variable (Token ohne Klammern) — dieselben
-	 * Beschriftungen im Dateinamen-Tag-Feld des Table Editors und im
-	 * Ausgabeordner-Feld des Projekt-Editors. `strings` ist der jeweilige
-	 * Webview-String-Katalog (outputVar…-Schlüssel; `project` gibt es nur im
-	 * Projekt-Editor).
+	 * Display name of a `{…}` variable (the token without braces) — the same
+	 * labels in the table editor's file name tag field and in the project
+	 * editor's output folder field. `strings` is the respective webview string
+	 * catalog (the outputVar… keys; `project` only exists in the project
+	 * editor).
 	 * @param {any} strings
 	 * @param {string} token
 	 */
@@ -154,9 +154,9 @@
 	}
 
 	/**
-	 * Fehlerzustand bei kaputtem TOML/CSV (ganzseitige Meldung statt des
-	 * Formulars) — identisch in allen drei Editoren; die Texte kommen aus dem
-	 * jeweiligen String-Katalog (errorTitle/errorBody/errorHint).
+	 * Error state for broken TOML/CSV (a full-page message instead of the form)
+	 * — identical in all three editors; the texts come from the respective
+	 * string catalog (errorTitle/errorBody/errorHint).
 	 * @param {any} strings
 	 * @param {string} message
 	 */
@@ -170,7 +170,7 @@
 		return wrap;
 	}
 
-	/** `true`, solange ein Eingabefeld (input/textarea/select/contenteditable) den Fokus hat. */
+	/** `true` while an input (input/textarea/select/contenteditable) has focus. */
 	function isEditing() {
 		const active = document.activeElement;
 		return !!(
@@ -184,14 +184,14 @@
 	}
 
 	/**
-	 * Anti-Flacker-Baustein: Broadcasts vom Extension-Host (nach jeder
-	 * Datei-Änderung im Workspace) sollen kein sofortiges Neuzeichnen
-	 * auslösen, solange gerade ein Eingabefeld fokussiert ist — sonst verlöre
-	 * das Feld bei jedem Broadcast Fokus und Cursor. `renderSoon` zeichnet
-	 * sofort neu oder merkt es sich vor; ein focusout-Listener holt das
-	 * Vorgemerkte nach, sobald kein Feld mehr fokussiert ist.
-	 * @param {() => void} doRender Das eigentliche (vollständige) Neuzeichnen.
-	 * @param {(() => boolean)} [isBlockedExtra] Zusätzliche Sperre (z. B. ein offener Dialog).
+	 * Anti-flicker building block: broadcasts from the extension host (after
+	 * every file change in the workspace) must not trigger an immediate
+	 * re-render while an input has focus — otherwise the field would lose focus
+	 * and cursor on every broadcast. `renderSoon` either re-renders right away
+	 * or defers it; a focusout listener performs the deferred render as soon as
+	 * no field is focused any more.
+	 * @param {() => void} doRender The actual (full) re-render.
+	 * @param {(() => boolean)} [isBlockedExtra] Additional block (e.g. an open dialog).
 	 */
 	function createDeferredRenderer(doRender, isBlockedExtra) {
 		let pending = false;
@@ -204,8 +204,8 @@
 			if (!pending) {
 				return;
 			}
-			// Kurz warten: bei einem Fokuswechsel zwischen zwei Feldern ist nach
-			// focusout sofort wieder ein Feld fokussiert — dann weiter aufschieben.
+			// Wait briefly: when focus moves between two fields, another field is
+			// focused immediately after focusout — keep deferring in that case.
 			window.setTimeout(() => {
 				if (pending && !blocked()) {
 					renderNow();
@@ -213,7 +213,7 @@
 			}, 100);
 		});
 		return {
-			/** Zeichnet sofort neu — oder erst, sobald kein Eingabefeld mehr fokussiert ist. */
+			/** Re-renders immediately — or once no input is focused any more. */
 			renderSoon() {
 				if (blocked()) {
 					pending = true;
@@ -221,13 +221,13 @@
 				}
 				renderNow();
 			},
-			/** Holt ein vorgemerktes Neuzeichnen nach, falls gerade nichts mehr blockiert (z. B. nach Schließen eines Dialogs). */
+			/** Performs a deferred re-render if nothing blocks any more (e.g. after a dialog closed). */
 			flushIfIdle() {
 				if (pending && !blocked()) {
 					renderNow();
 				}
 			},
-			/** Verwirft eine Vormerkung (das Neuzeichnen ist gerade ohnehin passiert). */
+			/** Discards a deferred render (a re-render has just happened anyway). */
 			clearPending() {
 				pending = false;
 			},
@@ -235,8 +235,8 @@
 	}
 
 	/**
-	 * Lässt eine Textarea automatisch mit ihrem Inhalt mitwachsen bzw.
-	 * -schrumpfen, statt eine feste Höhe mit interner Scrollleiste zu zeigen.
+	 * Lets a textarea grow and shrink automatically with its content instead of
+	 * showing a fixed height with an internal scrollbar.
 	 * @param {HTMLTextAreaElement} textarea
 	 */
 	function autoGrowCellTextarea(textarea) {
@@ -245,19 +245,25 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Markdown: sehr kleiner, bewusst eingeschränkter Renderer für die
-	// Beschreibungsfelder. Escaped zuerst konsequent jedes HTML im Rohtext
-	// und wendet danach nur eine kleine, sichere Teilmenge an
-	// Markdown-Syntax an (fett, kursiv, Code, Links, Listen, Absätze) — es
-	// wird nie rohes HTML durchgelassen.
+	// Markdown: a very small, deliberately restricted renderer for the
+	// description fields. It first escapes every piece of HTML in the raw text
+	// consistently and only then applies a small, safe subset of markdown
+	// syntax (bold, italic, code, links, lists, paragraphs) — raw HTML is never
+	// let through.
 	// ---------------------------------------------------------------------
 
-	/** @param {string} text */
+	/**
+	 * Escapes every HTML-significant character; applied before any markdown.
+	 * @param {string} text
+	 */
 	function escapeHtml(text) {
 		return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 	}
 
-	/** @param {string} line */
+	/**
+	 * Inline markdown of one line: code, bold, italic and http(s)/mailto links.
+	 * @param {string} line
+	 */
 	function renderMarkdownInline(line) {
 		let html = escapeHtml(line);
 		html = html.replace(/`([^`]+)`/g, (_m, code) => `<code>${code}</code>`);
@@ -272,7 +278,10 @@
 		return html;
 	}
 
-	/** @param {string} block */
+	/**
+	 * One paragraph-level block: a bullet list, a numbered list or a paragraph.
+	 * @param {string} block
+	 */
 	function renderMarkdownBlock(block) {
 		const lines = block
 			.split('\n')
@@ -294,7 +303,10 @@
 		return `<p>${lines.map((line) => renderMarkdownInline(line)).join('<br>')}</p>`;
 	}
 
-	/** @param {string} source */
+	/**
+	 * Renders the supported markdown subset to HTML (blocks separated by blank lines).
+	 * @param {string} source
+	 */
 	function renderMarkdown(source) {
 		const normalized = (source || '').replace(/\r\n?/g, '\n').trim();
 		if (!normalized) {
@@ -307,15 +319,14 @@
 	}
 
 	/**
-	 * Beschreibungsfeld mit Markdown-Unterstützung: standardmäßig als
-	 * gerendertes Markdown angezeigt, ein Klick (oder Enter/Leertaste) blendet
-	 * eine rohe Markdown-Textarea zum Bearbeiten ein, die beim Verlassen
-	 * (blur bzw. Escape) wieder verschwindet. Mit `gridCell: true` bleibt die
-	 * Vorschau per CSS einzeilig mit Ellipsis bei Überlänge (siehe
-	 * main.css `.columns-table .md-preview`) — das funktioniert nur, weil die
-	 * Vorschau ein <div> ist; text-overflow: ellipsis wird von <textarea>
-	 * nicht unterstützt, deshalb kein einzelnes Textarea-Element für beide
-	 * Zustände.
+	 * Description field with markdown support: shown as rendered markdown by
+	 * default; a click (or Enter/Space) reveals a raw markdown textarea for
+	 * editing that disappears again on leaving (blur or Escape). With
+	 * `gridCell: true` the preview stays single-line via CSS, with an ellipsis
+	 * when too long (see `.columns-table .md-preview` in main.css) — this only
+	 * works because the preview is a <div>; text-overflow: ellipsis is not
+	 * supported on <textarea>, hence not a single textarea element for both
+	 * states.
 	 * @param {string} initialValue
 	 * @param {string} placeholder
 	 * @param {(value: string) => void} onChange
@@ -408,10 +419,9 @@
 	}
 
 	/**
-	 * Markiert ein Eingabeelement bei einem Validierungsproblem nur farblich
-	 * (roter Rahmen) statt mit zusätzlichem Fehlertext — die ausführliche
-	 * Meldung steht in VS Codes Problems-Ansicht; als Tooltip liegt sie
-	 * trotzdem am Feld an.
+	 * Marks an input with a validation problem by colour only (a red border)
+	 * rather than with additional error text — the full message lives in VS
+	 * Code's Problems view; it is still attached to the field as a tooltip.
 	 * @param {HTMLElement} inputEl
 	 * @param {string} errorText
 	 * @param {boolean} hasError
@@ -426,22 +436,21 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Grid-Spaltenbreiten: gemeinsame Größenzieh-Logik für table.js
-	// (Spalten-Grid) und project.js (Tabellen-Auswahlbaum) — beide Grids
-	// starten mit table-layout: auto, damit Spalten ohne von Hand gesetzte
-	// Breite sich beim ersten Rendern inhaltsbasiert einpendeln; erst wenn
-	// die Tabelle wirklich im DOM hängt, lässt sich die dafür tatsächlich
-	// benötigte Breite messen (siehe fixColumnWidths) und die Tabelle auf
-	// table-layout: fixed umschalten — nur damit ist eine per Hand gezogene
-	// <col>-Breite zuverlässig maßgeblich.
+	// Grid column widths: shared resize logic for table.js (the column grid)
+	// and project.js (the table picker tree) — both grids start with
+	// table-layout: auto so that columns without a manually set width settle on
+	// a content-based width during the first render; only once the table is
+	// really in the DOM can the width actually needed be measured (see
+	// fixColumnWidths) and the table switched to table-layout: fixed — only
+	// then does a manually dragged <col> width reliably take effect.
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Baut die <colgroup> für ein Grid: eine <col> je Spalte in `order`, plus
-	 * eine leere Füll-Spalte am Ende (nimmt jeden Restplatz auf, damit das
-	 * Grid weiterhin die volle Breite ausfüllt, ohne die Inhaltsspalten zu
-	 * strecken). Spalten mit einer von Hand gezogenen Breite (aus `widths`)
-	 * bekommen diese sofort als feste Breite.
+	 * Builds the <colgroup> for a grid: one <col> per column in `order`, plus an
+	 * empty filler column at the end (which absorbs any remaining space so the
+	 * grid still spans the full width without stretching the content columns).
+	 * Columns with a manually dragged width (from `widths`) get it applied
+	 * immediately as a fixed width.
 	 * @param {string[]} order
 	 * @param {Record<string, number>} widths
 	 */
@@ -462,10 +471,10 @@
 	}
 
 	/**
-	 * Macht eine Grid-Kopfzelle per Ziehgriff am rechten Rand größenziehbar:
-	 * setzt die feste Breite direkt auf das zugehörige <col>-Element. Beim
-	 * Loslassen wird die neue Breite über `onResized` gemeldet (üblicherweise
-	 * an den Extension-Host, der sie geräteweit merkt).
+	 * Makes a grid header cell resizable via a drag handle on its right edge:
+	 * the fixed width is applied directly to the corresponding <col> element.
+	 * On release the new width is reported via `onResized` (usually to the
+	 * extension host, which remembers it per machine).
 	 * @param {HTMLElement} th
 	 * @param {HTMLTableColElement} col
 	 * @param {string} key
@@ -504,22 +513,22 @@
 	}
 
 	/**
-	 * Setzt für jede größenziehbare Spalte ihre endgültige feste Breite (von
-	 * Hand gezogen, sonst die inhaltsbasiert gemessene Breite ihrer
-	 * Kopfzelle) und schaltet die Tabelle danach auf table-layout: fixed um.
+	 * Applies each resizable column's final fixed width (manually dragged, or
+	 * otherwise the content-based measured width of its header cell) and then
+	 * switches the table to table-layout: fixed.
 	 *
-	 * Gemessen wird kurzzeitig unter width: max-content: unter dem normalen
-	 * width: 100% wären die Spalten bei wenig Inhalt bereits auf die volle
-	 * Panel-Breite auseinandergezogen und die Messung ergäbe genau diese
-	 * gestreckten Breiten — übrig bliebe nie freier Platz für die
-	 * Füll-Spalte rechts (siehe buildColGroup). Nur wenn der Inhalt ohnehin
-	 * breiter als das Panel ist, wird wie zuvor im gestreckten Zustand
-	 * gemessen: die Füll-Spalte bekäme sowieso nichts, und eine reine
-	 * max-content-Messung würde z. B. eine lange Beschreibung uferlos breit
-	 * machen, statt sie wie gewollt per Ellipsis zu kürzen.
+	 * Measuring happens briefly under width: max-content: under the regular
+	 * width: 100% the columns would, with little content, already be stretched
+	 * to the full panel width and the measurement would yield exactly those
+	 * stretched widths — leaving no free space for the filler column on the
+	 * right (see buildColGroup). Only when the content is wider than the panel
+	 * anyway is it measured in the stretched state as before: the filler column
+	 * would get nothing regardless, and a pure max-content measurement would
+	 * make e.g. a long description arbitrarily wide instead of truncating it
+	 * with an ellipsis as intended.
 	 *
-	 * Darf erst aufgerufen werden, wenn die Tabelle wirklich im DOM hängt
-	 * (sonst liefert getBoundingClientRect() keine sinnvolle Breite).
+	 * Must not be called before the table is really in the DOM (otherwise
+	 * getBoundingClientRect() returns no meaningful width).
 	 * @param {HTMLTableElement} table
 	 * @param {{key:string,minWidth:number}[]} resizable
 	 * @param {Record<string, HTMLElement>} headers
@@ -547,12 +556,11 @@
 	}
 
 	/**
-	 * Ersetzt den nativen Browser-Pfeil eines <select> durch ein eigenes
-	 * Chevron-Icon in einem Wrapper-Element: bei sehr schmalen Spalten (z. B.
-	 * nach Größenänderung) kann der native Pfeil sonst aus dem Sichtbereich
-	 * geraten, weil der Browser ihn nicht als eigenes, garantiert sichtbares
-	 * Element behandelt. Gibt den Wrapper zurück, der statt des rohen
-	 * <select> in die Zelle gehängt werden soll.
+	 * Replaces a <select>'s native browser arrow with a custom chevron icon
+	 * inside a wrapper element: in very narrow columns (e.g. after resizing) the
+	 * native arrow can otherwise scroll out of view, because the browser does
+	 * not treat it as a separate, guaranteed-visible element. Returns the
+	 * wrapper that should be placed in the cell instead of the bare <select>.
 	 * @param {HTMLSelectElement} select
 	 */
 	function wrapSelectWithChevron(select) {
@@ -564,10 +572,10 @@
 	}
 
 	/**
-	 * Füllt ein <select> mit einer Werteliste plus leerer Platzhalter-Option.
-	 * Zeigt einen aktuell gesetzten, aber nicht (mehr) in der Liste
-	 * enthaltenen Wert trotzdem an (z. B. nach Löschen/Umbenennen der
-	 * referenzierten Datei/Spalte), statt ihn stillschweigend zu verwerfen.
+	 * Fills a <select> with a list of values plus an empty placeholder option.
+	 * A value that is currently set but no longer part of the list is still
+	 * shown (e.g. after the referenced file/column was deleted or renamed)
+	 * instead of being silently dropped.
 	 * @param {HTMLSelectElement} select
 	 * @param {string[]} values
 	 * @param {string} currentValue
@@ -595,11 +603,10 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Schwebendes Menü: gemeinsame Grundlage für „Dynamischen Wert
-	// einfügen“ (Dateiname/Ausgabeordner in table.js/project.js). Webviews
-	// haben kein natives VS-Code-Menü, daher ein eigenes über die
-	// Menü-Theme-Variablen gestyltes (siehe .context-menu in main.css) —
-	// höchstens eines gleichzeitig offen.
+	// Floating menu: shared basis for "insert dynamic value" (file name/output
+	// folder in table.js/project.js). Webviews have no native VS Code menu, so
+	// this is a custom one styled via the menu theme variables (see
+	// .context-menu in main.css) — at most one open at a time.
 	// ---------------------------------------------------------------------
 
 	/** @type {(() => void) | null} */
@@ -612,6 +619,8 @@
 	}
 
 	/**
+	 * Opens a floating menu at the given viewport position, closing any menu
+	 * that is already open.
 	 * @typedef {{kind:'label',text:string}|{kind:'separator'}|{kind:'item',text:string,icon?:string,onPick:()=>void}} FloatingMenuEntry
 	 * @param {number} x
 	 * @param {number} y
@@ -646,8 +655,8 @@
 		}
 
 		document.body.appendChild(menu);
-		// Erst nach dem Anhängen messen, damit das Menü bei Bedarf nach
-		// links/oben ausweicht, statt aus dem Sichtbereich zu ragen.
+		// Measure only after appending, so the menu can shift left/up if needed
+		// instead of extending past the viewport.
 		const rect = menu.getBoundingClientRect();
 		menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - rect.width - 4))}px`;
 		menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - rect.height - 4))}px`;
@@ -681,14 +690,16 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Tag-Feld (Power-Automate-artig): fester Text ist direkt editierbar,
-	// dynamische `{…}`-Variablen erscheinen als atomare Tags — per
-	// Backspace/Entfernen wie ein Zeichen löschbar, ein Klick auf ein Tag
-	// entfernt es. Genutzt für den Dateinamen je Tabelle (table.js) und den
-	// Ausgabeordner je Projekt (project.js).
+	// Tag field (Power-Automate style): constant text is directly editable,
+	// while dynamic `{…}` variables appear as atomic tags — deletable with
+	// Backspace/Delete like a single character, and a click on a tag removes
+	// it. Used for the per-table file name (table.js) and the per-project
+	// output folder (project.js).
 	// ---------------------------------------------------------------------
 
 	/**
+	 * Builds the tag field; `labelFor`/`iconFor` supply the display of a `{…}`
+	 * token, and `onChange` receives the template text on every change.
 	 * @param {{
 	 *   value: string,
 	 *   placeholder: string,
@@ -706,12 +717,15 @@
 		field.setAttribute('aria-label', config.ariaLabel);
 		field.setAttribute('data-placeholder', config.placeholder);
 
-		/** @param {string} token */
+		/**
+		 * Builds one atomic tag element for a `{…}` token.
+		 * @param {string} token
+		 */
 		function createChip(token) {
-			// Äußeres Element bewusst inline-block mit einem inline-flex-Kind
-			// (.filename-tag-inner): ein atomarer Inline-Baustein direkt mit
-			// display:inline-flex wird von Chromium innerhalb von
-			// contenteditable unzuverlässig dargestellt (Grundlinie/Caret).
+			// The outer element is deliberately inline-block with an inline-flex
+			// child (.filename-tag-inner): an atomic inline building block with
+			// display:inline-flex applied directly is rendered unreliably by
+			// Chromium inside contenteditable (baseline/caret).
 			const chip = el('span', { className: 'filename-tag' });
 			chip.contentEditable = 'false';
 			chip.setAttribute('data-var', token);
@@ -721,14 +735,14 @@
 			inner.appendChild(el('span', { text: config.labelFor(token) }));
 			chip.appendChild(inner);
 			chip.addEventListener('click', () => {
-				// Klick entfernt das Tag.
+				// Clicking removes the tag.
 				chip.remove();
 				commit(true);
 			});
 			return chip;
 		}
 
-		/** Baut den Feldinhalt aus der gespeicherten Vorlage auf. @param {string} template */
+		/** Builds the field content from the stored template. @param {string} template */
 		function build(template) {
 			field.innerHTML = '';
 			const pattern = /\{([^{}]+)\}/g;
@@ -747,13 +761,13 @@
 			refreshEmptyState();
 		}
 
-		/** Liest den Feldinhalt zurück in die Vorlagen-Syntax. */
+		/** Reads the field content back into the template syntax. */
 		function serialize() {
-			// Zeilenumbrüche und geschweifte Klammern haben im *Text* nichts
-			// verloren (Klammern würden mit der Vorlagen-Syntax kollidieren) —
-			// nur je Textteil bereinigen, NICHT das Gesamtergebnis: dort würden
-			// sonst auch die Klammern der {…}-Tags selbst entfernt und die Tags
-			// beim nächsten Neuaufbau des Felds zu blankem Text zerfallen.
+			// Line breaks and curly braces have no business in the *text* (braces
+			// would collide with the template syntax) — clean each text part
+			// individually, NOT the combined result: that would also strip the
+			// braces of the {…} tags themselves, and the tags would decay into
+			// plain text the next time the field is rebuilt.
 			const cleanText = (text) => (text || '').replace(/[\r\n{}]/g, '');
 			let result = '';
 			field.childNodes.forEach((node) => {
@@ -762,7 +776,7 @@
 				} else if (node instanceof HTMLElement && node.dataset.var) {
 					result += `{${node.dataset.var}}`;
 				} else if (node instanceof HTMLElement) {
-					// z. B. aus einem Paste stammende Elemente: nur der Text zählt.
+					// E.g. elements originating from a paste: only the text counts.
 					result += cleanText(node.textContent);
 				}
 			});
@@ -770,8 +784,8 @@
 		}
 
 		function refreshEmptyState() {
-			// Ein geleertes contenteditable behält oft ein <br> zurück — dann
-			// gilt das Feld trotzdem als leer (Platzhalter anzeigen).
+			// An emptied contenteditable often keeps a <br> behind — the field
+			// still counts as empty then (show the placeholder).
 			const empty = (field.textContent || '') === '' && !field.querySelector('[data-var]');
 			if (empty && field.childNodes.length > 0) {
 				field.innerHTML = '';
@@ -794,13 +808,13 @@
 			}
 		});
 		field.addEventListener('paste', (event) => {
-			// Nur reinen Text übernehmen (ohne Formatierung/Zeilenumbrüche).
+			// Only take over plain text (without formatting or line breaks).
 			event.preventDefault();
 			const text = (event.clipboardData ? event.clipboardData.getData('text/plain') : '').replace(/[\r\n{}]/g, '');
 			document.execCommand('insertText', false, text);
 		});
 
-		/** Fügt eine Variable an der aktuellen Cursor-Position ein (sonst am Ende). @param {string} token */
+		/** Inserts a variable at the current cursor position (at the end otherwise). @param {string} token */
 		function insertVariable(token) {
 			const chip = createChip(token);
 			const selection = window.getSelection();

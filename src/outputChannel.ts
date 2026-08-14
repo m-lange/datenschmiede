@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 
 /**
- * Gemeinsamer Output-Channel „Datenschmiede“ (Ansicht „Output“/„Ausgabe“ in
- * VS Code): vollständiges Protokoll der Generator-Läufe und Vorschauen —
- * inklusive kompletter Python-Tracebacks und stderr-Ausgaben, die in einer
- * Fehler-Notification keinen Platz hätten. Die Notifications bieten dafür
- * einen „Details anzeigen“-Knopf an (siehe project/run.ts, table/preview.ts).
+ * The shared "Datenschmiede" output channel (VS Code's "Output" view): the full
+ * log of generator runs and previews — including complete Python tracebacks and
+ * stderr output, which would not fit into an error notification. Notifications
+ * offer a "Show Details" button for exactly this purpose (see project/run.ts,
+ * table/preview.ts).
  */
 let channel: vscode.OutputChannel | undefined;
 
+/** Returns the output channel, creating it on first use. */
 export function getOutputChannel(): vscode.OutputChannel {
 	if (!channel) {
 		channel = vscode.window.createOutputChannel('Datenschmiede');
@@ -16,17 +17,18 @@ export function getOutputChannel(): vscode.OutputChannel {
 	return channel;
 }
 
+/** Disposes the output channel; called when the extension is deactivated. */
 export function disposeOutputChannel(): void {
 	channel?.dispose();
 	channel = undefined;
 }
 
-/** Protokollzeile mit Zeitstempel. */
+/** Appends a timestamped log line. */
 export function log(message: string): void {
 	getOutputChannel().appendLine(`[${new Date().toISOString()}] ${message}`);
 }
 
-/** Fehler-Notification mit „Details anzeigen“-Knopf, der den Output-Channel öffnet. */
+/** Error notification with a "Show Details" button that reveals the output channel. */
 export function showErrorWithDetails(message: string, ...extraButtons: string[]): Thenable<string | undefined> {
 	const detailsLabel = vscode.l10n.t('Show Details');
 	return vscode.window.showErrorMessage(message, ...extraButtons, detailsLabel).then((choice) => {

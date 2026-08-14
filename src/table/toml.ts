@@ -3,7 +3,7 @@ import { Column, CsvOptions, OutputConfig, Table, createDefaultOutput } from './
 import { ParseError, tomlString } from '../tomlUtil';
 import { encodeGeneratorConfigLines, parseGeneratorConfig } from '../generator/configToml';
 
-/** Liest den TOML-Text einer .td-Datei in unser Tabellenmodell ein. */
+/** Parses the TOML text of a .td file into our table model. */
 export function parseTableText(text: string): Table {
 	if (!text.trim()) {
 		return { schema: '', name: '', description: '', columns: [], output: createDefaultOutput() };
@@ -31,6 +31,7 @@ export function parseTableText(text: string): Table {
 	};
 }
 
+/** Reads one `[[columns]]` block; unknown or missing values fall back to defaults. */
 function toColumn(raw: unknown): Column {
 	const c = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 	const column: Column = {
@@ -43,7 +44,7 @@ function toColumn(raw: unknown): Column {
 		description: toStr(c.description),
 		hidden: c.hidden === true,
 	};
-	// Den Generator-Teil parst der jeweilige Generator selbst (siehe
+	// The generator part is parsed by the generator layer itself (see
 	// generator/configToml.ts).
 	const generator = parseGeneratorConfig(c);
 	if (generator) {
@@ -52,7 +53,7 @@ function toColumn(raw: unknown): Column {
 	return column;
 }
 
-/** Liest den `[output]`-Block (fehlende Werte bekommen die Standardwerte, siehe createDefaultOutput). */
+/** Reads the `[output]` block (missing values fall back to the defaults, see createDefaultOutput). */
 function toOutput(raw: unknown): OutputConfig {
 	const output = createDefaultOutput();
 	const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -73,17 +74,18 @@ function toOutput(raw: unknown): OutputConfig {
 	return output;
 }
 
+/** Coerces an unknown TOML value to a string, treating anything else as empty. */
 function toStr(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
 
 /**
- * Schreibt unser Tabellenmodell als TOML-Text.
+ * Writes our table model as TOML text.
  *
- * Es wird bewusst nicht die generische stringify-Funktion von smol-toml
- * verwendet, sondern ein schlankes, festes Format: das hält die Datei
- * lesbar, git-diff-freundlich und benutzt für die Beschreibung bei Bedarf
- * einen mehrzeiligen TOML-String.
+ * smol-toml's generic stringify function is deliberately not used; a lean,
+ * fixed format is emitted instead: it keeps the file readable and
+ * git-diff-friendly and uses a multi-line TOML string for the description where
+ * needed.
  */
 export function serializeTable(table: Table): string {
 	const lines: string[] = [];
@@ -92,8 +94,8 @@ export function serializeTable(table: Table): string {
 	lines.push(`name = ${tomlString(table.name)}`);
 	lines.push(`description = ${tomlString(table.description)}`);
 
-	// Der [output]-Block muss vor den [[columns]]-Tabellen stehen — dahinter
-	// würde TOML ihn als weiteren Schlüssel der letzten Spalte lesen.
+	// The [output] block must precede the [[columns]] tables — after them TOML
+	// would read it as another key of the last column.
 	lines.push(...serializeOutput(table.output));
 
 	for (const column of table.columns) {
@@ -104,20 +106,20 @@ export function serializeTable(table: Table): string {
 		lines.push(`pk = ${column.pk ? 'true' : 'false'}`);
 		lines.push(`fk = ${column.fk ? 'true' : 'false'}`);
 		if (column.fk) {
-			// Nur relevant (und nur geschrieben), wenn die Spalte tatsächlich
-			// ein Fremdschlüssel ist — hält die Datei sauber, wenn nicht.
+			// Only relevant (and only written) when the column really is a
+			// foreign key — keeps the file clean otherwise.
 			lines.push(`fk_table = ${tomlString(column.fkTable)}`);
 			lines.push(`fk_column = ${tomlString(column.fkColumn)}`);
 		}
 		if (column.hidden) {
-			// Nur geschrieben, wenn gesetzt — Spalte wird generiert, aber nicht
-			// in die Ausgabedatei übernommen (siehe Column.hidden im Modell).
+			// Only written when set — the column is generated but not carried
+			// into the output file (see Column.hidden in the model).
 			lines.push('hidden = true');
 		}
 		lines.push(`description = ${tomlString(column.description)}`);
-		// Der Generator-Teil kommt vom Generator selbst — und muss als
-		// letztes stehen, weil [columns.generator_params] eine Untertabelle
-		// eröffnet (siehe generator/configToml.ts).
+		// The generator part comes from the generator layer itself — and must
+		// come last, because [columns.generator_params] opens a sub-table (see
+		// generator/configToml.ts).
 		lines.push(...encodeGeneratorConfigLines(column.generator, tomlString));
 	}
 
@@ -125,7 +127,7 @@ export function serializeTable(table: Table): string {
 	return lines.join('\n');
 }
 
-/** Schreibt den `[output]`-Block (Dateiname + CSV-Einstellungen). */
+/** Writes the `[output]` block (file name + CSV settings). */
 function serializeOutput(output: OutputConfig): string[] {
 	const lines: string[] = [];
 	lines.push('');
@@ -145,20 +147,20 @@ function serializeOutput(output: OutputConfig): string[] {
 	return lines;
 }
 
-/** Zeilenposition einer `[[columns]]`-Tabelle im Rohtext, für Diagnostics. */
+/** Line position of a `[[columns]]` table in the raw text, used for diagnostics. */
 export interface ColumnLineInfo {
-	/** 0-basierte Zeile der `[[columns]]`-Markierung selbst. */
+	/** 0-based line of the `[[columns]]` marker itself. */
 	columnsLine: number;
-	/** 0-basierte Zeile des `name`-Eintrags innerhalb dieser Tabelle, falls vorhanden. */
+	/** 0-based line of the `name` entry inside that table, if present. */
 	nameLine: number | null;
 }
 
 /**
- * Ermittelt für jede `[[columns]]`-Tabelle im Rohtext (in Dokumentreihenfolge,
- * passend zur Reihenfolge von `Table.columns`) ihre Zeilenposition. smol-toml
- * liefert nur für Parse-*Fehler* eine Position, keine für einzelne Werte —
- * daher hier ein einfacher zeilenbasierter Scan, den die Diagnostics-Erzeugung
- * im Extension-Host nutzt, um Meldungen an der richtigen Stelle zu platzieren.
+ * Determines the line position of every `[[columns]]` table in the raw text (in
+ * document order, matching the order of `Table.columns`). smol-toml only
+ * reports a position for parse *errors*, never for individual values — hence
+ * this simple line-based scan, which the extension host's diagnostics use to
+ * place messages at the right spot.
  */
 export function findColumnLineInfo(text: string): ColumnLineInfo[] {
 	const lines = text.split('\n');
@@ -173,8 +175,8 @@ export function findColumnLineInfo(text: string): ColumnLineInfo[] {
 			continue;
 		}
 		if (/^\s*\[columns\.generator_params\]/.test(line)) {
-			// Ab hier gehören Schlüssel (auch `name`) zur Parameter-Untertabelle,
-			// nicht mehr zur Spalte selbst.
+			// From here on keys (including `name`) belong to the parameter
+			// sub-table, no longer to the column itself.
 			current = null;
 			continue;
 		}

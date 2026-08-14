@@ -1,8 +1,8 @@
 /**
- * Registry der eingebauten Generatoren — je einer pro Datei in diesem
- * Ordner. Die Reihenfolge bestimmt die Anzeige-Reihenfolge in der
- * Generator-Auswahl des Table Editors. Bewusst vscode-frei, damit auch
- * table/toml.ts (Parsen/Schreiben der `.td`-Dateien) darauf zugreifen kann.
+ * Registry of the built-in generators — one per file in this folder. The order
+ * determines the display order in the table editor's generator picker.
+ * Deliberately vscode-free so that table/toml.ts (parsing/writing the `.td`
+ * files) can use it too.
  */
 
 import { GeneratorBase } from '../base';
@@ -24,6 +24,7 @@ export const BUILTIN_GENERATORS: readonly GeneratorBase[] = [
 	combineGenerator,
 ];
 
+/** Looks up a built-in generator by its `id`; `undefined` for custom or unknown ids. */
 export function findBuiltinGenerator(id: string): GeneratorBase | undefined {
 	return BUILTIN_GENERATORS.find((generator) => generator.id === id);
 }

@@ -5,37 +5,37 @@ import { ParseError } from '../tomlUtil';
 import { GeneratorBase } from '../generator/base';
 
 /**
- * Eine `.td`-Datei im Workspace, roh eingelesen und geparst — gemeinsame
- * Grundlage für alles, was den Workspace nach Tabellen durchsucht:
- * die FK-„Referenzierte Tabelle“-/„Referenzierte Spalte“-Auswahl im Table
- * Editor (siehe TableOption/toTableOptions unten), den Projekt-Tabellenbaum
- * (project/tree.ts, gruppiert nach Schema) und die FK-Abhängigkeitsauflösung
- * dort (braucht die vollen Spalten inkl. `fk`/`fk_table`, nicht nur Namen).
+ * A `.td` file in the workspace, read raw and parsed — the shared basis for
+ * everything that scans the workspace for tables: the FK "referenced
+ * table"/"referenced column" pickers in the table editor (see
+ * TableOption/toTableOptions below), the project table tree (project/tree.ts,
+ * grouped by schema) and the FK dependency resolution there (which needs the
+ * full columns including `fk`/`fk_table`, not just their names).
  */
 export interface TableEntry {
-	/** Absoluter URI der Datei — zum Öffnen (z. B. aus dem Projekt-Tabellenbaum) oder erneuten Einlesen. */
+	/** Absolute URI of the file — for opening it (e.g. from the project table tree) or re-reading it. */
 	uri: vscode.Uri;
-	/** Workspace-relativer Pfad (POSIX-Trenner), via `vscode.workspace.asRelativePath`. */
+	/** Workspace-relative path (POSIX separators), via `vscode.workspace.asRelativePath`. */
 	relativePath: string;
-	/** Rohtext zum Zeitpunkt des Einlesens — für Diagnostics (Zeilenpositionen) ohne erneutes Lesen/Parsen. */
+	/** Raw text at the time it was read — lets diagnostics compute line positions without reading/parsing again. */
 	text: string;
-	/** Geparste Tabelle, oder `null`, wenn die Datei kein gültiges TOML enthält (oder nicht lesbar war). */
+	/** The parsed table, or `null` if the file is not valid TOML (or could not be read). */
 	table: Table | null;
-	/** Der Parse-Fehler samt Position, falls das TOML kaputt ist (nicht gesetzt bei Lese-Fehlern). */
+	/** The parse error including its position if the TOML is broken (unset for read errors). */
 	error: ParseError | null;
-	/** Logische Identität (`schema.name`), oder `relativePath` als Fallback ohne gesetzten Namen bzw. bei Parse-Fehler. */
+	/** Logical identity (`schema.name`), falling back to `relativePath` when no name is set or on a parse error. */
 	label: string;
 }
 
-/** Eine Tabelle im Workspace, für die FK-„Referenzierte Tabelle“-/„Referenzierte Spalte“-Auswahl. */
+/** A table in the workspace, for the FK "referenced table"/"referenced column" pickers. */
 export interface TableOption {
-	/** Logische Identität (`schema.name`, oder Dateipfad als Fallback ohne gesetzten Namen). */
+	/** Logical identity (`schema.name`, or the file path as a fallback when no name is set). */
 	label: string;
-	/** Namen ihrer Spalten, für die „Referenzierte Spalte“-Auswahl. */
+	/** Names of its columns, for the "referenced column" picker. */
 	columns: string[];
 }
 
-/** Liest den Inhalt einer Datei — bevorzugt aus einem bereits offenen, noch ungesicherten Editor-Buffer statt von der Festplatte. */
+/** Reads a file's contents — preferring an already open, possibly unsaved editor buffer over the copy on disk. */
 export async function readFileText(uri: vscode.Uri): Promise<string> {
 	const openDocument = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
 	if (openDocument) {
@@ -46,10 +46,10 @@ export async function readFileText(uri: vscode.Uri): Promise<string> {
 }
 
 /**
- * Baut den Eintrag einer `.td`-Datei aus ihrem Rohtext — `text: null` steht
- * für eine nicht lesbare Datei (sie bleibt in der Liste sichtbar, statt
- * kommentarlos zu verschwinden). Gemeinsame Grundlage für listTables und den
- * Workspace-Index (src/workspaceIndex.ts).
+ * Builds the entry for a `.td` file from its raw text — `text: null` stands for
+ * an unreadable file (which stays visible in the list rather than silently
+ * disappearing). Shared basis for listTables and the workspace index
+ * (src/workspaceIndex.ts).
  */
 export function buildTableEntry(uri: vscode.Uri, relativePath: string, text: string | null): TableEntry {
 	if (text === null) {
@@ -65,15 +65,15 @@ export function buildTableEntry(uri: vscode.Uri, relativePath: string, text: str
 }
 
 /**
- * Liest und parst alle `.td`-Dateien im Workspace ein. Für offene, noch
- * ungesicherte Dateien wird der aktuelle Editor-Inhalt statt der
- * Festplattenversion gelesen (siehe readFileText). Dateien mit kaputtem TOML
- * landen trotzdem in der Liste (mit `table: null`), damit sie z. B. im
- * Projekt-Tabellenbaum sichtbar bleiben statt kommentarlos zu verschwinden.
+ * Reads and parses every `.td` file in the workspace. For open, unsaved files
+ * the current editor contents are read instead of the version on disk (see
+ * readFileText). Files with broken TOML still end up in the list (with
+ * `table: null`) so they stay visible, e.g. in the project table tree, instead
+ * of silently disappearing.
  *
- * Für die laufend benötigten Listen (Diagnostics, Editor-Webviews) hält der
- * Workspace-Index (src/workspaceIndex.ts) einen gemeinsamen Cache — diese
- * Funktion bleibt für einmalige Befehle (Generator-Lauf, Vorschau).
+ * For the lists needed continuously (diagnostics, editor webviews) the
+ * workspace index (src/workspaceIndex.ts) keeps a shared cache — this function
+ * remains for one-off commands (generator run, preview).
  */
 export async function listTables(): Promise<TableEntry[]> {
 	const uris = await vscode.workspace.findFiles('**/*.td', '**/node_modules/**');
@@ -87,10 +87,9 @@ export async function listTables(): Promise<TableEntry[]> {
 }
 
 /**
- * Verdichtet Tabellen-Einträge zu den `TableOption`s der FK-Auswahl im Table
- * Editor: eine Zeile je logischer Identität (Duplikate — zwei Dateien mit
- * demselben `schema.name` — werden auf den ersten Treffer reduziert), nach
- * Label sortiert.
+ * Condenses table entries into the `TableOption`s of the table editor's FK
+ * pickers: one row per logical identity (duplicates — two files with the same
+ * `schema.name` — collapse to the first match), sorted by label.
  */
 export function toTableOptions(entries: TableEntry[]): TableOption[] {
 	const byLabel = new Map<string, TableOption>();
@@ -106,15 +105,15 @@ export function toTableOptions(entries: TableEntry[]): TableOption[] {
 	return Array.from(byLabel.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Logische Tabellen-Identität (siehe `logicalTableName`); fällt auf `fallbackPath` zurück, solange kein Name gesetzt ist. */
+/** Logical table identity (see `logicalTableName`); falls back to `fallbackPath` while no name is set. */
 export function tableLabel(table: Table, fallbackPath: string): string {
 	return logicalTableName(table) || fallbackPath;
 }
 
 /**
- * Referenzierte Tabellen-Labels einer Tabelle (ohne Selbst-Referenzen):
- * aus FK-Spalten und den `table`-Referenzen der konfigurierten Generatoren.
- * Gemeinsamer Baustein von buildTableRefEdges und buildRequiredEdges.
+ * The table labels referenced by a table (self-references excluded): taken from
+ * FK columns and from the `table` references of the configured generators.
+ * Shared building block of buildTableRefEdges and buildRequiredEdges.
  */
 function collectRefLabels(table: Table, ownLabel: string, generatorsById: Map<string, GeneratorBase>): Set<string> {
 	const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
@@ -149,17 +148,17 @@ function collectRefLabels(table: Table, ownLabel: string, generatorsById: Map<st
 	return targets;
 }
 
-/** Generatoren als Map über ihre `id`, für die Referenz-Auflösung ohne lineare Suche je Spalte. */
+/** Generators keyed by their `id`, so reference resolution avoids a linear search per column. */
 export function generatorsById(generators: GeneratorBase[]): Map<string, GeneratorBase> {
 	return new Map(generators.map((generator) => [generator.id, generator] as const));
 }
 
 /**
- * Referenz-Kanten zwischen den Tabellen des Workspace (logische Identität →
- * referenzierte Identitäten), aus FK-Spalten und den `table`-Referenzen der
- * konfigurierten Generatoren. Selbst-Referenzen werden übersprungen (die
- * meldet bereits die FK-Validierung). Grundlage der Zyklus-Erkennung
- * (findTableCycle in table/validation.ts).
+ * Reference edges between the workspace's tables (logical identity →
+ * referenced identities), derived from FK columns and the `table` references of
+ * the configured generators. Self-references are skipped (FK validation already
+ * reports those). Basis of the cycle detection (findTableCycle in
+ * table/validation.ts).
  */
 export function buildTableRefEdges(entries: TableEntry[], generators: GeneratorBase[]): Map<string, string[]> {
 	const byId = generatorsById(generators);
@@ -178,13 +177,13 @@ export function buildTableRefEdges(entries: TableEntry[], generators: GeneratorB
 }
 
 /**
- * Referenz-Kanten auf *Pfad*-Ebene (workspace-relativer Pfad → benötigte
- * Pfade): dieselbe Ableitung wie buildTableRefEdges, aber die referenzierten
- * Labels sind bereits auf die (erste) Datei mit dieser logischen Identität
- * aufgelöst. Einmal gebaut, ist jede Hüllen-Berechnung (closureOf) reine
- * Graph-Traversierung — wichtig für den Tabellen-Tab des Projekt-Editors,
- * der den Sperr-Status jeder ausgewählten Tabelle über eine eigene Hülle
- * bestimmt (siehe buildPickerTree in project/editorProvider.ts).
+ * Reference edges at the *path* level (workspace-relative path → required
+ * paths): the same derivation as buildTableRefEdges, except the referenced
+ * labels are already resolved to the (first) file carrying that logical
+ * identity. Once built, every closure computation (closureOf) is pure graph
+ * traversal — which matters for the project editor's tables tab, where the
+ * locked state of each selected table is determined via its own closure (see
+ * buildPickerTree in project/editorProvider.ts).
  */
 export function buildRequiredEdges(entries: TableEntry[], generators: GeneratorBase[]): Map<string, string[]> {
 	const byId = generatorsById(generators);
@@ -216,9 +215,9 @@ export function buildRequiredEdges(entries: TableEntry[], generators: GeneratorB
 }
 
 /**
- * Transitive Hülle über vorberechnete Pfad-Kanten (buildRequiredEdges):
- * alle Pfade, die von `selected` aus (rekursiv) referenziert werden —
- * inklusive Mitgliedern von `selected`, die von anderen referenziert werden.
+ * Transitive closure over precomputed path edges (buildRequiredEdges): every
+ * path referenced (recursively) from `selected` — including members of
+ * `selected` that are referenced by others.
  */
 export function closureOf(selected: ReadonlySet<string>, edges: Map<string, string[]>): Set<string> {
 	const required = new Set<string>();
@@ -242,26 +241,25 @@ export function closureOf(selected: ReadonlySet<string>, edges: Map<string, stri
 }
 
 /**
- * Löst die transitive Hülle der referenzierten Tabellen auf: ausgehend von
- * `selected` (workspace-relative Pfade) wird für jede Tabelle jede gültige
- * `fk_table`-Referenz aufgelöst und rekursiv weiterverfolgt — plus jede
- * Tabelle, die ein konfigurierter Spalten-Generator benötigt (Parameter vom
- * Typ `table`, siehe GeneratorBase.requiredRefs). Leere und Selbst-Referenzen
- * (siehe validation.ts) werden übersprungen, ebenso Referenzen auf nicht
- * (mehr) vorhandene Tabellen.
+ * Resolves the transitive closure of referenced tables: starting from
+ * `selected` (workspace-relative paths), every valid `fk_table` reference of
+ * every table is resolved and followed recursively — plus every table required
+ * by a configured column generator (parameters of type `table`, see
+ * GeneratorBase.requiredRefs). Empty and self-references (see validation.ts) are
+ * skipped, as are references to tables that no longer exist.
  *
- * Grundlage für den Projekt-Tabellenbaum: Tabellen in der zurückgegebenen
- * Menge müssen ausgewählt bleiben, damit jede ausgewählte Fremdschlüssel-
- * Spalte und jeder Generator ein gültiges Ziel hat.
+ * Basis for the project table tree: tables in the returned set must stay
+ * selected so that every selected foreign key column and every generator has a
+ * valid target.
  *
- * Bequeme Hülle über buildRequiredEdges + closureOf — wer mehrere Hüllen
- * über denselben Einträgen braucht, baut die Kanten einmal selbst.
+ * Convenience wrapper around buildRequiredEdges + closureOf — code that needs
+ * several closures over the same entries should build the edges once itself.
  *
- * @param generators Alle verfügbaren Generatoren (eingebaute + benutzerdefinierte),
- * um Generator-Referenzen aufzulösen; ohne Angabe zählen nur FK-Referenzen.
- * @returns Die Pfade der (rekursiv) benötigten Tabellen — schließt `selected`
- * selbst nicht mit ein, auch wenn eine Tabelle sich selbst über einen Umweg
- * referenziert (durch die Selbst-Referenz-Prüfung ohnehin ausgeschlossen).
+ * @param generators All available generators (built-in plus custom) used to resolve
+ * generator references; when omitted only FK references count.
+ * @returns The paths of the (recursively) required tables — it does not include
+ * `selected` itself, even if a table references itself indirectly (which the
+ * self-reference check rules out anyway).
  */
 export function computeRequiredClosure(
 	selected: ReadonlySet<string>,

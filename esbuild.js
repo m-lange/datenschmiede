@@ -1,3 +1,7 @@
+// Build script: bundles the extension host (src/extension.ts) with esbuild and
+// copies the codicon assets into media/. The webview scripts in media/ are
+// deliberately NOT bundled — they are loaded as plain, uncompiled scripts.
+
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
@@ -6,8 +10,8 @@ const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
 /**
- * Kopiert die Codicon-Assets (Icon-Font, wie sie VS Code selbst verwendet)
- * aus node_modules in den media-Ordner, damit die Webview sie referenzieren kann.
+ * Copies the codicon assets (the icon font VS Code itself uses) from
+ * node_modules into the media folder, so the webviews can reference them.
  */
 function copyCodicons() {
 	const srcDir = path.join(__dirname, 'node_modules', '@vscode', 'codicons', 'dist');
@@ -20,7 +24,11 @@ function copyCodicons() {
 	}
 }
 
-/** @type {import('esbuild').Plugin} */
+/**
+ * Prints build start/end and errors in the format the watch task's problem
+ * matcher expects (see .vscode/tasks.json).
+ * @type {import('esbuild').Plugin}
+ */
 const problemMatcherPlugin = {
 	name: 'problem-matcher',
 	setup(build) {
@@ -39,6 +47,7 @@ const problemMatcherPlugin = {
 	},
 };
 
+/** Runs a single build, or starts watch mode with `--watch`. */
 async function main() {
 	copyCodicons();
 

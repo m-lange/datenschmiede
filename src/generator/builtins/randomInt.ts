@@ -2,8 +2,8 @@ import { GeneratorBase } from '../base';
 import { GeneratorConfig, GeneratorContext, GeneratorIssue } from '../types';
 
 /**
- * Eingebauter Generator: gleichverteilte Ganzzahlen in [min, max] (beide
- * Enden inklusive). Python-Gegenstück: `rng.integers` in python/generate.py.
+ * Built-in generator: uniformly distributed integers in [min, max] (both ends
+ * inclusive). Python counterpart: `rng.integers` in python/generate.py.
  */
 class RandomIntGenerator extends GeneratorBase {
 	constructor() {

@@ -3,7 +3,7 @@ import { GeneratorFile, createEmptyGeneratorFile } from './model';
 import { GeneratorParameter, PARAMETER_TYPES } from './types';
 import { ParseError, tomlString } from '../tomlUtil';
 
-/** Liest den TOML-Text einer .tdgen-Datei in unser Generator-Modell ein. */
+/** Parses the TOML text of a .tdgen file into our generator model. */
 export function parseGeneratorText(text: string): GeneratorFile {
 	if (!text.trim()) {
 		return createEmptyGeneratorFile();
@@ -39,13 +39,14 @@ export function parseGeneratorText(text: string): GeneratorFile {
 	};
 }
 
+/** Reads one `[[parameters]]` block; unknown or missing values fall back to defaults. */
 function toParameter(raw: unknown): GeneratorParameter {
 	const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 	const type = toStr(p.type);
 	const parameter: GeneratorParameter = {
 		name: toStr(p.name),
-		// Unbekannte Typen bleiben erhalten (statt sie stillschweigend zu
-		// ersetzen) — die Webview zeigt sie mit an, die Validierung meldet sie.
+		// Unknown types are preserved (rather than silently replaced) — the
+		// webview displays them and validation reports them.
 		type: type || 'string',
 		description: toStr(p.description),
 	};
@@ -61,19 +62,20 @@ function toParameter(raw: unknown): GeneratorParameter {
 	return parameter;
 }
 
+/** Coerces an unknown TOML value to a string, treating anything else as empty. */
 function toStr(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
 
-/** `true`, wenn der Parametertyp einer der bekannten ist (siehe PARAMETER_TYPES). */
+/** `true` when the parameter type is one of the known ones (see PARAMETER_TYPES). */
 export function isKnownParameterType(type: string): boolean {
 	return (PARAMETER_TYPES as readonly string[]).includes(type);
 }
 
 /**
- * Schreibt unser Generator-Modell als TOML-Text — analog zu
- * table/toml.ts#serializeTable ein schlankes, festes Format. Die
- * Python-Rümpfe stehen als mehrzeilige TOML-Strings unter `[code]`.
+ * Writes our generator model as TOML text — like table/toml.ts#serializeTable a
+ * lean, fixed format. The Python bodies are stored as multi-line TOML strings
+ * under `[code]`.
  */
 export function serializeGenerator(generator: GeneratorFile): string {
 	const lines: string[] = [];
@@ -98,8 +100,8 @@ export function serializeGenerator(generator: GeneratorFile): string {
 	lines.push('');
 	lines.push('[code]');
 	if (generator.code.parameters.trim()) {
-		// Verbatim gespeicherter Rumpf der parameters()-Zelle (die
-		// [[parameters]]-Blöcke oben sind die daraus abgeleitete Form).
+		// The verbatim body of the parameters() cell (the [[parameters]] blocks
+		// above are the form derived from it).
 		lines.push(`parameters = ${tomlString(ensureMultiline(generator.code.parameters))}`);
 	}
 	lines.push(`generate = ${tomlString(ensureMultiline(generator.code.generate))}`);
@@ -115,23 +117,24 @@ export function serializeGenerator(generator: GeneratorFile): string {
 }
 
 /**
- * Erzwingt für Code-Rümpfe die mehrzeilige TOML-String-Form (auch bei nur
- * einer Zeile), damit die Datei als Rohtext lesbar bleibt und ein
- * Speichern-Zyklus keine Formwechsel zwischen ein- und mehrzeilig erzeugt.
+ * Forces the multi-line TOML string form for code bodies (even for a single
+ * line), so the file stays readable as raw text and a save round-trip does not
+ * flip between the single-line and multi-line forms.
  */
 function ensureMultiline(code: string): string {
 	const text = code ?? '';
 	return text.includes('\n') ? text : `${text}\n`;
 }
 
-/** Zeilenposition eines `[[parameters]]`-Blocks im Rohtext, für Diagnostics (Gegenstück zu findColumnLineInfo in table/toml.ts). */
+/** Line position of a `[[parameters]]` block in the raw text, for diagnostics (counterpart to findColumnLineInfo in table/toml.ts). */
 export interface ParameterLineInfo {
-	/** 0-basierte Zeile der `[[parameters]]`-Markierung selbst. */
+	/** 0-based line of the `[[parameters]]` marker itself. */
 	parametersLine: number;
-	/** 0-basierte Zeile des `name`-Eintrags innerhalb dieses Blocks, falls vorhanden. */
+	/** 0-based line of the `name` entry inside that block, if present. */
 	nameLine: number | null;
 }
 
+/** Determines the line position of every `[[parameters]]` block, in document order. */
 export function findParameterLineInfo(text: string): ParameterLineInfo[] {
 	const lines = text.split('\n');
 	const result: ParameterLineInfo[] = [];
@@ -145,7 +148,7 @@ export function findParameterLineInfo(text: string): ParameterLineInfo[] {
 			continue;
 		}
 		if (/^\s*\[/.test(line)) {
-			// Nächster Block (z. B. [code]) — Parameter-Bereich zu Ende.
+			// Next block (e.g. [code]) — the parameter section has ended.
 			current = null;
 			continue;
 		}

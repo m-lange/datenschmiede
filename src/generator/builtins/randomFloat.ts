@@ -2,9 +2,9 @@ import { GeneratorBase } from '../base';
 import { GeneratorConfig, GeneratorContext, GeneratorIssue } from '../types';
 
 /**
- * Eingebauter Generator: gleichverteilte Gleitkommazahlen in [min, max),
- * gerundet auf `decimals` Nachkommastellen. Python-Gegenstück: `rng.uniform`
- * in python/generate.py.
+ * Built-in generator: uniformly distributed floating point numbers in
+ * [min, max), rounded to `decimals` decimal places. Python counterpart:
+ * `rng.uniform` in python/generate.py.
  */
 class RandomFloatGenerator extends GeneratorBase {
 	constructor() {

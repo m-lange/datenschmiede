@@ -5,8 +5,8 @@ import { ProjectEditorProvider } from '../editorProvider';
 import { fileExists, resolveTargetFolder } from '../../util';
 
 /**
- * Befehl "Neues Testdatenprojekt erstellen…": legt eine neue .tdproject-Datei
- * mit leerem Grundgerüst an und öffnet sie direkt im Custom Editor. Analog zu
+ * "New Test Data Project…" command: creates a new .tdproject file containing an
+ * empty skeleton and opens it straight away in the custom editor. Analogous to
  * table/commands/newTable.ts.
  */
 export async function newProjectCommand(target?: vscode.Uri): Promise<void> {

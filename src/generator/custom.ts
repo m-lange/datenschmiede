@@ -3,19 +3,18 @@ import { GeneratorFile } from './model';
 import { CUSTOM_GENERATOR_PREFIX } from './types';
 
 /**
- * Benutzerdefinierter Generator aus einer .tdgen-Datei des Workspace.
+ * A custom generator from a .tdgen file of the workspace.
  *
- * Referenziert wird er — wie Tabellen über ihre logische Identität — über
- * seinen `name` (mit Präfix `custom:` in der `id`), nicht über den
- * Dateinamen: die Referenz bleibt gültig, wenn die Datei umbenannt oder
- * verschoben wird; wird der *Name* geändert oder die Datei gelöscht, meldet
- * die Validierung im Table Editor die Referenz als nicht (mehr) gefunden.
+ * It is referenced — like tables via their logical identity — by its `name`
+ * (prefixed with `custom:` in the `id`), not by its file name: the reference
+ * survives renaming or moving the file; if the *name* is changed or the file is
+ * deleted, validation in the table editor reports the reference as not found.
  *
- * Anzeige, TOML-Teil, Prüfung und benötigte Referenzen kommen komplett aus
- * den generischen Implementierungen der Basisklasse — gesteuert über die in
- * der .tdgen-Datei deklarierte Parameterliste. Der Python-Code der Datei
- * (generate/parse_params/display_value) läuft erst beim Generator-Lauf
- * (siehe python/generate.py), nie im Extension-Host.
+ * Display, TOML part, validation and required references all come from the base
+ * class's generic implementations — driven by the parameter list declared in
+ * the .tdgen file. The file's Python code (generate/parse_params/display_value)
+ * only runs during a generator run (see python/generate.py), never in the
+ * extension host.
  */
 export class CustomGenerator extends GeneratorBase {
 	public readonly file: GeneratorFile;
@@ -31,16 +30,17 @@ export class CustomGenerator extends GeneratorBase {
 	}
 }
 
-/** `id` eines benutzerdefinierten Generators aus seinem Namen (`custom:<name>`). */
+/** `id` of a custom generator derived from its name (`custom:<name>`). */
 export function customGeneratorId(name: string): string {
 	return `${CUSTOM_GENERATOR_PREFIX}${name.trim()}`;
 }
 
+/** Whether a generator `id` refers to a custom generator rather than a built-in one. */
 export function isCustomGeneratorId(id: string): boolean {
 	return id.startsWith(CUSTOM_GENERATOR_PREFIX);
 }
 
-/** Name eines benutzerdefinierten Generators aus seiner `id` (`custom:<name>` → `<name>`). */
+/** Name of a custom generator derived from its `id` (`custom:<name>` → `<name>`). */
 export function customGeneratorName(id: string): string {
 	return id.slice(CUSTOM_GENERATOR_PREFIX.length);
 }
