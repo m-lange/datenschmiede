@@ -20,16 +20,18 @@ aber jede LEI-Prüfziffern-Validierung.
 - das Prüfziffern-Verfahren mod 97-10 als kleine Hilfsfunktion —
   `int(zeichen, 36)` übersetzt `A…Z` in `10…35`
 - die **`validate`-Zelle** prüft die LOU-Kennung (genau 4 alphanumerische
-  Zeichen)
-"""
+  Zeichen)"""
 
 [[parameters]]
 name = "lou"
 type = "string"
 description = "Vierstellige LOU-Kennung am LEI-Anfang (Standard \"5299\")."
-placeholder = "5299"
 
 [code]
+parameters = """
+return [
+    {"name": "lou", "type": "string", "description": "Vierstellige LOU-Kennung am LEI-Anfang (Standard \\"5299\\")."},
+]"""
 generate = """
 lou = ((params.get("lou") or "5299").strip().upper() + "0000")[:4]
 alphabet = ctx.np.array(list("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))
@@ -45,19 +47,22 @@ leis = []
 for row in core:
     body = f"{lou}00{''.join(row)}"
     leis.append(body + check_digits(body))
-return ctx.pd.Series(leis)
-"""
+return ctx.pd.Series(leis)"""
 parse_params = """
 return params
 """
 display_value = """
 lou = ((params.get("lou") or "5299").strip().upper() + "0000")[:4]
-return f"LEI {lou}00…"
-"""
+return f"LEI {lou}00…\""""
 validate = """
 warnings = []
 lou = (params.get("lou") or "").strip()
 if lou and (len(lou) != 4 or not lou.isalnum()):
     warnings.append("lou must be exactly 4 alphanumeric characters")
-return warnings
-"""
+return warnings"""
+scratch = """
+# Testwerte für die Zellen unten — anpassen und ausführen (params/n gelten für die Methoden-Zellen).
+params = {
+    "lou": "5299",
+}
+n = 10"""
