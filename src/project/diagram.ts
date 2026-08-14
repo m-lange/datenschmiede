@@ -47,6 +47,14 @@ export interface DiagramTable {
 	/** `true` bei einer referenzierten (sekundären) Tabelle — `records` gilt je Datensatz von `referencedTable`. */
 	secondary: boolean;
 	referencedTable?: string;
+	/**
+	 * Echte Datensatzanzahl aus dem letzten Generator-Lauf (siehe
+	 * project/runResults.ts) — bei Kardinalitäts-Bereichen steht die
+	 * tatsächliche Anzahl erst nach dem Lauf fest. Fehlt ohne bisherigen Lauf
+	 * oder wenn die Tabelle daran nicht beteiligt war; dann zeigt das Diagramm
+	 * die berechnete Von/Bis-Anzahl.
+	 */
+	lastRunRecords?: number;
 }
 
 /** Eine FK-Kante: von der referenzierenden Spalte (Kind) zur referenzierten Tabelle/Spalte (Eltern). */
@@ -70,6 +78,14 @@ export interface DiagramEdge {
 export interface ProjectDiagram {
 	tables: DiagramTable[];
 	edges: DiagramEdge[];
+	/** Zeitpunkt des letzten Generator-Laufs (Epoch-Millisekunden), falls `lastRunRecords` gesetzt sind. */
+	lastRunAt?: number;
+}
+
+/** Struktureller Ausschnitt eines RunResult (siehe project/runResults.ts) — ohne dessen vscode-Abhängigkeit. */
+interface DiagramRunResult {
+	finishedAt: number;
+	counts: Record<string, number>;
 }
 
 /** Struktureller Ausschnitt eines TableEntry (siehe table/repository.ts) — ohne dessen vscode-Abhängigkeit. */
@@ -105,6 +121,7 @@ export function buildProjectDiagram(
 	project: Project,
 	entries: DiagramSourceEntry[],
 	recordRows: DiagramRecordsRow[],
+	lastRun: DiagramRunResult | null = null,
 ): ProjectDiagram {
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
 	const rowByPath = new Map(recordRows.map((row) => [row.path, row] as const));
@@ -182,6 +199,7 @@ export function buildProjectDiagram(
 
 	const tables: DiagramTable[] = selected.map((item) => {
 		const used = usedColumns.get(item.label);
+		const lastRunRecords = lastRun?.counts[item.label];
 		return {
 			path: item.path,
 			label: item.label,
@@ -201,8 +219,14 @@ export function buildProjectDiagram(
 			estimatedMax: item.row?.estimatedMax,
 			secondary: item.row?.secondary ?? false,
 			referencedTable: item.row?.referencedTable,
+			...(lastRunRecords !== undefined ? { lastRunRecords } : {}),
 		};
 	});
 
+	// Der Zeitstempel gehört nur ins Diagramm, wenn er dort auch etwas erklärt
+	// (mindestens ein Kasten zeigt eine echte Anzahl aus diesem Lauf).
+	if (lastRun && tables.some((table) => table.lastRunRecords !== undefined)) {
+		return { tables, edges, lastRunAt: lastRun.finishedAt };
+	}
 	return { tables, edges };
 }

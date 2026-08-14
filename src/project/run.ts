@@ -11,6 +11,7 @@ import { listGenerators, toGeneratorList } from '../generator/repository';
 import { CustomGenerator } from '../generator/custom';
 import { listLookups } from '../lookup/repository';
 import { runPlanProcess, toPlanOutput, writePlanFile } from './planRunner';
+import { saveRunResult } from './runResults';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 
 /**
@@ -155,6 +156,8 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 				const files: { table: string; file: string; records: number }[] = doneFiles;
 				const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
 				log(`Run "${projectName}" finished in ${seconds}s: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
+				// Echte Datensatzanzahlen fürs ER-Diagramm merken (siehe runResults.ts).
+				await saveRunResult(context, uri, files);
 				const openLabel = vscode.l10n.t('Open Output Folder');
 				void vscode.window
 					.showInformationMessage(

@@ -16,8 +16,12 @@ export interface ProjectWebviewStrings {
 	diagramOpenHint: string;
 	diagramLegendPk: string;
 	diagramLegendFk: string;
-	/** Tooltip des Datensatz-Zählers im Kasten-Kopf. */
+	/** Tooltip des Datensatz-Zählers im Kasten-Kopf (ohne bisherigen Lauf: berechnete/konfigurierte Anzahl). */
 	diagramRecordsTitle: string;
+	/** Tooltip-Zeile des Zählers mit echter Anzahl; `{0}` = Anzahl, `{1}` = Zeitpunkt des Laufs. */
+	diagramRecordsLastRun: string;
+	/** Tooltip-Zeile mit dem konfigurierten Wert unter der echten Anzahl; `{0}` = konfigurierter Wert. */
+	diagramRecordsConfigured: string;
 
 	fieldNameLabel: string;
 	fieldNamePlaceholder: string;
@@ -108,6 +112,8 @@ const en: ProjectWebviewStrings = {
 	diagramLegendPk: 'Primary key',
 	diagramLegendFk: 'Foreign key',
 	diagramRecordsTitle: 'Records to generate',
+	diagramRecordsLastRun: 'Last run: {0} records ({1})',
+	diagramRecordsConfigured: 'Configured: {0}',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'e.g. Sales Reporting Demo',
@@ -189,6 +195,8 @@ const de: ProjectWebviewStrings = {
 	diagramLegendPk: 'Primärschlüssel',
 	diagramLegendFk: 'Fremdschlüssel',
 	diagramRecordsTitle: 'Zu erzeugende Datensätze',
+	diagramRecordsLastRun: 'Letzter Lauf: {0} Datensätze ({1})',
+	diagramRecordsConfigured: 'Konfiguriert: {0}',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'z. B. Demo Vertriebsauswertung',

@@ -13,9 +13,9 @@
 	'use strict';
 
 	/** @typedef {{name:string,type:string,pk:boolean,fk:boolean,hidden:boolean}} DiagramColumn */
-	/** @typedef {{path:string,label:string,schema:string,name:string,columns:DiagramColumn[],records?:string,estimatedMin?:number,estimatedMax?:number,secondary:boolean,referencedTable?:string}} DiagramTable */
+	/** @typedef {{path:string,label:string,schema:string,name:string,columns:DiagramColumn[],records?:string,estimatedMin?:number,estimatedMax?:number,secondary:boolean,referencedTable?:string,lastRunRecords?:number}} DiagramTable */
 	/** @typedef {{fromTable:string,fromColumn:string,toTable:string,toColumn:string,cardinality?:string}} DiagramEdge */
-	/** @typedef {{tables:DiagramTable[],edges:DiagramEdge[]}} ProjectDiagram */
+	/** @typedef {{tables:DiagramTable[],edges:DiagramEdge[],lastRunAt?:number}} ProjectDiagram */
 	/**
 	 * @typedef {Object} DiagramOptions
 	 * @property {any} strings Übersetzte Texte (siehe project/webviewStrings.ts).
@@ -404,8 +404,16 @@
 		const fonts = fontSet();
 		const iconChars = { key: codiconChar('key'), references: codiconChar('references') };
 
-		/** Anzeige-Text der Datensatzanzahl eines Kastens ("12.500" oder "100..300"), leer ohne Angabe. @param {DiagramTable} table */
+		/**
+		 * Anzeige-Text der Datensatzanzahl eines Kastens: bevorzugt die echte
+		 * Anzahl aus dem letzten Generator-Lauf ("812"), sonst die berechnete
+		 * Von/Bis-Anzahl ("100..300") bzw. der konfigurierte Wert; leer ohne
+		 * Angabe. @param {DiagramTable} table
+		 */
 		function recordsText(table) {
+			if (table.lastRunRecords !== undefined) {
+				return formatNumber(table.lastRunRecords);
+			}
 			if (table.estimatedMin !== undefined && table.estimatedMax !== undefined) {
 				return table.estimatedMin === table.estimatedMax
 					? formatNumber(table.estimatedMin)
@@ -414,6 +422,15 @@
 			const raw = (table.records || '').trim();
 			return /^\d+$/.test(raw) ? formatNumber(Number(raw)) : raw;
 		}
+
+		// Zeitpunkt des letzten Laufs, formatiert in der Webview-Sprache — für
+		// die Tooltips der Zähler mit echten Anzahlen.
+		const lastRunText = diagram.lastRunAt
+			? new Intl.DateTimeFormat(document.documentElement.lang === 'de' ? 'de-DE' : 'en-US', {
+					dateStyle: 'short',
+					timeStyle: 'short',
+				}).format(new Date(diagram.lastRunAt))
+			: '';
 
 		// --- Kastenbreite aus den Inhalten ableiten (einheitlich für alle) ---
 		let needed = MIN_BOX_W;
@@ -600,9 +617,26 @@
 
 			if (pillText) {
 				const pillGroup = svgEl('g', { class: 'er-pill-group' });
-				let pillTitle = strings.diagramRecordsTitle;
-				if (table.secondary && table.records) {
-					pillTitle += `\n${table.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', table.referencedTable || '')}`;
+				// Konfigurierter Wert als Text — bei referenzierten Tabellen samt
+				// „je Datensatz von …“, sonst die feste Anzahl.
+				const configured = table.records
+					? table.secondary
+						? `${table.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', table.referencedTable || '')}`
+						: table.records
+					: '';
+				let pillTitle;
+				if (table.lastRunRecords !== undefined) {
+					pillTitle = strings.diagramRecordsLastRun
+						.replace('{0}', formatNumber(table.lastRunRecords))
+						.replace('{1}', lastRunText);
+					if (configured) {
+						pillTitle += `\n${strings.diagramRecordsConfigured.replace('{0}', configured)}`;
+					}
+				} else {
+					pillTitle = strings.diagramRecordsTitle;
+					if (table.secondary && configured) {
+						pillTitle += `\n${configured}`;
+					}
 				}
 				appendTitle(pillGroup, pillTitle);
 				pillGroup.appendChild(

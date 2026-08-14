@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { Project, ProjectTable } from './model';
 import { buildProjectDiagram } from './diagram';
+import { getRunResult, onDidSaveRunResult } from './runResults';
 import { parseProjectText, serializeProject } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
@@ -258,6 +259,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), für computeRequiredClosure. */
 	private cachedGenerators: GeneratorBase[] = [];
 	private readonly indexSub: vscode.Disposable;
+	private readonly runResultSub: vscode.Disposable;
 	/**
 	 * Aufgelöster Interpreter-Status je verknüpftem Interpreter (`pfad|id`):
 	 * postState läuft bei jedem Tastendruck im Projekt (onDidChangeTextDocument)
@@ -280,10 +282,16 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				void this.broadcastPickerTree();
 			}
 		});
+		// Nach jedem Generator-Lauf zeigen die Diagramme die echten
+		// Datensatzanzahlen des Laufs (siehe runResults.ts) — Anzeige auffrischen.
+		this.runResultSub = onDidSaveRunResult(() => {
+			void this.broadcastPickerTree();
+		});
 	}
 
 	public dispose(): void {
 		this.indexSub.dispose();
+		this.runResultSub.dispose();
 	}
 
 	/** Löst den verknüpften Interpreter auf — aus dem Cache, außer `fresh` erzwingt eine Neuauflösung. */
@@ -343,7 +351,12 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
-				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles);
+				const diagram = buildProjectDiagram(
+					state.project,
+					this.cachedEntries,
+					outputFiles,
+					getRunResult(this.context, document.uri),
+				);
 				const pythonStatus = state.project.python ? await this.resolvePythonStatus(state.project.python, false) : null;
 				void webviewPanel.webview.postMessage({
 					type: 'update',
@@ -386,7 +399,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						'project' in state ? buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators) : [];
 					const outputFiles = 'project' in state ? buildOutputFiles(state.project, this.cachedEntries) : [];
 					const diagram =
-						'project' in state ? buildProjectDiagram(state.project, this.cachedEntries, outputFiles) : null;
+						'project' in state
+							? buildProjectDiagram(state.project, this.cachedEntries, outputFiles, getRunResult(this.context, document.uri))
+							: null;
 					const pythonStatus =
 						'project' in state && state.project.python ? await this.resolvePythonStatus(state.project.python, true) : null;
 					const columnWidths = this.context.globalState.get<Record<string, number>>(COLUMN_WIDTHS_STATE_KEY, {});
@@ -698,7 +713,12 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
-				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles);
+				const diagram = buildProjectDiagram(
+					state.project,
+					this.cachedEntries,
+					outputFiles,
+					getRunResult(this.context, document.uri),
+				);
 				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles, diagram });
 			}
 		}
