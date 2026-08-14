@@ -176,12 +176,17 @@
 		if (!strings) {
 			return;
 		}
+		// Tab-Leiste und Inhalt getrennt: die Leiste bleibt oben stehen,
+		// gescrollt wird nur der Inhaltsbereich (.tab-content, siehe main.css).
+		const content = el('div', { className: 'tab-content' });
 		if (parseError) {
-			app.appendChild(renderErrorState(strings, parseError));
+			content.appendChild(renderErrorState(strings, parseError));
+			app.appendChild(content);
 			return;
 		}
 		app.appendChild(renderTabs());
-		app.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderColumnsTab());
+		content.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderColumnsTab());
+		app.appendChild(content);
 
 		// Erst jetzt (Tabelle hängt im echten DOM) lässt sich die tatsächlich
 		// benötigte Breite je Spalte messen — siehe renderColumnsTab.

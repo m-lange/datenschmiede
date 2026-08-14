@@ -23,19 +23,15 @@
 html,
 body {
 	height: 100%;
-	/* Vertikal wird gescrollt, sobald der Inhalt höher als das Panel ist.
-	   Horizontal bleibt es normalerweise bei voller Breite ohne Scrollen;
-	   einzelne breite Elemente (z. B. das Spalten-Grid) verwalten ihr
-	   eigenes horizontales Scrollen selbst (siehe .columns-table-wrap).
+	/* Die Seite selbst scrollt vertikal nicht mehr — das übernimmt der
+	   Inhaltsbereich unterhalb der Tab-Leiste (.tab-content), damit die
+	   Tabs beim Scrollen oben stehen bleiben. Horizontal bleibt es bei
 	   "auto" statt "hidden", damit sehr schmale Panels (unterhalb der
-	   Mindestbreiten) nicht Inhalte unerreichbar abschneiden. */
+	   Mindestbreite von #app) nicht Inhalte unerreichbar abschneiden;
+	   einzelne breite Elemente (z. B. das Spalten-Grid) verwalten ihr
+	   eigenes horizontales Scrollen selbst (siehe .columns-table-wrap). */
 	overflow-x: auto;
-	overflow-y: auto;
-	/* Reserviert den Platz der vertikalen Scrollleiste immer, auch wenn sie
-	   gerade nicht gebraucht wird (z. B. nachdem eine Suche die Zeilenzahl
-	   verkürzt hat) — sonst springt der ganze Inhalt beim Auftauchen/
-	   Verschwinden der Leiste seitlich um deren Breite. */
-	scrollbar-gutter: stable;
+	overflow-y: hidden;
 }
 
 body {
@@ -53,7 +49,12 @@ body {
 	   wächst mit dem Panel, schrumpft aber nie unter eine nutzbare Größe. */
 	width: 100%;
 	min-width: 420px;
-	padding: 0 24px 64px;
+	/* Spaltenlayout mit fester Kopfzeile: die Tab-Leiste bleibt stehen,
+	   nur der Inhaltsbereich darunter (.tab-content) scrollt. Der frühere
+	   Seitenabstand von #app wandert dafür in .tabbar und .tab-content. */
+	height: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 h1,
@@ -77,8 +78,11 @@ h3 {
 .tabbar {
 	display: inline-flex;
 	gap: 2px;
-	margin-top: 14px;
-	margin-bottom: 20px;
+	margin: 14px 24px 20px;
+	/* Als Flex-Kind von #app nicht auf volle Breite strecken, sondern die
+	   Pillenform der Segmented Control behalten. */
+	align-self: flex-start;
+	flex: none;
 	padding: 3px;
 	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
 	border: 1px solid var(--card-border);
@@ -111,6 +115,23 @@ h3 {
 .tab:focus-visible {
 	outline: 1px solid var(--vscode-focusBorder);
 	outline-offset: 2px;
+}
+
+/* Scrollender Inhaltsbereich unterhalb der (fest stehenden) Tab-Leiste;
+   auch der Fehlerzustand wird von den Editoren hier hineingelegt, damit er
+   bei kleinen Panels erreichbar bleibt. */
+.tab-content {
+	flex: 1;
+	/* Erlaubt dem Flex-Kind, kleiner zu sein als sein Inhalt — ohne das
+	   wüchse es einfach mit und nichts würde scrollen. */
+	min-height: 0;
+	overflow-y: auto;
+	/* Reserviert den Platz der vertikalen Scrollleiste immer, auch wenn sie
+	   gerade nicht gebraucht wird (z. B. nachdem eine Suche die Zeilenzahl
+	   verkürzt hat) — sonst springt der ganze Inhalt beim Auftauchen/
+	   Verschwinden der Leiste seitlich um deren Breite. */
+	scrollbar-gutter: stable;
+	padding: 0 24px 64px;
 }
 
 .tab-panel {
