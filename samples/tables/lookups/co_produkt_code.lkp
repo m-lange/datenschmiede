@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: co_produkt_code
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"PRD_KRED_IK";"25"
+"PRD_KRED_KK";"25"
+"PRD_EINL_TG";"20"
+"PRD_EINL_FG";"15"
+"PRD_GIRO_FK";"15"

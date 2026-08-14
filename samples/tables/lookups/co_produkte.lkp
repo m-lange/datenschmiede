@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: co_produkte
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"KRED";"35"
+"AVAL";"30"
+"DERI";"15"
+"EINL";"10"
+"ZG";"10"

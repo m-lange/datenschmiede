@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: bva_produktgruppe
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"Investitionsdarlehen";"25"
+"Betriebsmittelkredite";"25"
+"Sichteinlagen";"20"
+"Termingelder";"15"
+"Zahlungsverkehrsprovisionen";"15"

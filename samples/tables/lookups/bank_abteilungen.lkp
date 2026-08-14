@@ -1,0 +1,8 @@
+# Datenschmiede Nachschlageliste
+# name: bank_abteilungen
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"Firmenkundenbetreuung";"4"
+"Verbundpartner";"3"
+"Kreditmanagement";"2"
+"Strukturierte Finanzierung";"1"

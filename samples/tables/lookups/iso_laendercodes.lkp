@@ -1,0 +1,14 @@
+# Datenschmiede Nachschlageliste
+# name: iso_laendercodes
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"DE";"30"
+"US";"20"
+"FR";"10"
+"IT";"10"
+"CN";"10"
+"GB";"8"
+"AT";"4"
+"CH";"4"
+"NL";"2"
+"PL";"2"

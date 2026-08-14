@@ -1,0 +1,8 @@
+# Datenschmiede Nachschlageliste
+# name: kredit_antragsarten
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"Neuantrag";"5"
+"Prolongation";"3"
+"Krediterhöhung";"2"
+"Konditionsanpassung";"1"

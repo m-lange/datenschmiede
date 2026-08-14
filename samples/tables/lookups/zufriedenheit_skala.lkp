@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: zufriedenheit_skala
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"Sehr zufrieden";"4"
+"Zufrieden";"4"
+"Eher zufrieden";"2"
+"Eher unzufrieden";"1"
+"Unzufrieden";"1"

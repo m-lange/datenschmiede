@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: gp_nummern
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"GP100001";"20"
+"GP100002";"20"
+"GP100003";"20"
+"GP100004";"20"
+"GP100005";"20"

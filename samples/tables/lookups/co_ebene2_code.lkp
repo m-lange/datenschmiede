@@ -1,0 +1,7 @@
+# Datenschmiede Nachschlageliste
+# name: co_ebene2_code
+# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
+"value";"weight"
+"KREDIT";"50"
+"EINLAGEN";"35"
+"ZV_KONTO";"15"
