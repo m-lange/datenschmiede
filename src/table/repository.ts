@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { Table, logicalTableName } from './model';
 import { parseTableText } from './toml';
 import { ParseError } from '../tomlUtil';
+import { decodeUtf8 } from '../encoding';
 import { GeneratorBase } from '../generator/base';
 
 /**
@@ -35,14 +36,20 @@ export interface TableOption {
 	columns: string[];
 }
 
-/** Reads a file's contents — preferring an already open, possibly unsaved editor buffer over the copy on disk. */
+/**
+ * Reads a file's contents — preferring an already open, possibly unsaved
+ * editor buffer over the copy on disk. Files on disk are decoded as UTF-8 (see
+ * src/encoding.ts); for open documents VS Code has decoded them already, which
+ * the `files.encoding` default contributed for the project languages pins to
+ * UTF-8 as well (see package.json → configurationDefaults).
+ */
 export async function readFileText(uri: vscode.Uri): Promise<string> {
 	const openDocument = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
 	if (openDocument) {
 		return openDocument.getText();
 	}
 	const bytes = await vscode.workspace.fs.readFile(uri);
-	return Buffer.from(bytes).toString('utf8');
+	return decodeUtf8(bytes);
 }
 
 /**

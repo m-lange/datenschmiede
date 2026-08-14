@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { ParseError } from './tomlUtil';
+import { createStreamDecoder, pythonEnv } from './encoding';
 import { resolveAnyInterpreter } from './project/python';
 import { ColumnLineInfo, findColumnLineInfo } from './table/toml';
 import { validateTable, findTableCycle, findColumnCycle, Issue } from './table/validation';
@@ -614,6 +615,11 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	): Promise<{ result: PythonCheckResult | null; spawnFailed: boolean }> {
 		const script = [
 			'import sys, json',
+			// The payload and the answer are UTF-8 in both directions — without
+			// this the interpreter would use the Windows code page for its
+			// standard streams and mangle umlauts in generator code and
+			// validation messages.
+			'for _s in (sys.stdin, sys.stdout): _s.reconfigure(encoding="utf-8")',
 			'data = json.load(sys.stdin)',
 			'out = {"syntax": [], "validations": []}',
 			'validators = {}',
@@ -650,11 +656,12 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		].join('\n');
 
 		return new Promise((resolve) => {
-			const child = spawn(pythonPath, ['-c', script]);
+			const child = spawn(pythonPath, ['-c', script], { env: pythonEnv() });
+			const decodeStdout = createStreamDecoder();
 			let stdout = '';
 			let spawnFailed = false;
 			child.stdout.on('data', (chunk: Buffer) => {
-				stdout += chunk.toString('utf8');
+				stdout += decodeStdout(chunk);
 			});
 			child.on('error', () => {
 				spawnFailed = true;

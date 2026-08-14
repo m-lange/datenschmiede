@@ -23,6 +23,15 @@ import json
 import sys
 import traceback
 
+# The protocol is UTF-8 in both directions — without this Python would use the
+# locale encoding for its piped standard streams (cp1252 on a German Windows)
+# and mangle umlauts in cell code, lookup values and cell output.
+for _stream in (sys.stdin, sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 LOOKUPS = {}
 
 try:

@@ -3,6 +3,7 @@ import { createEmptyProject } from '../model';
 import { serializeProject } from '../toml';
 import { ProjectEditorProvider } from '../editorProvider';
 import { fileExists, resolveTargetFolder } from '../../util';
+import { encodeUtf8 } from '../../encoding';
 
 /**
  * "New Test Data Project…" command: creates a new .tdproject file containing an
@@ -38,7 +39,7 @@ export async function newProjectCommand(target?: vscode.Uri): Promise<void> {
 
 	const projectName = fileName.replace(/\.tdproject$/, '');
 	const content = serializeProject(createEmptyProject(projectName));
-	await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
+	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, ProjectEditorProvider.viewType);
 }

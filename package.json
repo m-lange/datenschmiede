@@ -26,6 +26,24 @@
     "ms-python.python"
   ],
   "contributes": {
+    "configurationDefaults": {
+      "[td]": {
+        "files.encoding": "utf8",
+        "files.autoGuessEncoding": false
+      },
+      "[tdproject]": {
+        "files.encoding": "utf8",
+        "files.autoGuessEncoding": false
+      },
+      "[lkp]": {
+        "files.encoding": "utf8",
+        "files.autoGuessEncoding": false
+      },
+      "[tdgen]": {
+        "files.encoding": "utf8",
+        "files.autoGuessEncoding": false
+      }
+    },
     "languages": [
       {
         "id": "td",

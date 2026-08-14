@@ -3,6 +3,7 @@ import { createEmptyGeneratorFile } from '../model';
 import { serializeGenerator } from '../toml';
 import { GENERATOR_NOTEBOOK_TYPE } from '../notebook';
 import { fileExists, resolveTargetFolder } from '../../util';
+import { encodeUtf8 } from '../../encoding';
 
 /**
  * "New Generator…" command: creates a new .tdgen file with a skeleton (example
@@ -38,7 +39,7 @@ export async function newGeneratorCommand(target?: vscode.Uri): Promise<void> {
 
 	const generatorName = fileName.replace(/\.tdgen$/, '');
 	const content = serializeGenerator(createEmptyGeneratorFile(generatorName));
-	await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
+	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, GENERATOR_NOTEBOOK_TYPE);
 }

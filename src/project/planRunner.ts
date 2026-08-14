@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { Table } from '../table/model';
 import type { Plan, PlanTable } from './run';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
+import { createStreamDecoder, encodeUtf8, pythonEnv } from '../encoding';
 
 /**
  * Shared building blocks for the two callers of the Python runner
@@ -38,7 +39,7 @@ export async function writePlanFile(
 ): Promise<vscode.Uri> {
 	await vscode.workspace.fs.createDirectory(context.globalStorageUri);
 	const planUri = vscode.Uri.joinPath(context.globalStorageUri, `${prefix}-${Date.now()}.json`);
-	await vscode.workspace.fs.writeFile(planUri, Buffer.from(JSON.stringify(plan), 'utf8'));
+	await vscode.workspace.fs.writeFile(planUri, encodeUtf8(JSON.stringify(plan)));
 	return planUri;
 }
 
@@ -90,7 +91,10 @@ export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcess
 	const scriptPath = vscode.Uri.joinPath(options.context.extensionUri, 'python', 'generate.py').fsPath;
 
 	return new Promise<PlanProcessResult>((resolve) => {
-		const child = spawn(options.pythonPath, [scriptPath, options.planUri.fsPath], { cwd: options.cwd });
+		const child = spawn(options.pythonPath, [scriptPath, options.planUri.fsPath], {
+			cwd: options.cwd,
+			env: pythonEnv(),
+		});
 		options.token?.onCancellationRequested(() => {
 			if (options.onCancel) {
 				options.onCancel();
@@ -155,8 +159,13 @@ export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcess
 			}
 		};
 
+		// One decoder per stream, so that a multi-byte character split across two
+		// chunks survives (see createStreamDecoder).
+		const decodeStdout = createStreamDecoder();
+		const decodeStderr = createStreamDecoder();
+
 		child.stdout.on('data', (chunk: Buffer) => {
-			stdoutRest += chunk.toString('utf8');
+			stdoutRest += decodeStdout(chunk);
 			const lines = stdoutRest.split('\n');
 			stdoutRest = lines.pop() ?? '';
 			for (const line of lines) {
@@ -164,7 +173,7 @@ export function runPlanProcess(options: PlanProcessOptions): Promise<PlanProcess
 			}
 		});
 		child.stderr.on('data', (chunk: Buffer) => {
-			const text = chunk.toString('utf8');
+			const text = decodeStderr(chunk);
 			stderrText += text;
 			// Python stderr (warnings, unexpected output) goes to the
 			// "Datenschmiede" output channel in full.

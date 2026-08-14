@@ -6,6 +6,7 @@ import { CellRole, CellSpec, cellsToFile, fileToCells } from './notebookCells';
 import { resolveAnyInterpreter } from '../project/python';
 import { toPlanLookups } from '../project/run';
 import { listLookups } from '../lookup/repository';
+import { createStreamDecoder, decodeUtf8, encodeUtf8, pythonEnv } from '../encoding';
 import { log } from '../outputChannel';
 
 /** Notebook type of the generator editor (see `contributes.notebooks` in package.json). */
@@ -39,7 +40,7 @@ const ROLE_KEY = 'datenschmiedeRole';
 /** Translates between the `.tdgen` TOML on disk and the notebook's cells. */
 class GeneratorNotebookSerializer implements vscode.NotebookSerializer {
 	public deserializeNotebook(content: Uint8Array): vscode.NotebookData {
-		const text = Buffer.from(content).toString('utf8');
+		const text = decodeUtf8(content);
 		// Broken TOML throws — VS Code surfaces the error, and the file can be
 		// repaired via "Reopen Editor With… > Text Editor"; the exact position
 		// is additionally reported in the Problems view.
@@ -73,7 +74,7 @@ class GeneratorNotebookSerializer implements vscode.NotebookSerializer {
 			role: ((cell.metadata?.[ROLE_KEY] as CellRole | undefined) ?? 'extra') as CellRole,
 		}));
 		const file = cellsToFile(cells, previous);
-		return Buffer.from(serializeGenerator(file), 'utf8');
+		return encodeUtf8(serializeGenerator(file));
 	}
 }
 
@@ -158,11 +159,12 @@ class GeneratorNotebookController implements vscode.Disposable {
 			return null;
 		}
 		const scriptPath = vscode.Uri.joinPath(this.context.extensionUri, 'python', 'notebook_kernel.py').fsPath;
-		const child = spawn(interpreter.path, [scriptPath]);
+		const child = spawn(interpreter.path, [scriptPath], { env: pythonEnv() });
 		const kernel: Kernel = { child, pending: new Map(), nextId: 1, buffer: '' };
+		const decodeStdout = createStreamDecoder();
 
 		child.stdout.on('data', (chunk: Buffer) => {
-			kernel.buffer += chunk.toString('utf8');
+			kernel.buffer += decodeStdout(chunk);
 			const lines = kernel.buffer.split('\n');
 			kernel.buffer = lines.pop() ?? '';
 			for (const line of lines) {

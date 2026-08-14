@@ -1,0 +1,7 @@
+{
+	// Every file in this repository is UTF-8 without a BOM — sources, TOML
+	// samples, Python runtime and the localization files alike. Guessing is off
+	// so a file with few umlauts is not opened as cp1252 by accident.
+	"files.encoding": "utf8",
+	"files.autoGuessEncoding": false
+}

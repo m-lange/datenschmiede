@@ -3,6 +3,7 @@ import { createEmptyTable } from '../model';
 import { serializeTable } from '../toml';
 import { TableEditorProvider } from '../editorProvider';
 import { fileExists, resolveTargetFolder } from '../../util';
+import { encodeUtf8 } from '../../encoding';
 
 /**
  * "New Table…" command: creates a new .td file containing an empty skeleton and
@@ -37,7 +38,7 @@ export async function newTableCommand(target?: vscode.Uri): Promise<void> {
 
 	const tableName = fileName.replace(/\.td$/, '');
 	const content = serializeTable(createEmptyTable(tableName));
-	await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
+	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, TableEditorProvider.viewType);
 }

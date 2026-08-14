@@ -30,6 +30,18 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 
+# The event protocol and the log output are UTF-8, independently of the
+# platform: with a piped stdout Python otherwise falls back to the locale
+# encoding (cp1252 on a German Windows), which turns every umlaut in a preview,
+# a log line or a traceback into garbage on the extension host — which decodes
+# UTF-8. Only the standard streams are affected here; the CSV keeps the
+# encoding configured for the table (see write_csv).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 
 def emit(event, **payload):
     """Writes one event of the stdout protocol read by the extension host."""

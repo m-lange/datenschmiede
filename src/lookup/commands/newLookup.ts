@@ -3,6 +3,7 @@ import { createEmptyLookup } from '../model';
 import { serializeLookup } from '../csv';
 import { LookupEditorProvider } from '../editorProvider';
 import { fileExists, resolveTargetFolder } from '../../util';
+import { encodeUtf8 } from '../../encoding';
 
 /**
  * "New Lookup List…" command: creates a new .lkp file containing an empty
@@ -40,7 +41,7 @@ export async function newLookupCommand(target?: vscode.Uri): Promise<void> {
 	// Start with a first value column so the grid is usable right away — the
 	// technical column name is deliberately not localized (it is data).
 	const content = serializeLookup({ ...createEmptyLookup(listName), columns: ['value'] });
-	await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
+	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, LookupEditorProvider.viewType);
 }
