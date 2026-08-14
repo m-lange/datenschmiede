@@ -47,6 +47,194 @@
 	}
 
 	/**
+	 * Verzögert einen Aufruf, bis `delayMs` lang kein weiterer kam — z. B. für
+	 * das debouncte Zurückschreiben ins Dokument beim Tippen (postEdit).
+	 * @param {() => void} fn
+	 * @param {number} delayMs
+	 */
+	function debounce(fn, delayMs) {
+		/** @type {number | undefined} */
+		let handle;
+		return () => {
+			if (handle !== undefined) {
+				window.clearTimeout(handle);
+			}
+			handle = window.setTimeout(() => {
+				handle = undefined;
+				fn();
+			}, delayMs);
+		};
+	}
+
+	/**
+	 * Beschriftetes Text-Eingabefeld (Name, Schema, …) — gemeinsame Grundlage
+	 * der Übersicht-Tabs von Table-, Projekt- und Lookup-Editor.
+	 * @param {string} id
+	 * @param {string} labelText
+	 * @param {string} value
+	 * @param {string} placeholder
+	 * @param {(value: string) => void} onChange
+	 * @param {() => void} commitDebounced
+	 * @param {() => void} commit
+	 * @param {string} [extraClass]
+	 */
+	function renderTextField(id, labelText, value, placeholder, onChange, commitDebounced, commit, extraClass) {
+		const field = el('div', { className: 'field' });
+		const label = el('label', { text: labelText });
+		label.htmlFor = id;
+		const input = /** @type {HTMLInputElement} */ (
+			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
+		);
+		input.type = 'text';
+		input.id = id;
+		input.placeholder = placeholder;
+		input.value = value || '';
+		bindText(input, onChange, commitDebounced, commit);
+		field.appendChild(label);
+		field.appendChild(input);
+		return field;
+	}
+
+	/**
+	 * Beschriftetes Markdown-Beschreibungsfeld (siehe renderMarkdownField) —
+	 * gemeinsame Grundlage der Übersicht-Tabs aller drei Editoren.
+	 * @param {string} labelText
+	 * @param {string} placeholder
+	 * @param {string} value
+	 * @param {(value: string) => void} onChange
+	 * @param {() => void} commitDebounced
+	 * @param {() => void} commit
+	 */
+	function renderLabeledMarkdownField(labelText, placeholder, value, onChange, commitDebounced, commit) {
+		const field = el('div', { className: 'field' });
+		field.appendChild(el('label', { text: labelText }));
+		field.appendChild(
+			renderMarkdownField(value, placeholder, onChange, commitDebounced, commit, {
+				autoGrow: true,
+				rows: 5,
+				ariaLabel: labelText,
+			}),
+		);
+		return field;
+	}
+
+	/**
+	 * Anzeigename einer `{…}`-Variable (Token ohne Klammern) — dieselben
+	 * Beschriftungen im Dateinamen-Tag-Feld des Table Editors und im
+	 * Ausgabeordner-Feld des Projekt-Editors. `strings` ist der jeweilige
+	 * Webview-String-Katalog (outputVar…-Schlüssel; `project` gibt es nur im
+	 * Projekt-Editor).
+	 * @param {any} strings
+	 * @param {string} token
+	 */
+	function variableLabel(strings, token) {
+		if (token.startsWith('column:')) {
+			return token.slice('column:'.length);
+		}
+		switch (token) {
+			case 'date':
+				return strings.outputVarDate;
+			case 'time':
+				return strings.outputVarTime;
+			case 'datetime':
+				return strings.outputVarDatetime;
+			case 'timestamp':
+				return strings.outputVarTimestamp;
+			case 'schema':
+				return strings.outputVarSchema;
+			case 'table':
+				return strings.outputVarTable;
+			case 'records':
+				return strings.outputVarRecords;
+			case 'project':
+				return strings.outputVarProject || token;
+			default:
+				return token;
+		}
+	}
+
+	/**
+	 * Fehlerzustand bei kaputtem TOML/CSV (ganzseitige Meldung statt des
+	 * Formulars) — identisch in allen drei Editoren; die Texte kommen aus dem
+	 * jeweiligen String-Katalog (errorTitle/errorBody/errorHint).
+	 * @param {any} strings
+	 * @param {string} message
+	 */
+	function renderErrorState(strings, message) {
+		const wrap = el('div', { className: 'error-state' });
+		wrap.appendChild(el('i', { className: 'codicon codicon-warning error-icon' }));
+		wrap.appendChild(el('h2', { text: strings.errorTitle }));
+		wrap.appendChild(el('p', { text: strings.errorBody }));
+		wrap.appendChild(el('pre', { className: 'error-detail', text: message }));
+		wrap.appendChild(el('p', { className: 'hint', text: strings.errorHint }));
+		return wrap;
+	}
+
+	/** `true`, solange ein Eingabefeld (input/textarea/select/contenteditable) den Fokus hat. */
+	function isEditing() {
+		const active = document.activeElement;
+		return !!(
+			active &&
+			active !== document.body &&
+			(active.tagName === 'INPUT' ||
+				active.tagName === 'TEXTAREA' ||
+				active.tagName === 'SELECT' ||
+				/** @type {HTMLElement} */ (active).isContentEditable)
+		);
+	}
+
+	/**
+	 * Anti-Flacker-Baustein: Broadcasts vom Extension-Host (nach jeder
+	 * Datei-Änderung im Workspace) sollen kein sofortiges Neuzeichnen
+	 * auslösen, solange gerade ein Eingabefeld fokussiert ist — sonst verlöre
+	 * das Feld bei jedem Broadcast Fokus und Cursor. `renderSoon` zeichnet
+	 * sofort neu oder merkt es sich vor; ein focusout-Listener holt das
+	 * Vorgemerkte nach, sobald kein Feld mehr fokussiert ist.
+	 * @param {() => void} doRender Das eigentliche (vollständige) Neuzeichnen.
+	 * @param {(() => boolean)} [isBlockedExtra] Zusätzliche Sperre (z. B. ein offener Dialog).
+	 */
+	function createDeferredRenderer(doRender, isBlockedExtra) {
+		let pending = false;
+		const blocked = () => isEditing() || (isBlockedExtra ? isBlockedExtra() : false);
+		const renderNow = () => {
+			pending = false;
+			doRender();
+		};
+		document.addEventListener('focusout', () => {
+			if (!pending) {
+				return;
+			}
+			// Kurz warten: bei einem Fokuswechsel zwischen zwei Feldern ist nach
+			// focusout sofort wieder ein Feld fokussiert — dann weiter aufschieben.
+			window.setTimeout(() => {
+				if (pending && !blocked()) {
+					renderNow();
+				}
+			}, 100);
+		});
+		return {
+			/** Zeichnet sofort neu — oder erst, sobald kein Eingabefeld mehr fokussiert ist. */
+			renderSoon() {
+				if (blocked()) {
+					pending = true;
+					return;
+				}
+				renderNow();
+			},
+			/** Holt ein vorgemerktes Neuzeichnen nach, falls gerade nichts mehr blockiert (z. B. nach Schließen eines Dialogs). */
+			flushIfIdle() {
+				if (pending && !blocked()) {
+					renderNow();
+				}
+			},
+			/** Verwirft eine Vormerkung (das Neuzeichnen ist gerade ohnehin passiert). */
+			clearPending() {
+				pending = false;
+			},
+		};
+	}
+
+	/**
 	 * Lässt eine Textarea automatisch mit ihrem Inhalt mitwachsen bzw.
 	 * -schrumpfen, statt eine feste Höhe mit interner Scrollleiste zu zeigen.
 	 * @param {HTMLTextAreaElement} textarea
@@ -637,9 +825,16 @@
 	window.DatenschmiedeCommon = {
 		el,
 		bindText,
+		debounce,
 		autoGrowCellTextarea,
 		renderMarkdown,
 		renderMarkdownField,
+		renderTextField,
+		renderLabeledMarkdownField,
+		renderErrorState,
+		variableLabel,
+		isEditing,
+		createDeferredRenderer,
 		updateFieldError,
 		wrapSelectWithChevron,
 		populateSelectOptions,

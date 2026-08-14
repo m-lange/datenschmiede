@@ -18,8 +18,12 @@
 	// eslint-disable-next-line no-undef
 	const {
 		el,
-		bindText,
-		renderMarkdownField,
+		debounce,
+		renderTextField: renderTextFieldCommon,
+		renderLabeledMarkdownField,
+		renderErrorState,
+		variableLabel: variableLabelCommon,
+		createDeferredRenderer,
 		updateFieldError,
 		buildColGroup,
 		attachColumnResizeHandle,
@@ -140,71 +144,30 @@
 		vscode.postMessage({ type: 'edit', project });
 	}
 
-	/** @type {number | undefined} */
-	let debounceHandle;
-	function postEditDebounced() {
-		if (debounceHandle !== undefined) {
-			window.clearTimeout(debounceHandle);
-		}
-		debounceHandle = window.setTimeout(() => {
-			debounceHandle = undefined;
-			postEdit();
-		}, 250);
-	}
+	const postEditDebounced = debounce(postEdit, 250);
 
 	// ---------------------------------------------------------------------
 	// Anti-Flacker: Baum-/Übersichts-Broadcasts vom Extension-Host (nach
 	// Datei-Änderungen im Workspace) lösen kein sofortiges Neuzeichnen mehr
 	// aus — unverändert wird ignoriert, bei echten Änderungen wird das
-	// Neuzeichnen aufgeschoben, solange ein Eingabefeld fokussiert ist
-	// (gleiches Muster wie in table.js).
+	// Neuzeichnen aufgeschoben, solange ein Eingabefeld fokussiert ist.
+	// Mechanik siehe createDeferredRenderer in common.js.
 	// ---------------------------------------------------------------------
 
-	let pendingRender = false;
 	/** Zuletzt verarbeiteter Baum-/Übersichts-Stand (JSON), um unveränderte Broadcasts zu ignorieren. */
 	let lastBroadcastJson = '';
 
-	function isEditing() {
-		const active = document.activeElement;
-		return !!(
-			active &&
-			active !== document.body &&
-			(active.tagName === 'INPUT' ||
-				active.tagName === 'TEXTAREA' ||
-				active.tagName === 'SELECT' ||
-				/** @type {HTMLElement} */ (active).isContentEditable)
-		);
-	}
-
-	/** Zeichnet sofort neu — oder erst, sobald kein Eingabefeld mehr fokussiert ist. */
-	function renderSoon() {
-		if (isEditing()) {
-			pendingRender = true;
-			return;
-		}
-		render();
-	}
-
-	document.addEventListener('focusout', () => {
-		if (!pendingRender) {
-			return;
-		}
-		window.setTimeout(() => {
-			if (pendingRender && !isEditing()) {
-				render();
-			}
-		}, 100);
-	});
+	const deferredRender = createDeferredRenderer(() => render());
 
 	function render() {
 		app.innerHTML = '';
-		pendingRender = false;
+		deferredRender.clearPending();
 		pendingColumnSizing = null;
 		if (!strings) {
 			return;
 		}
 		if (parseError) {
-			app.appendChild(renderError(parseError));
+			app.appendChild(renderErrorState(strings, parseError));
 			return;
 		}
 		app.appendChild(renderTabs());
@@ -280,35 +243,13 @@
 	// ---------------------------------------------------------------------
 
 	/**
-	 * Anzeigename einer `{…}`-Variable — dieselben Beschriftungen wie im
-	 * Tag-Feld des Table Editors (siehe variableLabel in table.js), damit
+	 * Anzeigename einer `{…}`-Variable — gemeinsame Beschriftungen mit dem
+	 * Tag-Feld des Table Editors (siehe variableLabel in common.js), damit
 	 * Tags in beiden Editoren gleich heißen.
 	 * @param {string} token
 	 */
 	function variableLabel(token) {
-		if (token.startsWith('column:')) {
-			return token.slice('column:'.length);
-		}
-		switch (token) {
-			case 'date':
-				return strings.outputVarDate;
-			case 'time':
-				return strings.outputVarTime;
-			case 'datetime':
-				return strings.outputVarDatetime;
-			case 'timestamp':
-				return strings.outputVarTimestamp;
-			case 'schema':
-				return strings.outputVarSchema;
-			case 'table':
-				return strings.outputVarTable;
-			case 'records':
-				return strings.outputVarRecords;
-			case 'project':
-				return strings.outputVarProject;
-			default:
-				return token;
-		}
+		return variableLabelCommon(strings, token);
 	}
 
 	/** Variablen für den Ausgabeordner des Projekts (kein Tabellen-/Spaltenbezug). */
@@ -534,48 +475,22 @@
 		return card;
 	}
 
-	/**
-	 * @param {string} id
-	 * @param {string} labelText
-	 * @param {string} value
-	 * @param {string} placeholder
-	 * @param {(value: string) => void} onChange
-	 * @param {string} [extraClass]
-	 */
+	/** Dünner Umschlag um das gemeinsame Textfeld (common.js), mit den Commit-Funktionen dieses Editors. */
 	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
-		const field = el('div', { className: 'field' });
-		const label = el('label', { text: labelText });
-		label.htmlFor = id;
-		const input = /** @type {HTMLInputElement} */ (
-			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
-		);
-		input.type = 'text';
-		input.id = id;
-		input.placeholder = placeholder;
-		input.value = value || '';
-		bindText(input, onChange, postEditDebounced, postEdit);
-		field.appendChild(label);
-		field.appendChild(input);
-		return field;
+		return renderTextFieldCommon(id, labelText, value, placeholder, onChange, postEditDebounced, postEdit, extraClass);
 	}
 
 	function renderDescriptionField() {
-		const field = el('div', { className: 'field' });
-		const label = el('label', { text: strings.fieldDescriptionLabel });
-		field.appendChild(label);
-		field.appendChild(
-			renderMarkdownField(
-				project.description,
-				strings.fieldDescriptionPlaceholder,
-				(v) => {
-					project.description = v;
-				},
-				postEditDebounced,
-				postEdit,
-				{ autoGrow: true, rows: 5, ariaLabel: strings.fieldDescriptionLabel },
-			),
+		return renderLabeledMarkdownField(
+			strings.fieldDescriptionLabel,
+			strings.fieldDescriptionPlaceholder,
+			project.description,
+			(v) => {
+				project.description = v;
+			},
+			postEditDebounced,
+			postEdit,
 		);
-		return field;
 	}
 
 	/** Verknüpfter Python-Interpreter: Status-Text + Icon, plus Schalter zum (Neu-)Verknüpfen (siehe project/python.ts). */
@@ -1290,21 +1205,6 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Fehlerzustand (kaputtes TOML) — wie table.js
-	// ---------------------------------------------------------------------
-
-	/** @param {string} message */
-	function renderError(message) {
-		const wrap = el('div', { className: 'error-state' });
-		wrap.appendChild(el('i', { className: 'codicon codicon-warning error-icon' }));
-		wrap.appendChild(el('h2', { text: strings.errorTitle }));
-		wrap.appendChild(el('p', { text: strings.errorBody }));
-		wrap.appendChild(el('pre', { className: 'error-detail', text: message }));
-		wrap.appendChild(el('p', { className: 'hint', text: strings.errorHint }));
-		return wrap;
-	}
-
-	// ---------------------------------------------------------------------
 	// Nachrichten vom Extension-Host
 	// ---------------------------------------------------------------------
 
@@ -1353,7 +1253,7 @@
 				}
 				lastBroadcastJson = broadcastJson;
 				if (!parseError) {
-					renderSoon();
+					deferredRender.renderSoon();
 				}
 				break;
 			}

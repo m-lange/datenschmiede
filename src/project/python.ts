@@ -193,6 +193,13 @@ export async function checkPython310Available(): Promise<void> {
 	if (!api) {
 		return;
 	}
+	// Kennt die Python-Extension bereits eine moderne Umgebung (ihr
+	// persistierter Stand), ist nichts zu tun — der volle Umgebungs-Scan
+	// (refreshEnvironments, teuer: durchsucht die Platte) läuft nur noch in
+	// dem Fall, in dem sonst fälschlich gewarnt würde.
+	if (api.environments.known.some((env) => versionAtLeast(env.version, MIN_PYTHON))) {
+		return;
+	}
 	try {
 		await api.environments.refreshEnvironments();
 	} catch {

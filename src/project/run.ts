@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
-import { spawn } from 'child_process';
 import { Project } from './model';
 import { parseProjectText } from './toml';
 import { resolveLinkedInterpreter } from './python';
 import { parseCardinality } from '../table/cardinality';
 import { Table } from '../table/model';
-import { TableEntry, listTables, readFileText, tableLabel } from '../table/repository';
+import { TableEntry, generatorsById, listTables, readFileText, tableLabel } from '../table/repository';
 import { GeneratorConfig } from '../generator/types';
 import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
 import { CustomGenerator } from '../generator/custom';
 import { listLookups } from '../lookup/repository';
+import { runPlanProcess, toPlanOutput, writePlanFile } from './planRunner';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 
 /**
@@ -77,10 +77,7 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 
 	// Plan als JSON in den globalen Extension-Speicher schreiben (kein Teil
 	// des Workspace) und den Python-Läufer damit starten.
-	await vscode.workspace.fs.createDirectory(context.globalStorageUri);
-	const planUri = vscode.Uri.joinPath(context.globalStorageUri, `plan-${Date.now()}.json`);
-	await vscode.workspace.fs.writeFile(planUri, Buffer.from(JSON.stringify(plan.plan), 'utf8'));
-	const scriptPath = vscode.Uri.joinPath(context.extensionUri, 'python', 'generate.py').fsPath;
+	const planUri = await writePlanFile(context, plan.plan, 'plan');
 
 	const projectName = project.name.trim() || vscode.workspace.asRelativePath(uri, false);
 	const channel = getOutputChannel();
@@ -104,50 +101,23 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 			title: vscode.l10n.t('Generating test data — {0}', projectName),
 			cancellable: true,
 		},
-		(progress, token) =>
-			new Promise<void>((resolve) => {
-				const child = spawn(pythonStatus.path, [scriptPath, planUri.fsPath], {
-					cwd: vscode.Uri.joinPath(uri, '..').fsPath,
-				});
-				token.onCancellationRequested(() => {
-					log(`Run "${projectName}" cancelled.`);
-					child.kill();
-				});
+		async (progress, token) => {
+			let doneFiles: { table: string; file: string; records: number }[] | null = null;
+			/** Vom Läufer aufgelöster Ausgabeordner (Variablen ersetzt), aus dem done-Event. */
+			let doneOutputDir = '';
 
-				let stdoutRest = '';
-				let stderrText = '';
-				let reportedError = false;
-				let doneFiles: { table: string; file: string; records: number }[] | null = null;
-				/** Vom Läufer aufgelöster Ausgabeordner (Variablen ersetzt), aus dem done-Event. */
-				let doneOutputDir = '';
-
-				child.stdout.on('data', (chunk: Buffer) => {
-					stdoutRest += chunk.toString('utf8');
-					const lines = stdoutRest.split('\n');
-					stdoutRest = lines.pop() ?? '';
-					for (const line of lines) {
-						handleEvent(line);
-					}
-				});
-				child.stderr.on('data', (chunk: Buffer) => {
-					const text = chunk.toString('utf8');
-					stderrText += text;
-					// Python-stderr (Warnungen, unerwartete Ausgaben) landet
-					// vollständig im Output-Channel „Datenschmiede“.
-					channel.append(text);
-				});
-
-				const handleEvent = (line: string) => {
-					const trimmed = line.trim();
-					if (!trimmed) {
-						return;
-					}
-					let event: Record<string, unknown>;
-					try {
-						event = JSON.parse(trimmed);
-					} catch {
-						return;
-					}
+			// Prozess-Start, Protokoll-Parsing und die gemeinsame `log`-/
+			// `error`-Behandlung liegen im geteilten Läufer (planRunner.ts) —
+			// hier nur die lauf-spezifischen Events (Fortschritt + Ergebnis).
+			const result = await runPlanProcess({
+				pythonPath: pythonStatus.path,
+				context,
+				planUri,
+				cwd: vscode.Uri.joinPath(uri, '..').fsPath,
+				token,
+				onCancel: () => log(`Run "${projectName}" cancelled.`),
+				errorMessage: (message) => vscode.l10n.t('Test data generation failed: {0}', message),
+				onEvent: (event) => {
 					switch (event.event) {
 						case 'table_start': {
 							progress.report({ message: String(event.table ?? '') });
@@ -158,11 +128,6 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 						case 'column_done': {
 							// Spalte-für-Spalte-Fortschritt im Protokoll (ohne Zeitstempel-Präfix).
 							channel.appendLine(`    ✓ ${String(event.column ?? '')} (${Number(event.records)} values)`);
-							break;
-						}
-						case 'log': {
-							// ctx.log(...) aus (benutzerdefinierten) Generatoren.
-							channel.appendLine(`    » ${String(event.message ?? '')}`);
 							break;
 						}
 						case 'table_done': {
@@ -179,81 +144,43 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 							doneOutputDir = typeof event.output_dir === 'string' ? event.output_dir : '';
 							break;
 						}
-						case 'error': {
-							reportedError = true;
-							// Vollständige Details (inkl. Python-Traceback) in den
-							// Output-Channel — die Notification bietet dafür
-							// „Details anzeigen“ an.
-							log(`ERROR: ${String(event.message ?? '')}`);
-							if (typeof event.traceback === 'string' && event.traceback.trim()) {
-								channel.appendLine(event.traceback);
-							}
-							if (event.code === 'missing-packages') {
-								const packages = Array.isArray(event.packages) ? event.packages.join(' ') : 'pandas numpy';
-								const installLabel = vscode.l10n.t('Install packages');
-								void showErrorWithDetails(
-									vscode.l10n.t('Python packages are missing for test data generation: {0}', packages),
-									installLabel,
-								).then((choice) => {
-									if (choice === installLabel) {
-										// Installation bewusst sichtbar in einem Terminal statt
-										// versteckt im Hintergrund — der Interpreter des Projekts
-										// wird direkt verwendet.
-										const terminal = vscode.window.createTerminal(vscode.l10n.t('Datenschmiede: Install packages'));
-										terminal.show();
-										terminal.sendText(`& "${pythonStatus.path}" -m pip install ${packages}`);
-									}
-								});
-							} else {
-								void showErrorWithDetails(
-									vscode.l10n.t('Test data generation failed: {0}', String(event.message ?? '')),
-								);
-							}
-							break;
-						}
 					}
-				};
+				},
+			});
 
-				child.on('error', (err) => {
-					log(`ERROR: unable to start python: ${String(err.message)}`);
-					void showErrorWithDetails(vscode.l10n.t('Unable to start Python: {0}', String(err.message)));
-					resolve();
-				});
-				child.on('close', (code) => {
-					handleEvent(stdoutRest);
-					void vscode.workspace.fs.delete(planUri).then(undefined, () => undefined);
-					if (token.isCancellationRequested) {
-						resolve();
-						return;
-					}
-					if (doneFiles) {
-						const files = doneFiles;
-						const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-						log(`Run "${projectName}" finished in ${seconds}s: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
-						const openLabel = vscode.l10n.t('Open Output Folder');
-						void vscode.window
-							.showInformationMessage(
-								vscode.l10n.t(
-									'Test data generated: {0} file(s) in "{1}".',
-									files.length,
-									doneOutputDir || plan.plan.project_dir,
-								),
-								openLabel,
-							)
-							.then((choice) => {
-								if (choice === openLabel && files.length > 0) {
-									void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(files[0].file));
-								}
-							});
-					} else if (!reportedError) {
-						log(`ERROR: run exited with code ${String(code)} without a result.`);
-						void showErrorWithDetails(
-							vscode.l10n.t('Test data generation failed (exit code {0}). {1}', String(code), stderrText.slice(-400)),
-						);
-					}
-					resolve();
-				});
-			}),
+			if (result.cancelled) {
+				return;
+			}
+			if (doneFiles) {
+				const files: { table: string; file: string; records: number }[] = doneFiles;
+				const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+				log(`Run "${projectName}" finished in ${seconds}s: ${files.length} file(s) in ${doneOutputDir || plan.plan.project_dir}`);
+				const openLabel = vscode.l10n.t('Open Output Folder');
+				void vscode.window
+					.showInformationMessage(
+						vscode.l10n.t(
+							'Test data generated: {0} file(s) in "{1}".',
+							files.length,
+							doneOutputDir || plan.plan.project_dir,
+						),
+						openLabel,
+					)
+					.then((choice) => {
+						if (choice === openLabel && files.length > 0) {
+							void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(files[0].file));
+						}
+					});
+			} else if (!result.reportedError) {
+				log(`ERROR: run exited with code ${String(result.code)} without a result.`);
+				void showErrorWithDetails(
+					vscode.l10n.t(
+						'Test data generation failed (exit code {0}). {1}',
+						String(result.code),
+						result.stderrText.slice(-400),
+					),
+				);
+			}
+		},
 	);
 }
 
@@ -340,11 +267,12 @@ export function buildPlanColumns(
 	usedCustomGenerators: Map<string, CustomGenerator>,
 ): PlanColumn[] {
 	const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
+	const byId = generatorsById(generators);
 	return table.columns.map((column): PlanColumn => {
 		let generator: PlanColumn['generator'] = null;
 		const config = column.generator;
 		if (config?.id.trim()) {
-			const resolved = generators.find((g) => g.id === config.id);
+			const resolved = byId.get(config.id);
 			if (!resolved) {
 				errors.push(vscode.l10n.t('Column "{0}.{1}": generator "{2}" was not found.', label, column.name, config.id));
 			} else {
@@ -432,7 +360,6 @@ function buildPlan(
 		}
 		const table = entry.table;
 		const label = tableLabel(table, entry.relativePath);
-		const ownColumns = table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0);
 
 		// Treibende FK-Spalte: die erste FK-Spalte mit gültigem Ziel — sie
 		// bestimmt zusammen mit der Kardinalität die Zeilenanzahl (siehe
@@ -473,19 +400,7 @@ function buildPlan(
 			driving_fk: driving ? { table: driving.fkTable.trim(), column: driving.fkColumn.trim() } : null,
 			driving_fk_column: driving ? driving.name : null,
 			columns,
-			output: {
-				file_name: table.output.fileName,
-				format: table.output.format || 'csv',
-				csv: {
-					delimiter: table.output.csv.delimiter,
-					quote_all: table.output.csv.quoteAll,
-					decimal: table.output.csv.decimal,
-					date_format: table.output.csv.dateFormat,
-					datetime_format: table.output.csv.datetimeFormat,
-					include_header: table.output.csv.includeHeader,
-					encoding: table.output.csv.encoding,
-				},
-			},
+			output: toPlanOutput(table),
 		});
 	}
 

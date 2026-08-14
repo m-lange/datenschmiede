@@ -176,7 +176,9 @@ class Context:
     def lookup(self, name, column):
         """Alle (rohen) Werte einer Spalte einer Nachschlageliste (.lkp) — ohne Ziehung/Gewichtung."""
         values, _weights = self._runner.lookup_column(name, column)
-        return values
+        # Kopie, damit Custom-Code die Liste gefahrlos veraendern kann — die
+        # Original-Liste liegt im Cache des Runners (siehe lookup_column).
+        return list(values)
 
     def lookup_value(self, name, column):
         """
@@ -246,6 +248,10 @@ class Runner:
         # Liste ziehen, lesen so dieselbe Zeile — auch ueber FK-verbundene
         # Tabellen hinweg (siehe lookup_indices).
         self.lookup_row_indices = {}
+        # listen_name -> {"values": {spalte: [...]}, "weights": [...]} —
+        # einmal extrahierte Spaltenwerte/geparste Gewichte je Liste, statt
+        # sie fuer jede Spalte, die aus der Liste zieht, neu aufzubauen.
+        self._lookup_cache = {}
 
     # ------------------------------------------------------------------
     # Reihenfolge
@@ -295,6 +301,9 @@ class Runner:
             return deps
 
         remaining = {c["name"]: c for c in columns}
+        # Definierte Spaltenreihenfolge einmal als Index-Map (list.index je
+        # Sortierschluessel waere quadratisch).
+        order_index = {c["name"]: i for i, c in enumerate(table["columns"])}
         ordered = []
         # Erst alle ohne eigene Abhaengigkeiten und ohne Custom-Code, dann der Rest.
         while remaining:
@@ -308,7 +317,7 @@ class Runner:
                     + ", ".join(sorted(remaining))
                 )
             ready.sort(key=lambda c: (1 if (c.get("generator") or {}).get("id", "").startswith("custom:") else 0,
-                                      table["columns"].index(c)))
+                                      order_index.get(c["name"], 0)))
             column = ready[0]
             ordered.append(column)
             del remaining[column["name"]]
@@ -324,16 +333,24 @@ class Runner:
             raise RuntimeError(f'Lookup list "{name}" was not found')
         if column not in lookup["columns"]:
             raise RuntimeError(f'Lookup list "{name}" has no column "{column}"')
-        index = lookup["columns"].index(column)
-        values = [row["values"][index] if index < len(row["values"]) else "" for row in lookup["rows"]]
-        weights = []
-        for row in lookup["rows"]:
-            raw = str(row.get("weight", "")).strip().replace(",", ".")
-            try:
-                weights.append(max(0.0, float(raw)))
-            except ValueError:
-                weights.append(0.0)
-        return values, weights
+        # Spaltenwerte und Gewichte je Liste nur einmal aufbauen — jede
+        # weitere Spalte, die aus derselben Liste zieht, liest den Cache.
+        cache = self._lookup_cache.setdefault(name, {"values": {}, "weights": None})
+        if column not in cache["values"]:
+            index = lookup["columns"].index(column)
+            cache["values"][column] = [
+                row["values"][index] if index < len(row["values"]) else "" for row in lookup["rows"]
+            ]
+        if cache["weights"] is None:
+            weights = []
+            for row in lookup["rows"]:
+                raw = str(row.get("weight", "")).strip().replace(",", ".")
+                try:
+                    weights.append(max(0.0, float(raw)))
+                except ValueError:
+                    weights.append(0.0)
+            cache["weights"] = weights
+        return cache["values"][column], cache["weights"]
 
     def lookup_indices(self, table, name, n):
         """
@@ -448,7 +465,7 @@ class Runner:
             template = params.get("template", "")
             table_data = self.data[table["label"]]
             parts = re.split(r"(\{[^{}]+\})", template)
-            result = None
+            pieces = []
             for part in parts:
                 if not part:
                     continue
@@ -459,11 +476,16 @@ class Runner:
                             f'Column {table["label"]}.{column["name"]}: combine template references '
                             f'"{ref}", which is not generated yet'
                         )
-                    piece = table_data[ref].astype(str).reset_index(drop=True)
+                    pieces.append(table_data[ref].astype(str).reset_index(drop=True))
                 else:
-                    piece = pd.Series([part] * n, dtype=object)
-                result = piece if result is None else result.str.cat(piece)
-            return result if result is not None else pd.Series([""] * n, dtype=object)
+                    pieces.append(pd.Series([part] * n, dtype=object))
+            if not pieces:
+                return pd.Series([""] * n, dtype=object)
+            if len(pieces) == 1:
+                return pieces[0]
+            # Alle Teile in EINEM Durchlauf verketten, statt paarweise immer
+            # neue Zwischen-Serien zu erzeugen.
+            return pieces[0].str.cat(pieces[1:])
 
         if gen_id.startswith("custom:"):
             name = gen_id[len("custom:"):]
@@ -499,12 +521,21 @@ class Runner:
         if ctype == "boolean":
             return pd.Series(RNG.integers(0, 2, size=n).astype(bool))
         if ctype == "uuid":
-            # Vektorisiertes UUID4 aus Zufalls-Bytes (deutlich schneller als uuid.uuid4 je Zeile).
+            # Vektorisiertes UUID4 aus Zufalls-Bytes (deutlich schneller als
+            # uuid.uuid4 je Zeile). Der komplette Puffer wird in EINEM
+            # C-Aufruf zu Hex (statt einer Python-Callback je Zeile, wie es
+            # apply_along_axis taete) und dann in 32-Zeichen-Stuecke zerlegt.
             b = RNG.integers(0, 256, size=(n, 16), dtype=np.uint8)
             b[:, 6] = (b[:, 6] & 0x0F) | 0x40
             b[:, 8] = (b[:, 8] & 0x3F) | 0x80
-            hexes = np.apply_along_axis(lambda row: bytes(row.tolist()).hex(), 1, b)
-            return pd.Series([f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}" for h in hexes], dtype=object)
+            full = b.tobytes().hex()
+            return pd.Series(
+                [
+                    f"{full[i:i + 8]}-{full[i + 8:i + 12]}-{full[i + 12:i + 16]}-{full[i + 16:i + 20]}-{full[i + 20:i + 32]}"
+                    for i in range(0, 32 * n, 32)
+                ],
+                dtype=object,
+            )
         if ctype == "date":
             start = RUN_DT - timedelta(days=365)
             offsets = RNG.integers(0, 365, size=n)
@@ -638,7 +669,10 @@ class Runner:
         csv_cfg = table["output"].get("csv", {})
         date_fmt = csv_cfg.get("date_format") or "%Y-%m-%d"
         datetime_fmt = csv_cfg.get("datetime_format") or "%Y-%m-%d %H:%M:%S"
-        out = df.copy()
+        # Flache Kopie genuegt: unten werden nur ganze Spalten NEU zugewiesen
+        # (das laesst das Original unberuehrt) — eine tiefe Kopie wuerde bei
+        # grossen Laeufen den Speicherbedarf unnoetig verdoppeln.
+        out = df.copy(deep=False)
         for column in table["columns"]:
             cname, ctype = column["name"], column.get("type")
             if cname not in out.columns:

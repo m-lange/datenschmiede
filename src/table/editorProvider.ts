@@ -4,13 +4,14 @@ import { parseTableText, serializeTable } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getWebviewStrings } from './webviewStrings';
-import { TableOption, listTables, toTableOptions } from './repository';
+import { TableOption, toTableOptions } from './repository';
 import { GeneratorBase } from '../generator/base';
-import { listGenerators, toGeneratorList } from '../generator/repository';
-import { listLookups, toLookupRefs } from '../lookup/repository';
+import { toGeneratorList } from '../generator/repository';
+import { toLookupRefs } from '../lookup/repository';
 import { GeneratorParameter, KnownLookupRef } from '../generator/types';
 import { isCustomGeneratorId } from '../generator/custom';
 import { runTablePreview } from './preview';
+import { WorkspaceIndex } from '../workspaceIndex';
 
 export type { TableOption } from './repository';
 
@@ -70,8 +71,8 @@ function toGeneratorOptions(generators: GeneratorBase[]): GeneratorOption[] {
 export class TableEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.tableEditor';
 
-	public static register(context: vscode.ExtensionContext): vscode.Disposable {
-		const provider = new TableEditorProvider(context);
+	public static register(context: vscode.ExtensionContext, index: WorkspaceIndex): vscode.Disposable {
+		const provider = new TableEditorProvider(context, index);
 		const providerRegistration = vscode.window.registerCustomEditorProvider(TableEditorProvider.viewType, provider, {
 			webviewOptions: { retainContextWhenHidden: true },
 			supportsMultipleEditorsPerDocument: false,
@@ -82,47 +83,37 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	/** Alle aktuell offenen .td-Webviews, um sie bei Datei-Änderungen im Workspace zu benachrichtigen. */
 	private readonly panels = new Set<vscode.WebviewPanel>();
 	/**
-	 * Beobachtet .td-, .tdgen- und .lkp-Dateien im Workspace, um die
-	 * FK-„Referenzierte Tabelle“-Liste, die Generator-Auswahl und die
-	 * Nachschlagelisten-Auswahl aktuell zu halten — nicht nur bei
-	 * Anlegen/Löschen, sondern auch bei inhaltlichen Änderungen, da alle drei
-	 * Listen logische Namen statt Dateipfade anzeigen.
-	 */
-	private readonly watchers: vscode.FileSystemWatcher[] = [];
-	/**
 	 * Zuletzt ermittelte Tabellenliste des Workspace, für die Validierung von
 	 * FK-Referenzen (siehe validateTable). Wird bei jedem Broadcast
-	 * (Datei-Änderungen im Workspace) aktualisiert; per Konstruktion also
-	 * höchstens ein paar hundert Millisekunden veraltet — für die schnelle,
-	 * synchrone Validierung bei jedem Tastendruck (onDidChangeTextDocument)
-	 * ist das nötig, ein erneutes Einlesen aller .td-Dateien wäre dort zu
-	 * teuer.
+	 * (Datei-Änderungen im Workspace, gemeldet vom gemeinsamen
+	 * Workspace-Index) aktualisiert; per Konstruktion also höchstens ein paar
+	 * hundert Millisekunden veraltet — für die schnelle, synchrone
+	 * Validierung bei jedem Tastendruck (onDidChangeTextDocument) ist das
+	 * nötig, ein erneutes Einlesen aller .td-Dateien wäre dort zu teuer.
 	 */
 	private cachedTableOptions: TableOption[] = [];
 	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), analog zu cachedTableOptions. */
 	private cachedGenerators: GeneratorBase[] = [];
 	/** Zuletzt ermittelte Nachschlagelisten (.lkp), analog zu cachedTableOptions. */
 	private cachedLookups: KnownLookupRef[] = [];
-	private optionsBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly indexSub: vscode.Disposable;
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		const refresh = () => this.scheduleOptionsBroadcast();
-		for (const pattern of ['**/*.td', '**/*.tdgen', '**/*.lkp']) {
-			const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-			watcher.onDidCreate(refresh);
-			watcher.onDidDelete(refresh);
-			watcher.onDidChange(refresh);
-			this.watchers.push(watcher);
-		}
+	constructor(
+		private readonly context: vscode.ExtensionContext,
+		private readonly index: WorkspaceIndex,
+	) {
+		// Der gemeinsame Workspace-Index beobachtet alle Datenschmiede-Dateien
+		// (eigene Watcher sind nicht mehr nötig) und meldet Änderungen bereits
+		// debounced — .td/.tdgen/.lkp betreffen die drei Auswahllisten.
+		this.indexSub = index.onDidChange((kinds) => {
+			if (kinds.has('td') || kinds.has('tdgen') || kinds.has('lkp')) {
+				void this.broadcastOptions();
+			}
+		});
 	}
 
 	public dispose(): void {
-		for (const watcher of this.watchers) {
-			watcher.dispose();
-		}
-		if (this.optionsBroadcastTimer) {
-			clearTimeout(this.optionsBroadcastTimer);
-		}
+		this.indexSub.dispose();
 	}
 
 	public async resolveCustomTextEditor(
@@ -171,7 +162,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			if (e.document.uri.toString() !== document.uri.toString()) {
 				return;
 			}
-			this.scheduleOptionsBroadcast();
+			// Die Auswahllisten hält der Workspace-Index aktuell (er beobachtet
+			// auch Eingaben in offenen Editoren) — hier nur den eigenen Zustand.
 			if (selfEditsPending > 0) {
 				selfEditsPending--;
 				if (selfEditsPending === 0) {
@@ -263,19 +255,20 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		return { parseError: String(err) };
 	}
 
-	/** Liest Tabellen-, Generator- und Nachschlagelisten-Liste neu ein und hält sie für die Webview-Auswahllisten vor. */
+	/** Holt den aktuellen Index-Stand und hält die drei Auswahllisten für die Webviews vor. */
 	private async refreshOptionsCache(): Promise<void> {
-		const [tables, generators, lookups] = await Promise.all([listTables(), listGenerators(), listLookups()]);
-		this.cachedTableOptions = toTableOptions(tables);
-		this.cachedGenerators = toGeneratorList(generators);
-		this.cachedLookups = toLookupRefs(lookups);
+		const snapshot = await this.index.snapshot();
+		this.cachedTableOptions = toTableOptions(snapshot.tables);
+		this.cachedGenerators = toGeneratorList(snapshot.generators);
+		this.cachedLookups = toLookupRefs(snapshot.lookups);
 	}
 
 	/**
 	 * Schickt allen offenen .td-Webviews die aktuellen Auswahllisten (z. B.
 	 * nach Anlegen/Löschen/Umbenennen einer Tabelle, eines Generators oder
 	 * einer Nachschlageliste); die Problems-Ansicht hält die Workspace-weite
-	 * Hintergrund-Prüfung aktuell (siehe src/diagnostics.ts).
+	 * Hintergrund-Prüfung aktuell (siehe src/diagnostics.ts). Debouncing
+	 * übernimmt der Workspace-Index (siehe Konstruktor).
 	 */
 	private async broadcastOptions(): Promise<void> {
 		await this.refreshOptionsCache();
@@ -288,17 +281,6 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				lookupOptions: this.cachedLookups,
 			});
 		}
-	}
-
-	/** Debounced, damit z. B. beim Tippen im Namensfeld nicht bei jeder Änderung der ganze Workspace neu gelesen wird. */
-	private scheduleOptionsBroadcast(): void {
-		if (this.optionsBroadcastTimer) {
-			clearTimeout(this.optionsBroadcastTimer);
-		}
-		this.optionsBroadcastTimer = setTimeout(() => {
-			this.optionsBroadcastTimer = undefined;
-			void this.broadcastOptions();
-		}, 400);
 	}
 
 	private formatParseError(err: ParseError): string {

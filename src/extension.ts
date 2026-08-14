@@ -12,14 +12,20 @@ import { selectPythonInterpreterCommand } from './project/commands/selectPythonI
 import { runGenerationCommand } from './project/run';
 import { checkPython310Available } from './project/python';
 import { disposeOutputChannel } from './outputChannel';
+import { WorkspaceIndex } from './workspaceIndex';
 
 export function activate(context: vscode.ExtensionContext): void {
-	context.subscriptions.push(TableEditorProvider.register(context));
-	context.subscriptions.push(ProjectEditorProvider.register(context));
+	// Gemeinsamer Workspace-Index (EIN Watcher-Satz, EIN Einlese-Cache) für
+	// Diagnostics, Table Editor und Projekt-Editor — siehe workspaceIndex.ts.
+	const index = new WorkspaceIndex();
+	context.subscriptions.push(index);
+
+	context.subscriptions.push(TableEditorProvider.register(context, index));
+	context.subscriptions.push(ProjectEditorProvider.register(context, index));
 	context.subscriptions.push(LookupEditorProvider.register(context));
 	context.subscriptions.push(GeneratorNotebook.register(context));
 	// Workspace-weite Hintergrund-Prüfung aller Dateien (auch nicht geöffneter).
-	context.subscriptions.push(WorkspaceDiagnostics.register(context));
+	context.subscriptions.push(WorkspaceDiagnostics.register(context, index));
 	// Output-Channel „Datenschmiede“ (Lauf-Protokolle, Python-Tracebacks).
 	context.subscriptions.push({ dispose: disposeOutputChannel });
 

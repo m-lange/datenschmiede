@@ -5,11 +5,13 @@ import { parseProjectText, serializeProject } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
 import { getProjectWebviewStrings } from './webviewStrings';
-import { listTables, tableLabel, computeRequiredClosure, TableEntry } from '../table/repository';
+import { tableLabel, computeRequiredClosure, buildRequiredEdges, closureOf, TableEntry } from '../table/repository';
 import { parseCardinality } from '../table/cardinality';
-import { ensurePythonLinked, pickPythonInterpreter, resolveLinkedInterpreter } from './python';
+import { ResolvedPythonStatus, ensurePythonLinked, pickPythonInterpreter, resolveLinkedInterpreter } from './python';
 import { GeneratorBase } from '../generator/base';
-import { listGenerators, toGeneratorList } from '../generator/repository';
+import { toGeneratorList } from '../generator/repository';
+import { WorkspaceIndex } from '../workspaceIndex';
+import { PythonLink } from './model';
 
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
@@ -240,8 +242,8 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
 	public static readonly viewType = 'datenschmiede.projectEditor';
 
-	public static register(context: vscode.ExtensionContext): vscode.Disposable {
-		const provider = new ProjectEditorProvider(context);
+	public static register(context: vscode.ExtensionContext, index: WorkspaceIndex): vscode.Disposable {
+		const provider = new ProjectEditorProvider(context, index);
 		const providerRegistration = vscode.window.registerCustomEditorProvider(ProjectEditorProvider.viewType, provider, {
 			webviewOptions: { retainContextWhenHidden: true },
 			supportsMultipleEditorsPerDocument: false,
@@ -251,36 +253,48 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 
 	/** Offene Projekt-Webviews samt ihrem Dokument, um sie bei Änderungen an .td-Dateien im Workspace (Tabellen-Tab) neu zu versorgen. */
 	private readonly panelDocuments = new Map<vscode.WebviewPanel, vscode.TextDocument>();
-	/**
-	 * Beobachtet .td- und .tdgen-Dateien im Workspace, damit Tabellen-Tab und
-	 * Ausgabedateien-Übersicht aktuell bleiben — .tdgen zusätzlich, weil die
-	 * automatische Tabellen-Mitnahme auch die von Generatoren benötigten
-	 * Tabellen berücksichtigt (siehe computeRequiredClosure).
-	 */
-	private readonly watchers: vscode.FileSystemWatcher[] = [];
 	private cachedEntries: TableEntry[] = [];
 	/** Zuletzt ermittelte Generator-Liste (eingebaute + `.tdgen`-Dateien), für computeRequiredClosure. */
 	private cachedGenerators: GeneratorBase[] = [];
-	private entriesRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly indexSub: vscode.Disposable;
+	/**
+	 * Aufgelöster Interpreter-Status je verknüpftem Interpreter (`pfad|id`):
+	 * postState läuft bei jedem Tastendruck im Projekt (onDidChangeTextDocument)
+	 * — die Auflösung über die Python-Extension-API soll dabei nicht jedes Mal
+	 * neu passieren. Beim Öffnen eines Projekts ('ready') wird frisch
+	 * aufgelöst und der Cache aktualisiert.
+	 */
+	private readonly pythonStatusCache = new Map<string, ResolvedPythonStatus>();
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		const refresh = () => this.scheduleEntriesRefresh();
-		for (const pattern of ['**/*.td', '**/*.tdgen']) {
-			const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-			watcher.onDidCreate(refresh);
-			watcher.onDidDelete(refresh);
-			watcher.onDidChange(refresh);
-			this.watchers.push(watcher);
-		}
+	constructor(
+		private readonly context: vscode.ExtensionContext,
+		private readonly index: WorkspaceIndex,
+	) {
+		// Der gemeinsame Workspace-Index meldet Änderungen bereits debounced;
+		// relevant sind .td (Tabellen selbst) und .tdgen (die automatische
+		// Tabellen-Mitnahme berücksichtigt auch Generator-Referenzen, siehe
+		// computeRequiredClosure).
+		this.indexSub = index.onDidChange((kinds) => {
+			if (kinds.has('td') || kinds.has('tdgen')) {
+				void this.broadcastPickerTree();
+			}
+		});
 	}
 
 	public dispose(): void {
-		for (const watcher of this.watchers) {
-			watcher.dispose();
+		this.indexSub.dispose();
+	}
+
+	/** Löst den verknüpften Interpreter auf — aus dem Cache, außer `fresh` erzwingt eine Neuauflösung. */
+	private async resolvePythonStatus(link: PythonLink, fresh: boolean): Promise<ResolvedPythonStatus> {
+		const key = `${link.path}|${link.id ?? ''}`;
+		const cached = this.pythonStatusCache.get(key);
+		if (cached && !fresh) {
+			return cached;
 		}
-		if (this.entriesRefreshTimer) {
-			clearTimeout(this.entriesRefreshTimer);
-		}
+		const status = await resolveLinkedInterpreter(link);
+		this.pythonStatusCache.set(key, status);
+		return status;
 	}
 
 	public async resolveCustomTextEditor(
@@ -328,7 +342,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
-				const pythonStatus = state.project.python ? await resolveLinkedInterpreter(state.project.python) : null;
+				const pythonStatus = state.project.python ? await this.resolvePythonStatus(state.project.python, false) : null;
 				void webviewPanel.webview.postMessage({
 					type: 'update',
 					project: state.project,
@@ -369,7 +383,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						'project' in state ? buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators) : [];
 					const outputFiles = 'project' in state ? buildOutputFiles(state.project, this.cachedEntries) : [];
 					const pythonStatus =
-						'project' in state && state.project.python ? await resolveLinkedInterpreter(state.project.python) : null;
+						'project' in state && state.project.python ? await this.resolvePythonStatus(state.project.python, true) : null;
 					const columnWidths = this.context.globalState.get<Record<string, number>>(COLUMN_WIDTHS_STATE_KEY, {});
 					void webviewPanel.webview.postMessage({
 						type: 'init',
@@ -658,9 +672,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	}
 
 	private async refreshEntriesCache(): Promise<TableEntry[]> {
-		const [entries, generators] = await Promise.all([listTables(), listGenerators()]);
-		this.cachedEntries = entries;
-		this.cachedGenerators = toGeneratorList(generators);
+		const snapshot = await this.index.snapshot();
+		this.cachedEntries = snapshot.tables;
+		this.cachedGenerators = toGeneratorList(snapshot.generators);
 		return this.cachedEntries;
 	}
 
@@ -668,7 +682,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	 * Schickt allen offenen Projekt-Webviews den neu berechneten Auswahlbaum
 	 * (z. B. nach Anlegen/Löschen/Umbenennen einer `.td`-Datei oder Änderung
 	 * ihrer FK-Spalten) — die Auswahl selbst (welche Pfade zum Projekt
-	 * gehören) ändert sich dadurch nicht, nur ihre Anzeige.
+	 * gehören) ändert sich dadurch nicht, nur ihre Anzeige. Debouncing
+	 * übernimmt der Workspace-Index (siehe Konstruktor).
 	 */
 	private async broadcastPickerTree(): Promise<void> {
 		await this.refreshEntriesCache();
@@ -680,17 +695,6 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles });
 			}
 		}
-	}
-
-	/** Debounced, analog zu table/editorProvider.ts#scheduleTableOptionsBroadcast. */
-	private scheduleEntriesRefresh(): void {
-		if (this.entriesRefreshTimer) {
-			clearTimeout(this.entriesRefreshTimer);
-		}
-		this.entriesRefreshTimer = setTimeout(() => {
-			this.entriesRefreshTimer = undefined;
-			void this.broadcastPickerTree();
-		}, 400);
 	}
 
 	private getHtml(webview: vscode.Webview): string {
@@ -760,7 +764,12 @@ export function buildTableRows(project: Project, entries: TableEntry[]): Project
  */
 function buildPickerTree(project: Project, entries: TableEntry[], generators: GeneratorBase[] = []): ProjectPickerNode[] {
 	const explicit = new Set(project.tables.map((t) => t.path));
-	const required = computeRequiredClosure(explicit, entries, generators);
+	// Referenz-Kanten EINMAL aus den Einträgen ableiten (FK-Spalten +
+	// Generator-Referenzen auflösen ist der teure Teil) — jede der folgenden
+	// Hüllen-Berechnungen (eine je ausgewählter Tabelle, siehe
+	// isLockedSelection) ist dann reine Graph-Traversierung.
+	const edges = buildRequiredEdges(entries, generators);
+	const required = closureOf(explicit, edges);
 	const existingRecords = new Map(project.tables.map((t) => [t.path, t.records] as const));
 
 	/**
@@ -779,7 +788,7 @@ function buildPickerTree(project: Project, entries: TableEntry[], generators: Ge
 		}
 		const others = new Set(explicit);
 		others.delete(path);
-		return computeRequiredClosure(others, entries, generators).has(path);
+		return closureOf(others, edges).has(path);
 	}
 
 	function toTableNode(entry: TableEntry): ProjectPickerTableNode {

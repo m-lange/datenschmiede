@@ -22,7 +22,13 @@
 	const {
 		el,
 		bindText,
+		debounce,
 		renderMarkdownField,
+		renderTextField: renderTextFieldCommon,
+		renderLabeledMarkdownField,
+		renderErrorState,
+		variableLabel: variableLabelCommon,
+		createDeferredRenderer,
 		updateFieldError,
 		wrapSelectWithChevron,
 		populateSelectOptions,
@@ -127,17 +133,7 @@
 		vscode.postMessage({ type: 'edit', table: state });
 	}
 
-	/** @type {number | undefined} */
-	let debounceHandle;
-	function postEditDebounced() {
-		if (debounceHandle !== undefined) {
-			window.clearTimeout(debounceHandle);
-		}
-		debounceHandle = window.setTimeout(() => {
-			debounceHandle = undefined;
-			postEdit();
-		}, 250);
-	}
+	const postEditDebounced = debounce(postEdit, 250);
 
 	/**
 	 * Eigene logische Identität der gerade bearbeiteten Tabelle (`schema.name`,
@@ -160,57 +156,28 @@
 	// Datei-Änderung im Workspace) lösen kein sofortiges Neuzeichnen mehr
 	// aus. Unveränderte Listen werden komplett ignoriert; bei echten
 	// Änderungen wird das Neuzeichnen aufgeschoben, solange gerade ein
-	// Eingabefeld fokussiert ist — sonst verlöre das Feld bei jedem
-	// Broadcast Fokus und Cursor (das frühere „Flackern“).
+	// Eingabefeld fokussiert ist (oder der Parameter-Dialog offen ist) —
+	// sonst verlöre das Feld bei jedem Broadcast Fokus und Cursor (das
+	// frühere „Flackern“). Mechanik siehe createDeferredRenderer in common.js.
 	// ---------------------------------------------------------------------
 
-	let pendingRender = false;
 	/** Zuletzt verarbeitete Auswahllisten (JSON), um unveränderte Broadcasts zu ignorieren. */
 	let lastOptionsJson = '';
 
-	function isEditing() {
-		const active = document.activeElement;
-		return !!(
-			active &&
-			active !== document.body &&
-			(active.tagName === 'INPUT' ||
-				active.tagName === 'TEXTAREA' ||
-				active.tagName === 'SELECT' ||
-				/** @type {HTMLElement} */ (active).isContentEditable)
-		);
-	}
-
-	/** Zeichnet sofort neu — oder erst, sobald kein Eingabefeld mehr fokussiert ist. */
-	function renderSoon() {
-		if (isEditing() || closeParamDialog) {
-			pendingRender = true;
-			return;
-		}
-		render();
-	}
-
-	document.addEventListener('focusout', () => {
-		if (!pendingRender) {
-			return;
-		}
-		// Kurz warten: bei einem Fokuswechsel zwischen zwei Feldern ist nach
-		// focusout sofort wieder ein Feld fokussiert — dann weiter aufschieben.
-		window.setTimeout(() => {
-			if (pendingRender && !isEditing() && !closeParamDialog) {
-				render();
-			}
-		}, 100);
-	});
+	const deferredRender = createDeferredRenderer(
+		() => render(),
+		() => !!closeParamDialog,
+	);
 
 	function render() {
 		app.innerHTML = '';
-		pendingRender = false;
+		deferredRender.clearPending();
 		pendingColumnSizing = null;
 		if (!strings) {
 			return;
 		}
 		if (parseError) {
-			app.appendChild(renderError(parseError));
+			app.appendChild(renderErrorState(strings, parseError));
 			return;
 		}
 		app.appendChild(renderTabs());
@@ -276,7 +243,18 @@
 				state.schema = v;
 			}),
 		);
-		section.appendChild(renderDescriptionField());
+		section.appendChild(
+			renderLabeledMarkdownField(
+				strings.fieldDescriptionLabel,
+				strings.fieldDescriptionPlaceholder,
+				state.description,
+				(v) => {
+					state.description = v;
+				},
+				postEditDebounced,
+				postEdit,
+			),
+		);
 		stack.appendChild(section);
 
 		stack.appendChild(renderOutputCard());
@@ -284,77 +262,18 @@
 		return stack;
 	}
 
-	/**
-	 * @param {string} id
-	 * @param {string} labelText
-	 * @param {string} value
-	 * @param {string} placeholder
-	 * @param {(value: string) => void} onChange
-	 * @param {string} [extraClass]
-	 */
+	/** Dünner Umschlag um das gemeinsame Textfeld (common.js), mit den Commit-Funktionen dieses Editors. */
 	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
-		const field = el('div', { className: 'field' });
-		const label = el('label', { text: labelText });
-		label.htmlFor = id;
-		const input = /** @type {HTMLInputElement} */ (
-			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
-		);
-		input.type = 'text';
-		input.id = id;
-		input.placeholder = placeholder;
-		input.value = value || '';
-		bindText(input, onChange, postEditDebounced, postEdit);
-		field.appendChild(label);
-		field.appendChild(input);
-		return field;
-	}
-
-	function renderDescriptionField() {
-		const field = el('div', { className: 'field' });
-		const label = el('label', { text: strings.fieldDescriptionLabel });
-		field.appendChild(label);
-		field.appendChild(
-			renderMarkdownField(
-				state.description,
-				strings.fieldDescriptionPlaceholder,
-				(v) => {
-					state.description = v;
-				},
-				postEditDebounced,
-				postEdit,
-				{ autoGrow: true, rows: 5, ariaLabel: strings.fieldDescriptionLabel },
-			),
-		);
-		return field;
+		return renderTextFieldCommon(id, labelText, value, placeholder, onChange, postEditDebounced, postEdit, extraClass);
 	}
 
 	// ---------------------------------------------------------------------
 	// Übersicht: Ausgabe-Karte — Dateiname als Tag-Feld + CSV-Einstellungen
 	// ---------------------------------------------------------------------
 
-	/** Anzeigename einer Dateinamen-Variable (`{…}`-Token ohne Klammern). @param {string} token */
+	/** Anzeigename einer Dateinamen-Variable (`{…}`-Token ohne Klammern) — gemeinsame Beschriftungen, siehe common.js. @param {string} token */
 	function variableLabel(token) {
-		if (token.startsWith('column:')) {
-			return token.slice('column:'.length);
-		}
-		switch (token) {
-			case 'date':
-				return strings.outputVarDate;
-			case 'time':
-				return strings.outputVarTime;
-			case 'datetime':
-				return strings.outputVarDatetime;
-			case 'timestamp':
-				return strings.outputVarTimestamp;
-			case 'schema':
-				return strings.outputVarSchema;
-			case 'table':
-				return strings.outputVarTable;
-			case 'records':
-				return strings.outputVarRecords;
-			default:
-				return token;
-		}
+		return variableLabelCommon(strings, token);
 	}
 
 	function renderOutputCard() {
@@ -1456,9 +1375,7 @@
 			postEdit();
 			onChanged();
 			// Ein während des Dialogs aufgeschobenes Neuzeichnen jetzt nachholen.
-			if (pendingRender && !isEditing()) {
-				render();
-			}
+			deferredRender.flushIfIdle();
 		};
 
 		// Erstes Eingabefeld fokussieren, damit sich der Dialog sofort per
@@ -1760,21 +1677,6 @@
 	}
 
 	// ---------------------------------------------------------------------
-	// Fehlerzustand (kaputtes TOML)
-	// ---------------------------------------------------------------------
-
-	/** @param {string} message */
-	function renderError(message) {
-		const wrap = el('div', { className: 'error-state' });
-		wrap.appendChild(el('i', { className: 'codicon codicon-warning error-icon' }));
-		wrap.appendChild(el('h2', { text: strings.errorTitle }));
-		wrap.appendChild(el('p', { text: strings.errorBody }));
-		wrap.appendChild(el('pre', { className: 'error-detail', text: message }));
-		wrap.appendChild(el('p', { className: 'hint', text: strings.errorHint }));
-		return wrap;
-	}
-
-	// ---------------------------------------------------------------------
 	// Nachrichten vom Extension-Host
 	// ---------------------------------------------------------------------
 
@@ -1826,7 +1728,7 @@
 				}
 				lastOptionsJson = optionsJson;
 				if (!parseError) {
-					renderSoon();
+					deferredRender.renderSoon();
 				}
 				break;
 			}

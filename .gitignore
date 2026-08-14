@@ -4,3 +4,8 @@ out/
 *.vsix
 .vscode-test/
 __pycache__/
+# Vom Build aus node_modules kopiert (siehe esbuild.js#copyCodicons)
+media/codicon.css
+media/codicon.ttf
+# Generierte Laufergebnisse der Beispiel-Projekte
+samples/output/

@@ -2,6 +2,38 @@
 
 ## 0.6.0
 
+- **Gemeinsamer Workspace-Index statt dreifacher Hintergrund-Scans**:
+  Diagnostics, Table Editor und Projekt-Editor teilen sich jetzt EINEN
+  Watcher-Satz und EINEN gecachten Einlese-Stand aller `.td`-/`.tdgen`-/
+  `.lkp`-/`.tdproject`-Dateien (`src/workspaceIndex.ts`) — zuvor hielt
+  jede der drei Komponenten eigene Watcher und las den Workspace bei
+  jeder Änderung unabhängig neu ein. Rohtext und geparstes Modell werden
+  je Datei nur noch einmal gelesen/geparst (die Diagnostics parsten
+  bisher bis zu dreifach). Die gebündelte Python-Prüfung der `.tdgen`-
+  Code-Zellen startet nur noch dann einen Python-Prozess, wenn sich
+  Generator-Code oder geprüfte Spalten-Parameter tatsächlich geändert
+  haben; ein (noch) fehlender Interpreter wird nicht mehr für die ganze
+  Sitzung gecacht. Der Tabellen-Auswahlbaum berechnet den Sperr-Status
+  über einen einmal aufgebauten Referenz-Graphen statt je Tabelle alle
+  Referenzen neu aufzulösen; der verknüpfte Interpreter-Status wird beim
+  Tippen nicht mehr bei jedem Anschlag neu über die Python-Extension
+  aufgelöst.
+- **Schnellere Python-Laufzeit**: UUID-Spalten entstehen über einen
+  einzigen Hex-Aufruf statt einer Python-Callback je Zeile,
+  `combine` verkettet alle Teile in einem Durchlauf, Nachschlagelisten
+  cachen Spaltenwerte/Gewichte je Liste, und die Datums-Formatierung
+  vor dem CSV-Schreiben kopiert den DataFrame nicht mehr tief
+  (halbierter Spitzen-Speicherbedarf bei großen Läufen).
+- **Aufgeräumt**: der Prozess-Start des Generator-Laufs und der
+  Tabellen-Vorschau teilen sich einen gemeinsamen Läufer
+  (`src/project/planRunner.ts`) — die Vorschau bietet bei fehlenden
+  Python-Paketen jetzt ebenfalls „Install packages“ an. Gemeinsame
+  Webview-Bausteine (Textfeld, Beschreibungsfeld, Fehlerseite,
+  Variablen-Beschriftungen, Anti-Flacker-Renderer, Debounce) liegen
+  einmal in `media/common.js` statt kopiert in `table.js`/`project.js`/
+  `lookup.js`. Generierte Dateien (`media/codicon.*`, `samples/output/`)
+  sind nicht mehr im Repository; `__pycache__` wandert nicht mehr ins
+  Extension-Paket.
 - **Beispiel-Kommentare in neuen `.tdgen`-Dateien**: die Code-Zellen einer
   frisch angelegten Generator-Datei zeigen jetzt typische Muster als
   Kommentar direkt im Code — `generate` die wichtigsten `ctx`-Helfer

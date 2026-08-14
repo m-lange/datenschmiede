@@ -24,7 +24,10 @@
 	const {
 		el,
 		bindText,
-		renderMarkdownField,
+		debounce,
+		renderTextField: renderTextFieldCommon,
+		renderLabeledMarkdownField,
+		renderErrorState,
 		updateFieldError,
 		buildColGroup,
 		attachColumnResizeHandle,
@@ -57,17 +60,7 @@
 		vscode.postMessage({ type: 'edit', lookup: state });
 	}
 
-	/** @type {number | undefined} */
-	let debounceHandle;
-	function postEditDebounced() {
-		if (debounceHandle !== undefined) {
-			window.clearTimeout(debounceHandle);
-		}
-		debounceHandle = window.setTimeout(() => {
-			debounceHandle = undefined;
-			postEdit();
-		}, 250);
-	}
+	const postEditDebounced = debounce(postEdit, 250);
 
 	// ---------------------------------------------------------------------
 	// Gewichte: Kopie der vscode-freien Helfer aus src/lookup/model.ts —
@@ -108,7 +101,7 @@
 			return;
 		}
 		if (parseError) {
-			app.appendChild(renderError(parseError));
+			app.appendChild(renderErrorState(strings, parseError));
 			return;
 		}
 		app.appendChild(renderTabs());
@@ -176,48 +169,22 @@
 		return wrap;
 	}
 
-	/**
-	 * @param {string} id
-	 * @param {string} labelText
-	 * @param {string} value
-	 * @param {string} placeholder
-	 * @param {(value: string) => void} onChange
-	 * @param {string} [extraClass]
-	 */
+	/** Dünner Umschlag um das gemeinsame Textfeld (common.js), mit den Commit-Funktionen dieses Editors. */
 	function renderTextField(id, labelText, value, placeholder, onChange, extraClass) {
-		const field = el('div', { className: 'field' });
-		const label = el('label', { text: labelText });
-		label.htmlFor = id;
-		const input = /** @type {HTMLInputElement} */ (
-			el('input', { className: extraClass ? `text-input ${extraClass}` : 'text-input' })
-		);
-		input.type = 'text';
-		input.id = id;
-		input.placeholder = placeholder;
-		input.value = value || '';
-		bindText(input, onChange, postEditDebounced, postEdit);
-		field.appendChild(label);
-		field.appendChild(input);
-		return field;
+		return renderTextFieldCommon(id, labelText, value, placeholder, onChange, postEditDebounced, postEdit, extraClass);
 	}
 
 	function renderDescriptionField() {
-		const field = el('div', { className: 'field' });
-		const label = el('label', { text: strings.fieldDescriptionLabel });
-		field.appendChild(label);
-		field.appendChild(
-			renderMarkdownField(
-				state.description,
-				strings.fieldDescriptionPlaceholder,
-				(v) => {
-					state.description = v;
-				},
-				postEditDebounced,
-				postEdit,
-				{ autoGrow: true, rows: 5, ariaLabel: strings.fieldDescriptionLabel },
-			),
+		return renderLabeledMarkdownField(
+			strings.fieldDescriptionLabel,
+			strings.fieldDescriptionPlaceholder,
+			state.description,
+			(v) => {
+				state.description = v;
+			},
+			postEditDebounced,
+			postEdit,
 		);
-		return field;
 	}
 
 	/**
@@ -589,21 +556,6 @@
 		}
 		postEdit();
 		render();
-	}
-
-	// ---------------------------------------------------------------------
-	// Fehlerzustand (kaputtes CSV)
-	// ---------------------------------------------------------------------
-
-	/** @param {string} message */
-	function renderError(message) {
-		const wrap = el('div', { className: 'error-state' });
-		wrap.appendChild(el('i', { className: 'codicon codicon-warning error-icon' }));
-		wrap.appendChild(el('h2', { text: strings.errorTitle }));
-		wrap.appendChild(el('p', { text: strings.errorBody }));
-		wrap.appendChild(el('pre', { className: 'error-detail', text: message }));
-		wrap.appendChild(el('p', { className: 'hint', text: strings.errorHint }));
-		return wrap;
 	}
 
 	// ---------------------------------------------------------------------

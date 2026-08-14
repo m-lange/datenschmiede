@@ -2,33 +2,41 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { ParseError } from './tomlUtil';
 import { resolveAnyInterpreter } from './project/python';
-import { parseTableText, findColumnLineInfo } from './table/toml';
+import { ColumnLineInfo, findColumnLineInfo } from './table/toml';
 import { validateTable, findTableCycle, findColumnCycle, Issue } from './table/validation';
-import { buildTableRefEdges, listTables, readFileText, toTableOptions } from './table/repository';
-import { parseProjectText, findTableLineInfo } from './project/toml';
+import { TableEntry, buildTableRefEdges, toTableOptions } from './table/repository';
+import { findTableLineInfo } from './project/toml';
 import { buildTableRows } from './project/editorProvider';
 import { ProjectIssue, validateProjectRecords } from './project/validation';
-import { parseLookupText, findLookupLineInfo } from './lookup/csv';
+import { findLookupLineInfo } from './lookup/csv';
 import { parseWeight } from './lookup/model';
-import { listLookups, toLookupRefs } from './lookup/repository';
-import { parseGeneratorText, findParameterLineInfo, isKnownParameterType } from './generator/toml';
-import { listGenerators, toGeneratorList } from './generator/repository';
+import { LookupEntry, toLookupRefs } from './lookup/repository';
+import { GeneratorEntry, toGeneratorList } from './generator/repository';
+import { findParameterLineInfo, isKnownParameterType } from './generator/toml';
 import { customGeneratorName, isCustomGeneratorId } from './generator/custom';
 import { parametersFromBody } from './generator/notebookCells';
+import { ProjectEntry, WorkspaceIndex } from './workspaceIndex';
 
-/** Alle Dateitypen dieser Extension, die im Hintergrund geprüft werden. */
-const WATCH_PATTERN = '**/*.{td,tdproject,lkp,tdgen}';
-const OUR_EXTENSIONS = ['.td', '.tdproject', '.lkp', '.tdgen'];
-
-function isOurs(uri: vscode.Uri): boolean {
-	return OUR_EXTENSIONS.some((ext) => uri.path.endsWith(ext));
+/** Eine geprüfte `.td`-Datei: Eintrag aus dem Index plus abgeleitete Zeilen-Infos und die (noch erweiterbare) Diagnostics-Liste. */
+interface TableCheck {
+	entry: TableEntry;
+	lines: string[];
+	/** Zeilenpositionen der `[[columns]]`-Blöcke — einmal je Datei berechnet, von Grund- und Python-Prüfung gemeinsam genutzt. */
+	columnLines: ColumnLineInfo[];
+	diagnostics: vscode.Diagnostic[];
 }
 
-/** Eine geprüfte Datei: Rohtext plus die (noch erweiterbare) Diagnostics-Liste, die in die Collection wandert. */
-interface FileCheck {
-	uri: vscode.Uri;
-	text: string;
+/** Eine geprüfte `.tdgen`-Datei — Gegenstück zu TableCheck. */
+interface GeneratorCheck {
+	entry: GeneratorEntry;
+	lines: string[];
 	diagnostics: vscode.Diagnostic[];
+}
+
+/** Ergebnis der gebündelten Python-Prüfung (siehe runPythonCodeChecks). */
+interface PythonCheckResult {
+	syntax: { id: number; cell: string; line: number; message: string }[];
+	validations: { id: number; messages: string[] }[];
 }
 
 /**
@@ -39,68 +47,32 @@ interface FileCheck {
  * lebt jetzt ausschließlich hier (eine Quelle, keine doppelten Meldungen);
  * die Webviews zeigen dieselben Regeln weiterhin direkt am Feld an.
  *
- * Getriggert wird die (gebündelte, debouncte) Neubewertung von
- * Datei-Änderungen auf der Festplatte (Watcher), von Eingaben in offenen
- * Editoren (onDidChangeTextDocument — gelesen wird immer der aktuelle
- * Buffer-Stand, siehe readFileText) und vom Schließen eines Editors
- * (zurück zum Festplatten-Stand).
+ * Eingelesen wird nichts mehr selbst: der gemeinsame Workspace-Index
+ * (src/workspaceIndex.ts) liefert Rohtext und geparste Modelle aller Dateien
+ * und meldet (debounced) jede Änderung — von Datei-Änderungen auf der
+ * Festplatte über Eingaben in offenen Editoren bis zum Schließen eines
+ * Editors.
  */
 export class WorkspaceDiagnostics implements vscode.Disposable {
-	public static register(_context: vscode.ExtensionContext): vscode.Disposable {
-		return new WorkspaceDiagnostics();
+	public static register(_context: vscode.ExtensionContext, index: WorkspaceIndex): vscode.Disposable {
+		return new WorkspaceDiagnostics(index);
 	}
 
 	private readonly collection = vscode.languages.createDiagnosticCollection('datenschmiede');
-	private readonly disposables: vscode.Disposable[] = [];
-	private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly changeSub: vscode.Disposable;
 	/** Reentranz-Schutz: läuft bereits ein Scan, wird höchstens ein weiterer vorgemerkt. */
 	private refreshing = false;
 	private refreshQueued = false;
 
-	constructor() {
-		const watcher = vscode.workspace.createFileSystemWatcher(WATCH_PATTERN);
-		const schedule = () => this.scheduleRefresh();
-		watcher.onDidCreate(schedule);
-		watcher.onDidDelete(schedule);
-		watcher.onDidChange(schedule);
-		this.disposables.push(watcher);
-		this.disposables.push(
-			vscode.workspace.onDidChangeTextDocument((e) => {
-				if (isOurs(e.document.uri)) {
-					this.scheduleRefresh();
-				}
-			}),
-		);
-		this.disposables.push(
-			vscode.workspace.onDidCloseTextDocument((doc) => {
-				if (isOurs(doc.uri)) {
-					this.scheduleRefresh();
-				}
-			}),
-		);
+	constructor(private readonly index: WorkspaceIndex) {
+		this.changeSub = index.onDidChange(() => void this.refreshAll());
 		// Initialer Scan direkt beim Aktivieren.
-		this.scheduleRefresh(0);
+		void this.refreshAll();
 	}
 
 	public dispose(): void {
 		this.collection.dispose();
-		for (const disposable of this.disposables) {
-			disposable.dispose();
-		}
-		if (this.refreshTimer) {
-			clearTimeout(this.refreshTimer);
-		}
-	}
-
-	/** Debounced, damit z. B. Tippen in einem offenen Editor nicht bei jedem Anschlag den ganzen Workspace neu liest. */
-	private scheduleRefresh(delay = 500): void {
-		if (this.refreshTimer) {
-			clearTimeout(this.refreshTimer);
-		}
-		this.refreshTimer = setTimeout(() => {
-			this.refreshTimer = undefined;
-			void this.refreshAll();
-		}, delay);
+		this.changeSub.dispose();
 	}
 
 	private async refreshAll(): Promise<void> {
@@ -110,46 +82,50 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		}
 		this.refreshing = true;
 		try {
-			const [tableEntries, generatorEntries, lookupEntries, projectUris] = await Promise.all([
-				listTables(),
-				listGenerators(),
-				listLookups(),
-				vscode.workspace.findFiles('**/*.tdproject', '**/node_modules/**'),
-			]);
-			const generators = toGeneratorList(generatorEntries);
-			const lookups = toLookupRefs(lookupEntries);
-			const tableOptions = toTableOptions(tableEntries);
-			const edges = buildTableRefEdges(tableEntries, generators);
+			const snapshot = await this.index.snapshot();
+			const generators = toGeneratorList(snapshot.generators);
+			const lookups = toLookupRefs(snapshot.lookups);
+			const tableOptions = toTableOptions(snapshot.tables);
+			const edges = buildTableRefEdges(snapshot.tables, generators);
 
-			const results: [vscode.Uri, vscode.Diagnostic[]][] = [];
+			const tableChecks: TableCheck[] = snapshot.tables.map((entry) => ({
+				entry,
+				lines: entry.text.split('\n'),
+				columnLines: entry.table ? findColumnLineInfo(entry.text) : [],
+				diagnostics: [],
+			}));
+			for (const check of tableChecks) {
+				this.checkTable(check, { tableOptions, generators, lookups, edges });
+			}
 
-			const tableChecks: FileCheck[] = [];
-			for (const entry of tableEntries) {
-				const text = await readFileText(entry.uri).catch(() => '');
-				const diagnostics = this.checkTable(text, { tableOptions, generators, lookups, edges });
-				tableChecks.push({ uri: entry.uri, text, diagnostics });
-				results.push([entry.uri, diagnostics]);
+			const generatorChecks: GeneratorCheck[] = snapshot.generators.map((entry) => ({
+				entry,
+				lines: entry.text.split('\n'),
+				diagnostics: [],
+			}));
+			for (const check of generatorChecks) {
+				this.checkGenerator(check);
 			}
-			const generatorChecks: FileCheck[] = [];
-			for (const entry of generatorEntries) {
-				const text = await readFileText(entry.uri).catch(() => '');
-				const diagnostics = this.checkGenerator(text);
-				generatorChecks.push({ uri: entry.uri, text, diagnostics });
-				results.push([entry.uri, diagnostics]);
-			}
+
 			// Python-Prüfungen der Code-Zellen (gebündelt in einem einzigen
 			// Python-Aufruf): Syntaxfehler je .tdgen plus die eigene
 			// validate-Prüfung jedes Generators für jede Spalte, die ihn
 			// verwendet — hängt Warnungen an die bereits gesammelten
 			// Diagnostics der jeweiligen Datei an.
 			await this.runPythonCodeChecks(generatorChecks, tableChecks);
-			for (const entry of lookupEntries) {
-				const text = await readFileText(entry.uri).catch(() => '');
-				results.push([entry.uri, this.checkLookup(text)]);
+
+			const results: [vscode.Uri, vscode.Diagnostic[]][] = [];
+			for (const check of tableChecks) {
+				results.push([check.entry.uri, check.diagnostics]);
 			}
-			for (const uri of projectUris) {
-				const text = await readFileText(uri).catch(() => '');
-				results.push([uri, this.checkProject(text, tableEntries)]);
+			for (const check of generatorChecks) {
+				results.push([check.entry.uri, check.diagnostics]);
+			}
+			for (const entry of snapshot.lookups) {
+				results.push([entry.uri, this.checkLookup(entry)]);
+			}
+			for (const entry of snapshot.projects) {
+				results.push([entry.uri, this.checkProject(entry, snapshot.tables)]);
 			}
 
 			// Kompletter Austausch: entfernt auch Einträge gelöschter Dateien.
@@ -159,7 +135,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			this.refreshing = false;
 			if (this.refreshQueued) {
 				this.refreshQueued = false;
-				this.scheduleRefresh(0);
+				void this.refreshAll();
 			}
 		}
 	}
@@ -185,9 +161,9 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		return diagnostic;
 	}
 
-	/** Syntaxfehler (kaputtes TOML/CSV) an seiner Position. */
-	private parseErrorDiagnostics(err: unknown, lines: string[]): vscode.Diagnostic[] {
-		if (err instanceof ParseError && err.line !== undefined && err.column !== undefined) {
+	/** Syntaxfehler (kaputtes TOML/CSV) an seiner Position — aus dem im Index-Eintrag festgehaltenen Parse-Fehler. */
+	private parseErrorDiagnostics(err: ParseError, lines: string[]): vscode.Diagnostic[] {
+		if (err.line !== undefined && err.column !== undefined) {
 			const lineIndex = Math.min(Math.max(0, err.line - 1), Math.max(0, lines.length - 1));
 			const lineText = lines[lineIndex] ?? '';
 			const startCol = Math.min(Math.max(0, err.column - 1), lineText.length);
@@ -202,29 +178,33 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	// ------------------------------------------------------------------
 
 	private checkTable(
-		text: string,
+		check: TableCheck,
 		ctx: {
 			tableOptions: ReturnType<typeof toTableOptions>;
 			generators: ReturnType<typeof toGeneratorList>;
 			lookups: ReturnType<typeof toLookupRefs>;
 			edges: Map<string, string[]>;
 		},
-	): vscode.Diagnostic[] {
-		const lines = text.split('\n');
-		let table;
-		try {
-			table = parseTableText(text);
-		} catch (err) {
-			return this.parseErrorDiagnostics(err, lines);
+	): void {
+		const { entry, lines, columnLines, diagnostics } = check;
+		if (entry.error) {
+			diagnostics.push(...this.parseErrorDiagnostics(entry.error, lines));
+			return;
+		}
+		const table = entry.table;
+		if (!table) {
+			// Nicht lesbare Datei — dafür gibt es keine sinnvolle Meldung im Text.
+			return;
 		}
 
 		const issues = validateTable(table, ctx.tableOptions, ctx.generators, ctx.lookups);
-		const columnLines = findColumnLineInfo(text);
-		const diagnostics = issues.map((issue) => {
+		for (const issue of issues) {
 			const info = columnLines[issue.columnIndex];
 			const line = info ? info.nameLine ?? info.columnsLine : 0;
-			return this.diagnostic(this.lineRange(lines, line), this.formatTableIssueMessage(issue), issue.kind, !!issue.warning);
-		});
+			diagnostics.push(
+				this.diagnostic(this.lineRange(lines, line), this.formatTableIssueMessage(issue), issue.kind, !!issue.warning),
+			);
+		}
 
 		// Zyklische Referenzen: über FK-/Generator-Ketten zwischen Tabellen
 		// bzw. zwischen den Spalten dieser Tabelle — dann lässt sich keine
@@ -262,8 +242,6 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				),
 			);
 		}
-
-		return diagnostics;
 	}
 
 	private formatTableIssueMessage(issue: Issue): string {
@@ -352,18 +330,18 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	// .tdproject — Testdatenprojekte
 	// ------------------------------------------------------------------
 
-	private checkProject(text: string, tableEntries: Awaited<ReturnType<typeof listTables>>): vscode.Diagnostic[] {
-		const lines = text.split('\n');
-		let project;
-		try {
-			project = parseProjectText(text);
-		} catch (err) {
-			return this.parseErrorDiagnostics(err, lines);
+	private checkProject(entry: ProjectEntry, tableEntries: TableEntry[]): vscode.Diagnostic[] {
+		const lines = entry.text.split('\n');
+		if (entry.error) {
+			return this.parseErrorDiagnostics(entry.error, lines);
+		}
+		if (!entry.project) {
+			return [];
 		}
 
-		const rows = buildTableRows(project, tableEntries);
+		const rows = buildTableRows(entry.project, tableEntries);
 		const issues = validateProjectRecords(rows);
-		const lineInfoByPath = findTableLineInfo(text);
+		const lineInfoByPath = findTableLineInfo(entry.text);
 
 		return issues.map((issue) => {
 			const info = lineInfoByPath.get(issue.path);
@@ -403,18 +381,18 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	// .lkp — Nachschlagelisten
 	// ------------------------------------------------------------------
 
-	private checkLookup(text: string): vscode.Diagnostic[] {
-		const lines = text.split('\n');
-		let lookup;
-		try {
-			lookup = parseLookupText(text);
-		} catch (err) {
-			return this.parseErrorDiagnostics(err, lines);
+	private checkLookup(entry: LookupEntry): vscode.Diagnostic[] {
+		const lines = entry.text.split('\n');
+		if (entry.error) {
+			return this.parseErrorDiagnostics(entry.error, lines);
+		}
+		if (!entry.lookup) {
+			return [];
 		}
 
-		const info = findLookupLineInfo(text);
+		const info = findLookupLineInfo(entry.text);
 		const diagnostics: vscode.Diagnostic[] = [];
-		lookup.rows.forEach((row, index) => {
+		entry.lookup.rows.forEach((row, index) => {
 			if (parseWeight(row.weight) !== null) {
 				return;
 			}
@@ -437,15 +415,40 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	// .tdgen — Python-Syntaxprüfung der Code-Zellen
 	// ------------------------------------------------------------------
 
-	/** Einmal aufgelöster Interpreter für die Syntaxprüfung (kein Interpreter -> Prüfung entfällt still). */
-	private pythonPathPromise: Promise<string | null> | undefined;
+	/**
+	 * Aufgelöster Interpreter für die Syntaxprüfung. Anders als früher wird
+	 * ein Fehlschlag NICHT für immer gecacht: solange kein Interpreter
+	 * gefunden wurde, wird bei jedem Scan erneut (billig, über die Python-
+	 * Extension-API) nachgefragt — wer Python erst nach dem Start installiert
+	 * oder verknüpft, bekommt die Prüfungen ohne Reload.
+	 */
+	private pythonPath: string | null = null;
+	private resolvingPython: Promise<string | null> | null = null;
 
 	private getPythonPath(): Promise<string | null> {
-		if (!this.pythonPathPromise) {
-			this.pythonPathPromise = resolveAnyInterpreter().then((status) => status?.path ?? null);
+		if (this.pythonPath) {
+			return Promise.resolve(this.pythonPath);
 		}
-		return this.pythonPathPromise;
+		if (!this.resolvingPython) {
+			this.resolvingPython = resolveAnyInterpreter().then((status) => {
+				this.resolvingPython = null;
+				this.pythonPath = status?.path ?? null;
+				return this.pythonPath;
+			});
+		}
+		return this.resolvingPython;
 	}
+
+	/**
+	 * Eingabe (defs + checks als JSON) und Ergebnis des letzten erfolgreichen
+	 * Python-Laufs: ändert ein Scan weder Generator-Code noch die geprüften
+	 * Spalten-Parameter (der Normalfall beim Tippen in `.td`-Beschreibungen
+	 * o. Ä.), wird das Ergebnis wiederverwendet statt erneut einen
+	 * Python-Prozess zu starten. Die Zeilenpositionen werden ohnehin bei
+	 * jedem Scan gegen den aktuellen Text neu berechnet.
+	 */
+	private lastPythonPayload = '';
+	private lastPythonFindings: PythonCheckResult = { syntax: [], validations: [] };
 
 	/**
 	 * Gebündelte Python-Prüfung der Code-Zellen (EIN Python-Aufruf für den
@@ -460,7 +463,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 	 *    erscheinen an der Spalte in der `.td`-Datei. Der Code stammt aus dem
 	 *    eigenen Workspace (dieselbe Vertrauensstufe wie der Generator-Lauf).
 	 */
-	private async runPythonCodeChecks(generatorChecks: FileCheck[], tableChecks: FileCheck[]): Promise<void> {
+	private async runPythonCodeChecks(generatorChecks: GeneratorCheck[], tableChecks: TableCheck[]): Promise<void> {
 		interface CodeDef {
 			id: number;
 			parameters: string;
@@ -470,26 +473,26 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			validate: string;
 		}
 		const defs: CodeDef[] = [];
-		const defOwner: FileCheck[] = [];
+		const defOwner: GeneratorCheck[] = [];
 		const defIndexByName = new Map<string, number>();
 		for (const check of generatorChecks) {
-			try {
-				const generator = parseGeneratorText(check.text);
-				if (generator.name.trim() && !defIndexByName.has(generator.name.trim())) {
-					defIndexByName.set(generator.name.trim(), defs.length);
-				}
-				defs.push({
-					id: defs.length,
-					parameters: generator.code.parameters,
-					generate: generator.code.generate,
-					parse_params: generator.code.parseParams,
-					display_value: generator.code.displayValue,
-					validate: generator.code.validate,
-				});
-				defOwner.push(check);
-			} catch {
+			const generator = check.entry.file;
+			if (!generator) {
 				// Kaputtes TOML wird bereits gemeldet.
+				continue;
 			}
+			if (generator.name.trim() && !defIndexByName.has(generator.name.trim())) {
+				defIndexByName.set(generator.name.trim(), defs.length);
+			}
+			defs.push({
+				id: defs.length,
+				parameters: generator.code.parameters,
+				generate: generator.code.generate,
+				parse_params: generator.code.parseParams,
+				display_value: generator.code.displayValue,
+				validate: generator.code.validate,
+			});
+			defOwner.push(check);
 		}
 		if (defs.length === 0) {
 			return;
@@ -501,16 +504,14 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			id: number;
 			def_id: number;
 			params: Record<string, string>;
-			tableCheck: FileCheck;
+			tableCheck: TableCheck;
 			columnIndex: number;
 			columnName: string;
 		}
 		const validationChecks: ValidationCheck[] = [];
 		for (const tableCheck of tableChecks) {
-			let table;
-			try {
-				table = parseTableText(tableCheck.text);
-			} catch {
+			const table = tableCheck.entry.table;
+			if (!table) {
 				continue;
 			}
 			table.columns.forEach((column, columnIndex) => {
@@ -533,11 +534,80 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			});
 		}
 
-		const pythonPath = await this.getPythonPath();
-		if (!pythonPath) {
-			return;
+		const payloadJson = JSON.stringify({
+			defs,
+			checks: validationChecks.map(({ id, def_id, params }) => ({ id, def_id, params })),
+		});
+
+		let findings: PythonCheckResult;
+		if (payloadJson === this.lastPythonPayload) {
+			// Unveränderte Eingabe -> Ergebnis des letzten Laufs wiederverwenden
+			// (kein Python-Prozess nötig).
+			findings = this.lastPythonFindings;
+		} else {
+			const pythonPath = await this.getPythonPath();
+			if (!pythonPath) {
+				return;
+			}
+			const outcome = await this.spawnPythonCheck(pythonPath, payloadJson);
+			if (outcome.spawnFailed) {
+				// Interpreter nicht (mehr) startbar -> beim nächsten Scan neu auflösen.
+				this.pythonPath = null;
+			}
+			if (!outcome.result) {
+				return;
+			}
+			findings = outcome.result;
+			this.lastPythonPayload = payloadJson;
+			this.lastPythonFindings = findings;
 		}
 
+		for (const finding of findings.syntax) {
+			const target = defOwner[finding.id];
+			if (!target) {
+				continue;
+			}
+			// Zeile des `<zelle> = """`-Schlüssels; der Rumpf beginnt in der
+			// Zeile darunter (mehrzeiliger TOML-String, siehe serializeGenerator).
+			const keyLine = target.lines.findIndex((line) => new RegExp(`^\\s*${finding.cell}\\s*=`).test(line));
+			const bodyLine = keyLine >= 0 ? keyLine + Math.max(1, finding.line) : 0;
+			target.diagnostics.push(
+				this.diagnostic(
+					this.lineRange(target.lines, bodyLine),
+					vscode.l10n.t('Python syntax error in "{0}": {1}', finding.cell, finding.message),
+					'gen-file-python-syntax',
+					true,
+				),
+			);
+		}
+
+		for (const validation of findings.validations) {
+			const target = validationChecks[validation.id];
+			if (!target) {
+				continue;
+			}
+			const { lines, columnLines } = target.tableCheck;
+			const info = columnLines[target.columnIndex];
+			const line = info ? info.nameLine ?? info.columnsLine : 0;
+			const label = target.columnName.trim() || vscode.l10n.t('column {0}', target.columnIndex + 1);
+			for (const message of validation.messages) {
+				target.tableCheck.diagnostics.push(
+					this.diagnostic(
+						this.lineRange(lines, line),
+						vscode.l10n.t('Column "{0}": {1}', label, message),
+						'gen-custom-validate',
+						true,
+					),
+				);
+			}
+		}
+	}
+
+	/** Startet den gebündelten Python-Prüflauf; `result: null` bei jedem Fehlschlag (Start, Absturz, unlesbare Ausgabe). */
+	private spawnPythonCheck(
+		pythonPath: string,
+		payloadJson: string,
+	): Promise<{ result: PythonCheckResult | null; spawnFailed: boolean }> {
 		const script = [
 			'import sys, json',
 			'data = json.load(sys.stdin)',
@@ -575,95 +645,50 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			'print(json.dumps(out))',
 		].join('\n');
 
-		interface CheckResult {
-			syntax: { id: number; cell: string; line: number; message: string }[];
-			validations: { id: number; messages: string[] }[];
-		}
-		const findings = await new Promise<CheckResult>((resolve) => {
-			const empty: CheckResult = { syntax: [], validations: [] };
+		return new Promise((resolve) => {
 			const child = spawn(pythonPath, ['-c', script]);
 			let stdout = '';
+			let spawnFailed = false;
 			child.stdout.on('data', (chunk: Buffer) => {
 				stdout += chunk.toString('utf8');
 			});
-			child.on('error', () => resolve(empty));
+			child.on('error', () => {
+				spawnFailed = true;
+			});
 			child.on('close', () => {
 				try {
 					const result = JSON.parse(stdout.trim());
 					resolve({
-						syntax: Array.isArray(result.syntax) ? result.syntax : [],
-						validations: Array.isArray(result.validations) ? result.validations : [],
+						result: {
+							syntax: Array.isArray(result.syntax) ? result.syntax : [],
+							validations: Array.isArray(result.validations) ? result.validations : [],
+						},
+						spawnFailed,
 					});
 				} catch {
-					resolve(empty);
+					resolve({ result: null, spawnFailed });
 				}
 			});
-			child.stdin.write(
-				JSON.stringify({
-					defs,
-					checks: validationChecks.map(({ id, def_id, params }) => ({ id, def_id, params })),
-				}),
-			);
+			child.stdin.on('error', () => undefined);
+			child.stdin.write(payloadJson);
 			child.stdin.end();
 		});
-
-		for (const finding of findings.syntax) {
-			const target = defOwner[finding.id];
-			if (!target) {
-				continue;
-			}
-			const lines = target.text.split('\n');
-			// Zeile des `<zelle> = """`-Schlüssels; der Rumpf beginnt in der
-			// Zeile darunter (mehrzeiliger TOML-String, siehe serializeGenerator).
-			const keyLine = lines.findIndex((line) => new RegExp(`^\\s*${finding.cell}\\s*=`).test(line));
-			const bodyLine = keyLine >= 0 ? keyLine + Math.max(1, finding.line) : 0;
-			target.diagnostics.push(
-				this.diagnostic(
-					this.lineRange(lines, bodyLine),
-					vscode.l10n.t('Python syntax error in "{0}": {1}', finding.cell, finding.message),
-					'gen-file-python-syntax',
-					true,
-				),
-			);
-		}
-
-		for (const validation of findings.validations) {
-			const target = validationChecks[validation.id];
-			if (!target) {
-				continue;
-			}
-			const lines = target.tableCheck.text.split('\n');
-			const columnLines = findColumnLineInfo(target.tableCheck.text);
-			const info = columnLines[target.columnIndex];
-			const line = info ? info.nameLine ?? info.columnsLine : 0;
-			const label = target.columnName.trim() || vscode.l10n.t('column {0}', target.columnIndex + 1);
-			for (const message of validation.messages) {
-				target.tableCheck.diagnostics.push(
-					this.diagnostic(
-						this.lineRange(lines, line),
-						vscode.l10n.t('Column "{0}": {1}', label, message),
-						'gen-custom-validate',
-						true,
-					),
-				);
-			}
-		}
 	}
 
 	// ------------------------------------------------------------------
 	// .tdgen — benutzerdefinierte Generatoren
 	// ------------------------------------------------------------------
 
-	private checkGenerator(text: string): vscode.Diagnostic[] {
-		const lines = text.split('\n');
-		let generator;
-		try {
-			generator = parseGeneratorText(text);
-		} catch (err) {
-			return this.parseErrorDiagnostics(err, lines);
+	private checkGenerator(check: GeneratorCheck): void {
+		const { entry, lines, diagnostics } = check;
+		if (entry.error) {
+			diagnostics.push(...this.parseErrorDiagnostics(entry.error, lines));
+			return;
 		}
-
-		const diagnostics: vscode.Diagnostic[] = [];
+		const generator = entry.file;
+		if (!generator) {
+			return;
+		}
 
 		if (!generator.name.trim()) {
 			// Ohne Name ist der Generator nicht referenzierbar (siehe generator/custom.ts).
@@ -677,7 +702,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			);
 		}
 
-		const parameterLines = findParameterLineInfo(text);
+		const parameterLines = findParameterLineInfo(entry.text);
 		const seen = new Set<string>();
 		generator.parameters.forEach((parameter, index) => {
 			const info = parameterLines[index];
@@ -739,7 +764,5 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				),
 			);
 		}
-
-		return diagnostics;
 	}
 }

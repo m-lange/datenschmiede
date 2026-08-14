@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { spawn } from 'child_process';
 import { parseTableText } from './toml';
 import { computeRequiredClosure, listTables, tableLabel } from './repository';
 import { listGenerators, toGeneratorList } from '../generator/repository';
@@ -7,7 +6,8 @@ import { listLookups } from '../lookup/repository';
 import { CustomGenerator } from '../generator/custom';
 import { resolveAnyInterpreter } from '../project/python';
 import { Plan, PlanTable, buildPlanColumns, toPlanCustomGenerators, toPlanLookups } from '../project/run';
-import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
+import { runPlanProcess, toPlanOutput, writePlanFile } from '../project/planRunner';
+import { log, showErrorWithDetails } from '../outputChannel';
 
 /** Anzahl der Datensätze einer Tabellen-Vorschau. */
 const PREVIEW_LIMIT = 20;
@@ -85,19 +85,7 @@ export async function runTablePreview(
 			driving_fk: null,
 			driving_fk_column: null,
 			columns: buildPlanColumns(table, label, generators, errors, usedCustomGenerators),
-			output: {
-				file_name: table.output.fileName,
-				format: table.output.format || 'csv',
-				csv: {
-					delimiter: table.output.csv.delimiter,
-					quote_all: table.output.csv.quoteAll,
-					decimal: table.output.csv.decimal,
-					date_format: table.output.csv.dateFormat,
-					datetime_format: table.output.csv.datetimeFormat,
-					include_header: table.output.csv.includeHeader,
-					encoding: table.output.csv.encoding,
-				},
-			},
+			output: toPlanOutput(table),
 		});
 	}
 
@@ -116,97 +104,42 @@ export async function runTablePreview(
 		preview: { table: targetLabel, limit: PREVIEW_LIMIT },
 	};
 
-	await vscode.workspace.fs.createDirectory(context.globalStorageUri);
-	const planUri = vscode.Uri.joinPath(context.globalStorageUri, `preview-${Date.now()}.json`);
-	await vscode.workspace.fs.writeFile(planUri, Buffer.from(JSON.stringify(plan), 'utf8'));
-	const scriptPath = vscode.Uri.joinPath(context.extensionUri, 'python', 'generate.py').fsPath;
+	const planUri = await writePlanFile(context, plan, 'preview');
 
-	const channel = getOutputChannel();
 	log(`Preview "${targetLabel}" — ${interpreter.path}`);
 
 	return vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Window, title: vscode.l10n.t('Generating preview…') },
-		() =>
-			new Promise<PreviewResult | null>((resolve) => {
-				const child = spawn(interpreter.path, [scriptPath, planUri.fsPath], {
-					cwd: vscode.Uri.joinPath(document.uri, '..').fsPath,
-				});
+		async () => {
+			let result: PreviewResult | null = null;
 
-				let stdoutRest = '';
-				let stderrText = '';
-				let result: PreviewResult | null = null;
-				let reportedError = false;
-
-				const handleEvent = (line: string) => {
-					const trimmed = line.trim();
-					if (!trimmed) {
-						return;
-					}
-					let event: Record<string, unknown>;
-					try {
-						event = JSON.parse(trimmed);
-					} catch {
-						return;
-					}
+			// Prozess-Start, Protokoll-Parsing und die gemeinsame `log`-/
+			// `error`-Behandlung liegen im geteilten Läufer (planRunner.ts).
+			const run = await runPlanProcess({
+				pythonPath: interpreter.path,
+				context,
+				planUri,
+				cwd: vscode.Uri.joinPath(document.uri, '..').fsPath,
+				errorMessage: (message) => vscode.l10n.t('Preview failed: {0}', message),
+				onEvent: (event) => {
 					if (event.event === 'preview') {
 						result = {
 							columns: Array.isArray(event.columns) ? (event.columns as string[]) : [],
 							rows: Array.isArray(event.rows) ? (event.rows as string[][]) : [],
 						};
-					} else if (event.event === 'log') {
-						// ctx.log(...) aus (benutzerdefinierten) Generatoren.
-						channel.appendLine(`    » ${String(event.message ?? '')}`);
-					} else if (event.event === 'error') {
-						reportedError = true;
-						// Vollständige Details (inkl. Python-Traceback) in den
-						// Output-Channel — die Notification bietet „Details anzeigen“.
-						log(`ERROR: ${String(event.message ?? '')}`);
-						if (typeof event.traceback === 'string' && event.traceback.trim()) {
-							channel.appendLine(event.traceback);
-						}
-						if (event.code === 'missing-packages') {
-							const packages = Array.isArray(event.packages) ? event.packages.join(' ') : 'pandas numpy';
-							void showErrorWithDetails(
-								vscode.l10n.t('Python packages are missing for test data generation: {0}', packages),
-							);
-						} else {
-							void showErrorWithDetails(vscode.l10n.t('Preview failed: {0}', String(event.message ?? '')));
-						}
 					}
-				};
+				},
+			});
 
-				child.stdout.on('data', (chunk: Buffer) => {
-					stdoutRest += chunk.toString('utf8');
-					const lines = stdoutRest.split('\n');
-					stdoutRest = lines.pop() ?? '';
-					for (const line of lines) {
-						handleEvent(line);
-					}
-				});
-				child.stderr.on('data', (chunk: Buffer) => {
-					const text = chunk.toString('utf8');
-					stderrText += text;
-					// Python-stderr vollständig in den Output-Channel „Datenschmiede“.
-					channel.append(text);
-				});
-				child.on('error', (err) => {
-					log(`ERROR: unable to start python: ${String(err.message)}`);
-					void showErrorWithDetails(vscode.l10n.t('Unable to start Python: {0}', String(err.message)));
-					resolve(null);
-				});
-				child.on('close', (code) => {
-					handleEvent(stdoutRest);
-					void vscode.workspace.fs.delete(planUri).then(undefined, () => undefined);
-					if (result) {
-						log(`Preview "${targetLabel}" finished: ${result.rows.length} rows.`);
-					} else if (!reportedError) {
-						log(`ERROR: preview exited with code ${String(code)} without a result.`);
-						void showErrorWithDetails(
-							vscode.l10n.t('Preview failed (exit code {0}). {1}', String(code), stderrText.slice(-400)),
-						);
-					}
-					resolve(result);
-				});
-			}),
+			if (result) {
+				log(`Preview "${targetLabel}" finished: ${(result as PreviewResult).rows.length} rows.`);
+			} else if (!run.reportedError) {
+				log(`ERROR: preview exited with code ${String(run.code)} without a result.`);
+				void showErrorWithDetails(
+					vscode.l10n.t('Preview failed (exit code {0}). {1}', String(run.code), run.stderrText.slice(-400)),
+				);
+			}
+			return result;
+		},
 	);
 }
