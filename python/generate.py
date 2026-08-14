@@ -702,6 +702,11 @@ class Runner:
         out = self.format_dataframe(table, df)
         file_name = self.resolve_filename(table, n, out) + ".csv"
         path = os.path.join(self.out_dir, file_name)
+        # Ausgeblendete Spalten (hidden = true) erst jetzt entfernen: sie sind
+        # generiert und stehen bis hierher bereit (FK-Quelle anderer Tabellen,
+        # {column:...}-Dateinamen) — nur in die Datei geschrieben werden sie nicht.
+        visible = [c["name"] for c in table["columns"] if not c.get("hidden") and c["name"] in out.columns]
+        out = out[visible]
         out.to_csv(
             path,
             index=False,

@@ -58,12 +58,13 @@
 	const FILE_NAME_VARIABLES = ['date', 'time', 'datetime', 'timestamp', 'schema', 'table', 'records'];
 
 	/**
-	 * `uiHidden` ist ein rein visueller Merkzustand des Auge-Umschalters in der
-	 * Aktionsspalte (Zeile gedimmt) — bewusst ohne jede weitere Funktion, wird
-	 * nicht in die .td-Datei geschrieben (serializeTable im Extension-Host kennt
-	 * das Feld nicht) und geht bei externen Änderungen am Dokument verloren.
+	 * `hidden` ist der Auge-Umschalter in der Aktionsspalte (Zeile gedimmt):
+	 * die Spalte bleibt überall in der Extension sichtbar und wird beim
+	 * Generator-Lauf ganz normal generiert (z. B. als FK-Quelle nutzbar) —
+	 * nur in die Ausgabedatei wird sie nicht geschrieben. Wird als `hidden`
+	 * in der .td-Datei gespeichert (Gegenstück: Column im Extension-Host).
 	 * @typedef {{id:string,params:Record<string,string>}} GeneratorConfig
-	 * @typedef {{name:string,type:string,pk:boolean,fk:boolean,fkTable:string,fkColumn:string,description:string,generator?:GeneratorConfig,uiHidden?:boolean}} Column
+	 * @typedef {{name:string,type:string,pk:boolean,fk:boolean,fkTable:string,fkColumn:string,description:string,hidden:boolean,generator?:GeneratorConfig}} Column
 	 */
 	/** @typedef {{delimiter:string,quoteAll:boolean,decimal:string,dateFormat:string,datetimeFormat:string,includeHeader:boolean,encoding:string}} CsvOptions */
 	/** @typedef {{fileName:string,format:string,csv:CsvOptions}} OutputConfig */
@@ -1588,6 +1589,7 @@
 			fkTable: '',
 			fkColumn: '',
 			description: '',
+			hidden: false,
 		});
 		postEdit();
 		render();
@@ -1632,9 +1634,10 @@
 	}
 
 	/**
-	 * Auge-Umschalter „Spalte aus-/einblenden“: rein visueller Merkzustand
-	 * (Icon wechselt, Zeile wird gedimmt) ohne jede weitere Funktion — bewusst
-	 * kein postEdit, das Dokument bleibt unverändert (siehe Column-Typedef).
+	 * Auge-Umschalter „Spalte aus der Ausgabe ausblenden“ (Icon wechselt,
+	 * Zeile wird gedimmt): die Spalte wird weiterhin generiert, aber nicht in
+	 * die Ausgabedatei geschrieben — der Zustand wird als `hidden` in der
+	 * .td-Datei gespeichert (siehe Column-Typedef).
 	 * @param {Column} column
 	 * @param {HTMLElement} row
 	 */
@@ -1644,14 +1647,15 @@
 		const icon = el('i');
 		btn.appendChild(icon);
 		const refresh = () => {
-			icon.className = `codicon ${column.uiHidden ? 'codicon-eye-closed' : 'codicon-eye'}`;
-			const label = column.uiHidden ? strings.unhideColumnLabel : strings.hideColumnLabel;
+			icon.className = `codicon ${column.hidden ? 'codicon-eye-closed' : 'codicon-eye'}`;
+			const label = column.hidden ? strings.unhideColumnLabel : strings.hideColumnLabel;
 			btn.title = label;
 			btn.setAttribute('aria-label', label);
-			row.classList.toggle('column-hidden', !!column.uiHidden);
+			row.classList.toggle('column-hidden', !!column.hidden);
 		};
 		btn.addEventListener('click', () => {
-			column.uiHidden = !column.uiHidden;
+			column.hidden = !column.hidden;
+			postEdit();
 			refresh();
 		});
 		refresh();

@@ -41,6 +41,7 @@ function toColumn(raw: unknown): Column {
 		fkTable: toStr(c.fk_table),
 		fkColumn: toStr(c.fk_column),
 		description: toStr(c.description),
+		hidden: c.hidden === true,
 	};
 	// Den Generator-Teil parst der jeweilige Generator selbst (siehe
 	// generator/configToml.ts).
@@ -107,6 +108,11 @@ export function serializeTable(table: Table): string {
 			// ein Fremdschlüssel ist — hält die Datei sauber, wenn nicht.
 			lines.push(`fk_table = ${tomlString(column.fkTable)}`);
 			lines.push(`fk_column = ${tomlString(column.fkColumn)}`);
+		}
+		if (column.hidden) {
+			// Nur geschrieben, wenn gesetzt — Spalte wird generiert, aber nicht
+			// in die Ausgabedatei übernommen (siehe Column.hidden im Modell).
+			lines.push('hidden = true');
 		}
 		lines.push(`description = ${tomlString(column.description)}`);
 		// Der Generator-Teil kommt vom Generator selbst — und muss als

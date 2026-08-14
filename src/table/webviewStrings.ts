@@ -135,8 +135,8 @@ const en: WebviewStrings = {
 	removeColumnLabel: 'Remove column',
 	moveColumnUpLabel: 'Move column up',
 	moveColumnDownLabel: 'Move column down',
-	hideColumnLabel: 'Hide column',
-	unhideColumnLabel: 'Show column',
+	hideColumnLabel: 'Exclude column from output file (values are still generated)',
+	unhideColumnLabel: 'Include column in output file',
 
 	fkTableLabel: 'Referenced table',
 	fkTableEmptyOption: '— select table —',
@@ -235,8 +235,8 @@ const de: WebviewStrings = {
 	removeColumnLabel: 'Spalte entfernen',
 	moveColumnUpLabel: 'Spalte nach oben verschieben',
 	moveColumnDownLabel: 'Spalte nach unten verschieben',
-	hideColumnLabel: 'Spalte ausblenden',
-	unhideColumnLabel: 'Spalte einblenden',
+	hideColumnLabel: 'Spalte nicht in die Ausgabedatei schreiben (Werte werden trotzdem generiert)',
+	unhideColumnLabel: 'Spalte in die Ausgabedatei aufnehmen',
 
 	fkTableLabel: 'Referenzierte Tabelle',
 	fkTableEmptyOption: '— Tabelle wählen —',

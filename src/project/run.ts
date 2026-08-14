@@ -203,6 +203,8 @@ export interface PlanColumn {
 	fk: boolean;
 	fk_table: string;
 	fk_column: string;
+	/** Spalte wird generiert, aber nicht in die Ausgabedatei geschrieben (siehe Column.hidden). */
+	hidden: boolean;
 	generator: (GeneratorConfig & { table_refs: string[]; own_column_refs: string[] }) | null;
 }
 
@@ -297,6 +299,7 @@ export function buildPlanColumns(
 			fk: column.fk,
 			fk_table: column.fkTable.trim(),
 			fk_column: column.fkColumn.trim(),
+			hidden: column.hidden,
 			generator,
 		};
 	});

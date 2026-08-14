@@ -37,6 +37,13 @@ export interface Column {
 	fkColumn: string;
 	description: string;
 	/**
+	 * Ausgeblendete Spalte: überall in der Extension sichtbar (Editor, FK-Ziele,
+	 * Vorschau) und beim Generator-Lauf ganz normal generiert — nur in die
+	 * Ausgabedatei wird sie nicht geschrieben (siehe python/generate.py). So
+	 * lassen sich Hilfsspalten erzeugen, deren Werte z. B. als FK-Quelle dienen.
+	 */
+	hidden: boolean;
+	/**
 	 * Generator dieser Spalte (siehe src/generator/) — `undefined`, solange
 	 * keiner gewählt ist; beim Generator-Lauf greift dann ein Standard je
 	 * Datentyp (FK-Spalten bekommen den Fremdschlüssel-Generator automatisch).
@@ -132,5 +139,6 @@ export function createEmptyColumn(): Column {
 		fkTable: '',
 		fkColumn: '',
 		description: '',
+		hidden: false,
 	};
 }
