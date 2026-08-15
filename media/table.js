@@ -1923,26 +1923,26 @@
 			// can only come from hand-edited TOML.
 			return strings.genWarnFkMismatch;
 		}
-		if (config.id === 'combine') {
-			const template = (config.params.template || '').trim();
-			if (!template) {
-				return strings.genWarnParamMissing.replace('{0}', 'template');
-			}
-			const ownColumns = state.columns.map((c) => (c.name || '').trim());
-			const matches = template.matchAll(/\{([^{}]+)\}/g);
-			for (const match of matches) {
-				const name = match[1].trim();
-				if (name === (column.name || '').trim() || !ownColumns.includes(name)) {
-					return strings.genWarnRefNotFound.replace('{0}', 'template').replace('{1}', name);
-				}
-			}
-			return null;
-		}
 		for (const parameter of option.parameters) {
 			const value = (config.params[parameter.name] || '').trim();
 			if (value === '') {
 				if (parameter.required) {
 					return strings.genWarnParamMissing.replace('{0}', parameter.name);
+				}
+				continue;
+			}
+			// A value with {column} placeholders is not one fixed value but one
+			// per record: only the referenced columns can be checked here, the
+			// data type applies to the resolved value and is checked during the
+			// run. This also covers the combine generator, whose template is
+			// exactly such a value.
+			if (isTemplatableParamType(parameter.type) && hasParamTemplate(value)) {
+				const ownColumns = state.columns.map((c) => (c.name || '').trim());
+				for (const match of value.matchAll(/\{([^{}]+)\}/g)) {
+					const name = match[1].trim();
+					if (name === (column.name || '').trim() || !ownColumns.includes(name)) {
+						return strings.genWarnRefNotFound.replace('{0}', parameter.name).replace('{1}', name);
+					}
 				}
 				continue;
 			}
