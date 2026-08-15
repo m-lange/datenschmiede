@@ -18,9 +18,10 @@ import { IndexedFileKind, WorkspaceIndex, WorkspaceSnapshot } from '../workspace
  * and shows its content immediately.
  *
  * Items are labelled with the name from INSIDE the file (project name, list
- * name, generator name, table name); the file name appears nowhere but in the
- * tooltip. A file whose TOML is broken has no name to show — it appears with a
- * warning icon and its path, so it can be opened and repaired.
+ * name, generator name, table name); the file name appears nowhere in the tree
+ * but in the tooltip, below the file's description rendered as Markdown. A
+ * file whose TOML is broken has no name to show — it appears with a warning
+ * icon and its path, so it can be opened and repaired.
  */
 
 /** Context key: the schema view is filtered — controls the "clear filter" button in its title bar. */
@@ -306,7 +307,7 @@ class SchemaView extends IndexView<SchemaNode> {
 		}
 		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
 		item.resourceUri = element.uri;
-		item.tooltip = element.path;
+		item.tooltip = tooltipFor(element.path, element.description);
 		item.command = openCommand(element.uri);
 		item.contextValue = 'datenschmiede.table';
 		item.id = element.id;
@@ -374,6 +375,7 @@ class SchemaView extends IndexView<SchemaNode> {
 						label: item.label,
 						path: item.entry.relativePath,
 						valid: !!item.entry.table,
+						description: item.entry.table?.description,
 					};
 					this.nodes.set(node.id, node);
 					return node;
@@ -398,6 +400,7 @@ export function registerSidebar(context: vscode.ExtensionContext, index: Workspa
 				label: entry.project?.name.trim() || entry.relativePath,
 				path: entry.relativePath,
 				valid: !!entry.project,
+				description: entry.project?.description,
 			})),
 	});
 
@@ -414,6 +417,7 @@ export function registerSidebar(context: vscode.ExtensionContext, index: Workspa
 				label: entry.lookup ? entry.name : entry.relativePath,
 				path: entry.relativePath,
 				valid: !!entry.lookup,
+				description: entry.lookup?.description,
 			})),
 	});
 
