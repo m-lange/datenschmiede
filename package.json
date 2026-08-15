@@ -20,7 +20,13 @@
 		"test data project",
 		"python"
 	],
-	"activationEvents": [],
+	"activationEvents": [
+		"workspaceContains:**/*.tdproject",
+		"workspaceContains:**/*.td",
+		"workspaceContains:**/*.lkp",
+		"workspaceContains:**/*.tdgen",
+		"workspaceContains:**/*.filegen"
+	],
 	"main": "./dist/extension.js",
 	"extensionDependencies": [
 		"ms-python.python"

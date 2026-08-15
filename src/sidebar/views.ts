@@ -7,9 +7,15 @@ import { IndexedFileKind, WorkspaceIndex, WorkspaceSnapshot } from '../workspace
  * all tables, lookup lists and generators.
  *
  * Everything here is a VIEW of the index, never a second source of truth: the
- * lists come from `index.snapshot()`, and every view refreshes on
+ * entries come from `index.snapshot()`, and every view refreshes on
  * `index.onDidChange` — but only for the file kinds it actually shows, so
  * typing in a `.td` file does not rebuild the project list.
+ *
+ * The entries are built EAGERLY, including for a collapsed or hidden view (see
+ * `prime`), and `getChildren` hands out the finished array synchronously. VS
+ * Code does not ask a collapsed view for its children, so nothing else can be
+ * preloaded — but this way expanding one needs no round trip through the index
+ * and shows its content immediately.
  *
  * Items are labelled with the name from INSIDE the file (project name, list
  * name, generator name, table name); the file name appears nowhere but in the
@@ -52,14 +58,16 @@ interface FileNode {
 }
 
 /**
- * Base class of the views: holds the refresh wiring (index event filtered by
- * file kind) and the `message` shown while a view is empty, so each subclass
- * only has to say what its items are.
+ * Base class of the views: refresh wiring (index event filtered by file kind),
+ * the preloaded entries and the `message` shown while a view is empty. A
+ * subclass only says how its entries are built.
  */
 abstract class IndexView<T> implements vscode.TreeDataProvider<T> {
 	private readonly emitter = new vscode.EventEmitter<T | undefined>();
 	public readonly onDidChangeTreeData = this.emitter.event;
 	protected view: vscode.TreeView<T> | undefined;
+	/** Preloaded top-level entries; `null` while they still have to be built. */
+	private roots: T[] | null = null;
 
 	constructor(
 		protected readonly context: vscode.ExtensionContext,
@@ -73,55 +81,67 @@ abstract class IndexView<T> implements vscode.TreeDataProvider<T> {
 
 	/** Registers the view and keeps it in sync; returns the disposables to hand to the extension context. */
 	public register(viewId: string): vscode.Disposable[] {
-		const view = vscode.window.createTreeView<T>(viewId, {
+		this.view = vscode.window.createTreeView<T>(viewId, {
 			treeDataProvider: this,
 			showCollapseAll: this.nested,
 		});
-		this.view = view;
-		void this.updateMessage();
+		// Build right away rather than on first opening: all views share the one
+		// index snapshot, so this costs a single pass for the whole sidebar.
+		void this.prime();
 		const sub = this.index.onDidChange((changed) => {
 			if (this.kinds.some((kind) => changed.has(kind))) {
 				this.refresh();
 			}
 		});
-		return [view, sub, this.emitter];
-	}
-
-	/** Rebuilds the whole view. */
-	protected refresh(): void {
-		this.emitter.fire(undefined);
-		void this.updateMessage();
+		return [this.view, sub, this.emitter];
 	}
 
 	/**
-	 * Empty state: an explanatory line instead of a blank pane. Set on the view
-	 * itself rather than as welcome content, because the condition ("the
-	 * workspace contains no such file") is exactly what the index already knows
-	 * and would otherwise have to be mirrored into a context key.
+	 * Builds the entries and updates the empty-state message — also for a view
+	 * that is collapsed or on a hidden container, so opening it needs no
+	 * loading step.
 	 */
-	private async updateMessage(): Promise<void> {
-		if (!this.view) {
-			return;
-		}
+	public async prime(): Promise<T[]> {
 		const snapshot = await this.index.snapshot();
-		this.view.message = this.isEmpty(snapshot) ? this.emptyMessage() : undefined;
+		this.roots = this.build(snapshot);
+		if (this.view) {
+			this.view.message = this.roots.length === 0 ? this.emptyMessage() : undefined;
+		}
+		return this.roots;
 	}
 
-	protected abstract isEmpty(snapshot: WorkspaceSnapshot): boolean;
+	/** Discards the entries, rebuilds them and only then tells the tree — which then finds them ready. */
+	protected refresh(): void {
+		this.roots = null;
+		void this.prime().then(() => this.emitter.fire(undefined));
+	}
+
+	public getChildren(element?: T): vscode.ProviderResult<T[]> {
+		if (element) {
+			return this.childrenOf(element);
+		}
+		// Preloaded: hand it out without an await, so the tree renders in the
+		// same turn instead of showing an empty pane first.
+		return this.roots ?? this.prime();
+	}
+
+	/** Builds the top-level entries from a snapshot. */
+	protected abstract build(snapshot: WorkspaceSnapshot): T[];
+	/** Children of an already built entry — always available without the index. */
+	protected abstract childrenOf(element: T): T[];
 	protected abstract emptyMessage(): string;
 
 	public abstract getTreeItem(element: T): vscode.TreeItem;
-	public abstract getChildren(element?: T): Promise<T[]>;
 }
 
 // ---------------------------------------------------------------------------
-// Flat views: projects, lookup lists, generators, file generators
+// Flat views: projects, lookup lists, generators
 // ---------------------------------------------------------------------------
 
 /**
- * A flat list of files of one kind. The four flat views differ only in where
- * their entries come from and what they are called, so everything else lives
- * here once.
+ * A flat list of files. The three flat views differ only in where their
+ * entries come from and what they are called, so everything else lives here
+ * once.
  */
 class FlatFileView extends IndexView<FileNode> {
 	constructor(
@@ -139,8 +159,12 @@ class FlatFileView extends IndexView<FileNode> {
 		super(context, index, kinds);
 	}
 
-	protected isEmpty(snapshot: WorkspaceSnapshot): boolean {
-		return this.config.items(snapshot).length === 0;
+	protected build(snapshot: WorkspaceSnapshot): FileNode[] {
+		return this.config.items(snapshot).sort((a, b) => a.label.localeCompare(b.label));
+	}
+
+	protected childrenOf(): FileNode[] {
+		return [];
 	}
 
 	protected emptyMessage(): string {
@@ -155,14 +179,6 @@ class FlatFileView extends IndexView<FileNode> {
 		item.contextValue = this.config.contextValue;
 		item.iconPath = element.valid ? fileIcon(this.context, element.icon ?? this.config.icon) : invalidIcon();
 		return item;
-	}
-
-	public async getChildren(element?: FileNode): Promise<FileNode[]> {
-		if (element) {
-			return [];
-		}
-		const snapshot = await this.index.snapshot();
-		return this.config.items(snapshot).sort((a, b) => a.label.localeCompare(b.label));
 	}
 }
 
@@ -185,14 +201,14 @@ class SchemaView extends IndexView<SchemaNode> {
 		this.nested = true;
 	}
 
-	protected isEmpty(snapshot: WorkspaceSnapshot): boolean {
-		return snapshot.tables.length === 0;
-	}
-
 	protected emptyMessage(): string {
 		return this.filter
 			? vscode.l10n.t('No table matches the filter.')
 			: vscode.l10n.t('No table definitions in this workspace.');
+	}
+
+	protected childrenOf(element: SchemaNode): SchemaNode[] {
+		return element.kind === 'schema' ? element.children : [];
 	}
 
 	/**
@@ -237,9 +253,9 @@ class SchemaView extends IndexView<SchemaNode> {
 		if (!this.view) {
 			return;
 		}
-		// Rebuilds this.nodes, so the reveal below also works right after a
-		// refresh or before the tree has ever been opened.
-		await this.getChildren();
+		if (this.nodes.size === 0) {
+			await this.prime();
+		}
 		for (const node of [...this.nodes.values()]) {
 			if (node.kind === 'schema') {
 				await this.view.reveal(node, { expand: true, select: false, focus: false });
@@ -273,12 +289,7 @@ class SchemaView extends IndexView<SchemaNode> {
 		return item;
 	}
 
-	public async getChildren(element?: SchemaNode): Promise<SchemaNode[]> {
-		if (element) {
-			return element.kind === 'schema' ? element.children : [];
-		}
-		const snapshot = await this.index.snapshot();
-
+	protected build(snapshot: WorkspaceSnapshot): SchemaNode[] {
 		// Same grouping as the project editor's table picker: the schema is split
 		// on dots, so "shop.master" nests "master" under "shop"; tables without a
 		// schema sit at the top level.
