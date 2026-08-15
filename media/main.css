@@ -570,7 +570,9 @@ body.col-resizing .col-resize-handle {
    trägt dafür keine eigenen Spalten mehr (siehe openFkPicker in table.js). */
 
 .fk-dialog {
-	width: min(560px, calc(100vw - 48px));
+	/* Breit genug, dass lange Namensraum-/Tabellennamen samt Einrückung ohne
+	   Umbruch nebeneinander stehen. */
+	width: min(760px, calc(100vw - 48px));
 	max-height: 80vh;
 	display: flex;
 	flex-direction: column;
@@ -657,10 +659,15 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .fk-table .fk-icon {
 	color: inherit;
 }
 
+/* Feste Breite, damit jede Zeile denselben Platz dafür reserviert — auch die
+   Spaltenzeilen, die keinen Pfeil haben. Nur so steht das Symbol einer Spalte
+   genau eine Ebene rechts vom Symbol ihrer Tabelle. */
 .fk-twisty {
 	flex: 0 0 auto;
 	width: 14px;
+	height: 14px;
 	font-size: 14px;
+	line-height: 14px;
 	color: var(--vscode-descriptionForeground);
 }
 

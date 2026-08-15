@@ -2886,6 +2886,10 @@
 						columnRow.style.paddingLeft = `${(depth + 1) * 16}px`;
 						columnRow.tabIndex = 0;
 						columnRow.setAttribute('role', 'button');
+						// Empty twisty slot: every row reserves the same width for it, so
+						// a column's icon lines up one level right of its table's icon
+						// instead of drifting back to the left.
+						columnRow.appendChild(el('span', { className: 'fk-twisty' }));
 						columnRow.appendChild(el('i', { className: 'codicon codicon-symbol-field fk-icon' }));
 						columnRow.appendChild(el('span', { text: name }));
 						columnRow.addEventListener('click', () => pick(table.label, name));
