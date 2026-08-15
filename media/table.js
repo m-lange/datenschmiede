@@ -479,9 +479,12 @@
 	 */
 	function renderDrivingLookupCard() {
 		const card = el('section', { className: 'field-group card' });
-		card.appendChild(el('h3', { className: 'card-title', text: strings.drivingLookupSectionTitle }));
+		// The card title IS the field's label — a second, identical label above the
+		// select would only repeat it, so the name lives on the select instead.
+		card.appendChild(el('h3', { className: 'card-title', text: strings.fieldDrivingLookupLabel }));
 		const field = el('div', { className: 'field field-narrow' });
 		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+		select.setAttribute('aria-label', strings.fieldDrivingLookupLabel);
 		const names = lookupOptions.map((l) => l.name);
 		populateSelectOptions(
 			select,

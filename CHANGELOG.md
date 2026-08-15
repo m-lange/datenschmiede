@@ -26,7 +26,7 @@
   Datei-Vorschau — dasselbe Kürzel startet also immer das, worum es im
   offenen Editor geht.
 - Die **führende Nachschlageliste** steht im Übersicht-Tab jetzt in einer
-  eigenen Karte („Datensatzquelle“) statt zwischen den Beschreibungsfeldern,
+  eigenen Karte gleichen Namens statt zwischen den Beschreibungsfeldern,
   und der **Fremdschlüssel-Baum** trägt für Namensräume und Tabellen dieselben
   Farben wie der Auswahlbaum des Projekt-Editors.
 - Die Datei-Vorschau trägt wieder das **Play-Symbol**.
