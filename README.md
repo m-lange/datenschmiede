@@ -570,8 +570,17 @@ Elterntabellen früh freigegeben werden können.
 Gemessen an einem Projekt mit **50 Tabellen und 10 Mio. Datensätzen** senkt
 das den Spitzenbedarf von **3.040 MB auf 633 MB** (mit `duckdb`; ohne das
 Paket rund 550 MB bei diesem Zuschnitt, aber ohne Auslagern auf die
-Festplatte, wenn eine einzelne Tabelle sehr groß wird). Die Laufzeit bleibt
-im Rahmen der Messschwankung.
+Festplatte, wenn eine einzelne Tabelle sehr groß wird).
+
+`duckdb` **tauscht dabei Zeit gegen Speicher**, und wie viel, hängt davon ab,
+wie oft auf bereits fertige Tabellen zurückgegriffen wird: Bei einem stark
+verflochtenen Lastprojekt (200 Tabellen, 6.000 Spalten, 7,4 Mio. Datensätze,
+über 750 Rückgriffe) sank der Spitzenbedarf von **3.490 MB auf 967 MB** —
+bei **72 % mehr Laufzeit** (452 s → 777 s). Wer viel RAM und ein mäßig
+verflochtenes Modell hat, ist ohne das Paket schneller; bei wenig RAM oder
+sehr großen Einzeltabellen verhindert es, dass der Lauf am Speicher
+scheitert. Ausführliche Messwerte samt Hochrechnung für andere Datenmengen
+stehen im [Wiki unter „Performance“](https://github.com/m-lange/datenschmiede/wiki/Performance).
 
 Der Fortschritt erscheint als abbrechbare Benachrichtigung mit
 Fortschrittsbalken; das vollständige Protokoll (Tabellen, Spalten,
