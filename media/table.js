@@ -2348,11 +2348,15 @@
 
 		select.addEventListener('change', () => {
 			const id = select.value;
+			// Deep copy: the configuration in place beforehand must survive the
+			// switch unchanged, so Cancel can put it back exactly as it was.
+			const before = column.generator
+				? { id: column.generator.id, params: { ...column.generator.params } }
+				: null;
 			if (!id) {
 				delete column.generator;
 			} else {
-				const previous = column.generator;
-				column.generator = { id, params: previous && previous.id === id ? previous.params : {} };
+				column.generator = { id, params: before && before.id === id ? before.params : {} };
 			}
 			postEdit();
 			refresh();
@@ -2360,7 +2364,7 @@
 			// Parameter hat — spart den zweiten Klick auf den Stift.
 			const option = id ? findGeneratorOption(id) : null;
 			if (option && option.parameters.length > 0) {
-				openParamDialog(column, option, refresh);
+				openParamDialog(column, option, refresh, { restore: before, onRestored: rebuild });
 			}
 		});
 
@@ -2410,8 +2414,14 @@
 	 * @param {Column} column
 	 * @param {GeneratorOption} option
 	 * @param {() => void} onChanged Refreshes the generator cell (display text + warning).
+	 * @param {{restore?: GeneratorConfig | null, onRestored?: () => void}} [revert]
+	 *   What Cancel restores when the dialog was opened by SWITCHING generator:
+	 *   `restore` is the configuration in place beforehand (`null` = none was
+	 *   set). Without it, Cancel only takes back the parameters, which would
+	 *   leave the newly chosen generator standing - not what "cancel" means
+	 *   when the choice itself is what opened the dialog.
 	 */
-	function openParamDialog(column, option, onChanged) {
+	function openParamDialog(column, option, onChanged, revert) {
 		dismissParamDialog();
 		if (!column.generator) {
 			return;
@@ -2628,13 +2638,28 @@
 		closeParamDialog = (keepChanges) => {
 			cleanup();
 			if (!keepChanges) {
-				// Cancel: discard every change made in this dialog.
-				for (const key of Object.keys(params)) {
-					delete params[key];
+				if (revert) {
+					// The dialog was opened by switching generator: take the whole
+					// switch back, not just the parameters.
+					if (revert.restore) {
+						column.generator = { id: revert.restore.id, params: { ...revert.restore.params } };
+					} else {
+						delete column.generator;
+					}
+				} else {
+					// Cancel: discard every change made in this dialog.
+					for (const key of Object.keys(params)) {
+						delete params[key];
+					}
+					Object.assign(params, originalParams);
 				}
-				Object.assign(params, originalParams);
 			}
 			postEdit();
+			if (!keepChanges && revert && revert.onRestored) {
+				// The select still shows the discarded choice - it has to be
+				// rebuilt, not merely refreshed.
+				revert.onRestored();
+			}
 			onChanged();
 			// Perform a re-render that was deferred while the dialog was open.
 			deferredRender.flushIfIdle();
