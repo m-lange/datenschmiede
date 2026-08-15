@@ -43,10 +43,18 @@ export interface Project {
 	 * `output`.
 	 */
 	outputPath: string;
+	/**
+	 * Path to a `requirements.txt` listing the Python packages this project's
+	 * generators need beyond the built-in ones — relative to the project file
+	 * (absolute paths allowed). Before a run the linked interpreter is checked
+	 * against it, and anything missing is offered for installation (see
+	 * checkRequirements in project/run.ts). Empty -> nothing extra is required.
+	 */
+	requirements: string;
 	tables: ProjectTable[];
 }
 
 /** Creates a blank project, used when a new `.tdproject` file is created. */
 export function createEmptyProject(name = ''): Project {
-	return { name, description: '', python: null, outputPath: '', tables: [] };
+	return { name, description: '', python: null, outputPath: '', requirements: '', tables: [] };
 }

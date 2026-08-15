@@ -130,8 +130,9 @@ Lauf und beide mit 20 Datensätzen inklusive aller referenzierten Tabellen:
 - der **Vorschau-Knopf** in der Toolbar des Spalten-Tabs zeigt die **Werte**
   als Tabelle im Dialog
 - der **Play-Knopf in der Editor-Titelleiste** (Befehl **„Datenschmiede:
-  Datei-Vorschau“**, an derselben Stelle wie der Run-Knopf des
-  Projekt-Editors) erzeugt die **fertige Datei** — für *jeden* Dateityp,
+  Datei-Vorschau“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>,
+  an derselben Stelle wie der Run-Knopf des Projekt-Editors) erzeugt die
+  **fertige Datei** — für *jeden* Dateityp,
   auch CSV — und öffnet sie als **neuen, ungespeicherten Editor**. Damit
   lässt sich das Ergebnis lesen, durchsuchen und kopieren wie jede andere
   Datei; geschrieben wird nichts. Excel entfällt hier, da eine Binärdatei
@@ -418,6 +419,18 @@ Grundlage für den Generator-Lauf. Der Editor hat zwei Tabs:
 **Python-Interpreter** (Status samt Version, **„Ändern…“**-Knopf), der
 **Start-Knopf** des Laufs sowie:
 
+- **Zusätzliche Python-Pakete**: Pfad zu einer `requirements.txt` mit den
+  Paketen, die eigene Generatoren (`.tdgen`, `.filegen`) über
+  `pandas`/`numpy` hinaus importieren — relativ zur Projektdatei oder
+  absolut, wahlweise über einen Dateiauswahl-Dialog. **Vor** jedem Lauf wird
+  der verknüpfte Interpreter dagegen geprüft (offline, über
+  `importlib.metadata`); fehlt etwas, bricht der Lauf ab und bietet die
+  Installation in einem sichtbaren Terminal an (`pip install -r …`) —
+  installiert wird nichts von allein. Kommentare, `-r`-Verweise und
+  URL-Einträge werden übersprungen, Versionsangaben, Extras und
+  Umgebungsmarker (`paket[extra]>=1.0 ; python_version >= "3.10"`) versteht
+  die Prüfung
+
 - **Ausgabeordner** als Tag-Feld — fester Text (auch per
   Ordner-Auswahldialog) plus Variablen wie Datum, Uhrzeit, Zeitstempel und
   Projektname, z. B. `output/{project}_{datetime}`; leer gilt `output`.
@@ -470,7 +483,8 @@ Interpretern zu suchen:
 
 Der **Run-Knopf** in der Editor-Titelleiste des Projekt-Editors (bzw. der
 Start-Knopf im Übersicht-Tab, Befehl **„Datenschmiede: Testdaten
-generieren“**) startet die Generierung
+generieren“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>)
+startet die Generierung
 ([`python/generate.py`](python/generate.py)). Ohne offenen Projekt-Editor
 führt der Befehl **„Datenschmiede: Testdaten generieren (Projekt
 auswählen)…“** zum selben Lauf — er fragt zuerst, welches `.tdproject` des
@@ -489,6 +503,11 @@ Ablauf des Laufs:
    Excel, JSON, XML, feste Satzlänge oder ein eigener Dateigenerator) in den
    aufgelösten Ausgabeordner des Projekts — temporäre Tabellen werden
    erzeugt, aber nicht geschrieben
+
+Dasselbe Kürzel gilt in beiden Editoren — es startet immer das, worum es im
+gerade offenen Editor geht: im Projekt den Lauf, in einer Tabelle die
+Datei-Vorschau. Umbelegen lässt es sich wie jedes andere über
+**Datei → Einstellungen → Tastenkombinationen**.
 
 Fertige Tabellen wandern dabei sofort aus dem Arbeitsspeicher in einen
 **Zwischenspeicher**: Nur die Tabelle, die gerade erzeugt wird, liegt

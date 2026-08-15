@@ -25,6 +25,7 @@ type WebviewToExtensionMessage =
 	| { type: 'deselectTables'; paths: string[] }
 	| { type: 'runGeneration' }
 	| { type: 'pickOutputFolder' }
+	| { type: 'pickRequirementsFile' }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { project: Project } | { error: unknown };
 
@@ -492,6 +493,34 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					// Triggers an updated display through the regular
 					// onDidChangeTextDocument -> postState() path (as changePython does).
 					await this.applyText(document, serializeProject({ ...current.project, outputPath }));
+					break;
+				}
+				case 'pickRequirementsFile': {
+					// File picker for the requirements.txt; stored relative to the
+					// project folder where possible, so the project stays portable.
+					const projectDir = vscode.Uri.joinPath(document.uri, '..');
+					const picked = await vscode.window.showOpenDialog({
+						canSelectFiles: true,
+						canSelectFolders: false,
+						canSelectMany: false,
+						defaultUri: projectDir,
+						filters: { 'requirements.txt': ['txt'], 'All files': ['*'] },
+						title: vscode.l10n.t('Select Requirements File'),
+						openLabel: vscode.l10n.t('Select'),
+					});
+					if (!picked || picked.length === 0) {
+						break;
+					}
+					const current = this.readState(document);
+					if (!('project' in current)) {
+						break;
+					}
+					const relative = path.relative(projectDir.fsPath, picked[0].fsPath);
+					const requirements =
+						relative && !relative.startsWith('..') && !path.isAbsolute(relative)
+							? relative.replace(/\\/g, '/')
+							: picked[0].fsPath;
+					await this.applyText(document, serializeProject({ ...current.project, requirements }));
 					break;
 				}
 				case 'selectTables': {

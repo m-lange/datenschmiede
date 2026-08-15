@@ -46,6 +46,13 @@ export interface ProjectWebviewStrings {
 	outputFilesPerRecordSuffix: string;
 	outputFilesEmptyText: string;
 
+	/** requirements.txt with the extra Python packages this project's generators need. */
+	requirementsLabel: string;
+	requirementsHint: string;
+	requirementsPlaceholder: string;
+	requirementsBrowseLabel: string;
+	requirementsClearLabel: string;
+
 	outputPathLabel: string;
 	outputPathPlaceholder: string;
 	outputPathHint: string;
@@ -138,6 +145,12 @@ const en: ProjectWebviewStrings = {
 	outputFilesPerRecordSuffix: 'per record of {0}',
 	outputFilesEmptyText: 'No tables selected yet — pick tables in the Tables tab.',
 
+	requirementsLabel: 'Additional Python packages',
+	requirementsHint:
+		'Path to a requirements.txt with the packages your custom generators import beyond pandas/numpy. Before a run the linked interpreter is checked against it and anything missing is offered for installation — nothing is installed silently.',
+	requirementsPlaceholder: 'e.g. requirements.txt',
+	requirementsBrowseLabel: 'Select requirements file',
+	requirementsClearLabel: 'Remove requirements file',
 	outputPathLabel: 'Output folder',
 	outputPathPlaceholder: 'output',
 	outputPathHint:
@@ -221,6 +234,12 @@ const de: ProjectWebviewStrings = {
 	outputFilesPerRecordSuffix: 'je Datensatz von {0}',
 	outputFilesEmptyText: 'Noch keine Tabellen ausgewählt — Auswahl im Tabellen-Tab.',
 
+	requirementsLabel: 'Zusätzliche Python-Pakete',
+	requirementsHint:
+		'Pfad zu einer requirements.txt mit den Paketen, die eigene Generatoren über pandas/numpy hinaus importieren. Vor einem Lauf wird der verknüpfte Interpreter dagegen geprüft; Fehlendes wird zur Installation angeboten — installiert wird nichts von allein.',
+	requirementsPlaceholder: 'z. B. requirements.txt',
+	requirementsBrowseLabel: 'Requirements-Datei auswählen',
+	requirementsClearLabel: 'Requirements-Datei entfernen',
 	outputPathLabel: 'Ausgabeordner',
 	outputPathPlaceholder: 'output',
 	outputPathHint:

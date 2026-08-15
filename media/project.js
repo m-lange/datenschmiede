@@ -18,6 +18,7 @@
 	// eslint-disable-next-line no-undef
 	const {
 		el,
+		bindText,
 		debounce,
 		renderTextField: renderTextFieldCommon,
 		renderLabeledMarkdownField,
@@ -307,6 +308,62 @@
 	 * editor — constant text plus dynamic variables (date, timestamp, project
 	 * name, …). Relative to the project file; empty -> "output".
 	 */
+	/**
+	 * "Additional Python packages": path to a requirements.txt listing what this
+	 * project's custom generators import beyond the built-ins. The run checks
+	 * the linked interpreter against it and offers to install what is missing
+	 * (see project/requirements.ts) — nothing is installed silently.
+	 */
+	function renderRequirementsField() {
+		const field = el('div', { className: 'field' });
+		field.appendChild(el('label', { text: strings.requirementsLabel }));
+
+		const row = el('div', { className: 'filename-row' });
+		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+		input.type = 'text';
+		input.placeholder = strings.requirementsPlaceholder;
+		input.value = project.requirements || '';
+		input.setAttribute('aria-label', strings.requirementsLabel);
+		bindText(
+			input,
+			(value) => {
+				project.requirements = value;
+			},
+			postEditDebounced,
+			postEdit,
+		);
+		row.appendChild(input);
+
+		// File picker (native VS Code), mirroring the output folder's browse button.
+		const browseBtn = el('button', { className: 'icon-button' });
+		browseBtn.type = 'button';
+		browseBtn.title = strings.requirementsBrowseLabel;
+		browseBtn.setAttribute('aria-label', strings.requirementsBrowseLabel);
+		browseBtn.appendChild(el('i', { className: 'codicon codicon-file-code' }));
+		browseBtn.addEventListener('click', () => {
+			vscode.postMessage({ type: 'pickRequirementsFile' });
+		});
+		row.appendChild(browseBtn);
+
+		if ((project.requirements || '').trim()) {
+			const clearBtn = el('button', { className: 'icon-button icon-button-danger' });
+			clearBtn.type = 'button';
+			clearBtn.title = strings.requirementsClearLabel;
+			clearBtn.setAttribute('aria-label', strings.requirementsClearLabel);
+			clearBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
+			clearBtn.addEventListener('click', () => {
+				project.requirements = '';
+				postEdit();
+				render();
+			});
+			row.appendChild(clearBtn);
+		}
+
+		field.appendChild(row);
+		field.appendChild(el('p', { className: 'hint', text: strings.requirementsHint }));
+		return field;
+	}
+
 	function renderOutputPathField() {
 		const field = el('div', { className: 'field' });
 		field.appendChild(el('label', { text: strings.outputPathLabel }));
@@ -392,6 +449,7 @@
 		card.appendChild(toolbar);
 
 		card.appendChild(renderOutputPathField());
+		card.appendChild(renderRequirementsField());
 
 		card.appendChild(el('h3', { className: 'card-title', text: strings.outputFilesTitle }));
 		card.appendChild(el('p', { className: 'hint', text: strings.outputFilesHint }));

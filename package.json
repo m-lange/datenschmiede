@@ -219,7 +219,21 @@
         "command": "datenschmiede.previewFile",
         "title": "%command.previewFile.title%",
         "category": "Datenschmiede",
-        "icon": "$(eye)"
+        "icon": "$(play)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "datenschmiede.runGeneration",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "activeCustomEditorId == datenschmiede.projectEditor"
+      },
+      {
+        "command": "datenschmiede.previewFile",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "activeCustomEditorId == datenschmiede.tableEditor"
       }
     ],
     "menus": {

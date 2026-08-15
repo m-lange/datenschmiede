@@ -11,6 +11,7 @@ import { listGenerators, toGeneratorList } from '../generator/repository';
 import { CustomGenerator } from '../generator/custom';
 import { listLookups } from '../lookup/repository';
 import { listFileGenerators, toPlanFileGenerators } from '../filegen/repository';
+import { checkRequirements, reportRequirements } from './requirements';
 import { runPlanProcess, toPlanOutput, writePlanFile } from './planRunner';
 import { saveRunResult } from './runResults';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
@@ -61,6 +62,14 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 		void vscode.window.showErrorMessage(
 			vscode.l10n.t('The linked Python interpreter is not usable (missing or older than 3.10): {0}', pythonStatus.path),
 		);
+		return;
+	}
+
+	// Extra packages the project declares (custom generators typically import
+	// them) — missing ones are offered for installation and stop the run, since
+	// generation would only fail with ModuleNotFoundError.
+	const requirements = await checkRequirements(pythonStatus.path, uri, project);
+	if (!(await reportRequirements(requirements, pythonStatus.path))) {
 		return;
 	}
 

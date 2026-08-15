@@ -461,9 +461,9 @@
 				postEdit,
 			),
 		);
-		section.appendChild(renderDrivingLookupField());
 		stack.appendChild(section);
 
+		stack.appendChild(renderDrivingLookupCard());
 		stack.appendChild(renderOutputCard());
 
 		return stack;
@@ -475,9 +475,10 @@
 	 * project. Every lookup column of the table reads that same row, so a
 	 * predefined list of IDs becomes one record each with matching attributes.
 	 */
-	function renderDrivingLookupField() {
-		const field = el('div', { className: 'field' });
-		field.appendChild(el('label', { text: strings.fieldDrivingLookupLabel }));
+	function renderDrivingLookupCard() {
+		const card = el('section', { className: 'field-group card' });
+		card.appendChild(el('h3', { className: 'card-title', text: strings.drivingLookupSectionTitle }));
+		const field = el('div', { className: 'field field-narrow' });
 		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
 		const names = lookupOptions.map((l) => l.name);
 		populateSelectOptions(
@@ -498,8 +499,9 @@
 		});
 		refreshError();
 		field.appendChild(wrapSelectWithChevron(select));
-		field.appendChild(el('p', { className: 'hint', text: strings.fieldDrivingLookupHint }));
-		return field;
+		card.appendChild(field);
+		card.appendChild(el('p', { className: 'hint', text: strings.fieldDrivingLookupHint }));
+		return card;
 	}
 
 	/** Thin wrapper around the shared text field (common.js), using this editor's commit functions. */
@@ -2960,7 +2962,7 @@
 	function renderPreviewButton() {
 		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
-		btn.appendChild(el('i', { className: 'codicon codicon-eye' }));
+		btn.appendChild(el('i', { className: 'codicon codicon-play' }));
 		btn.appendChild(document.createTextNode(strings.previewButton));
 		btn.addEventListener('click', () => {
 			if (previewRunning) {
@@ -2982,7 +2984,7 @@
 		previewButton.disabled = previewRunning;
 		const icon = previewButton.querySelector('.codicon');
 		if (icon) {
-			icon.className = previewRunning ? 'codicon codicon-loading codicon-modifier-spin' : 'codicon codicon-eye';
+			icon.className = previewRunning ? 'codicon codicon-loading codicon-modifier-spin' : 'codicon codicon-play';
 		}
 	}
 

@@ -28,6 +28,7 @@ export interface WebviewStrings {
 	fieldDescriptionLabel: string;
 	fieldDescriptionPlaceholder: string;
 	/** Leading lookup list: one record per list row (see Table.drivingLookup). */
+	drivingLookupSectionTitle: string;
 	fieldDrivingLookupLabel: string;
 	fieldDrivingLookupHint: string;
 	fieldDrivingLookupEmptyOption: string;
@@ -259,6 +260,7 @@ const en: WebviewStrings = {
 	fieldSchemaPlaceholder: 'e.g. public',
 	fieldDescriptionLabel: 'Description',
 	fieldDescriptionPlaceholder: 'What is this table used for? Supports Markdown.',
+	drivingLookupSectionTitle: 'Record source',
 	fieldDrivingLookupLabel: 'Leading lookup list',
 	fieldDrivingLookupHint:
 		'Generates exactly one record per row of the list, each row used once and in list order — the record count then comes from the list instead of the project. Every lookup column of this table reads that same row.',
@@ -479,6 +481,7 @@ const de: WebviewStrings = {
 	fieldSchemaPlaceholder: 'z. B. public',
 	fieldDescriptionLabel: 'Beschreibung',
 	fieldDescriptionPlaceholder: 'Wofür wird diese Tabelle verwendet? Markdown wird unterstützt.',
+	drivingLookupSectionTitle: 'Datensatzquelle',
 	fieldDrivingLookupLabel: 'Führende Nachschlageliste',
 	fieldDrivingLookupHint:
 		'Erzeugt genau einen Datensatz je Zeile der Liste — jede Zeile genau einmal, in Listenreihenfolge. Die Datensatzanzahl kommt dann aus der Liste statt aus dem Projekt; alle Nachschlage-Spalten dieser Tabelle lesen dieselbe Zeile.',

@@ -5,7 +5,7 @@ import { ParseError, tomlString } from '../tomlUtil';
 /** Parses the TOML text of a .tdproject file into our project model. */
 export function parseProjectText(text: string): Project {
 	if (!text.trim()) {
-		return { name: '', description: '', python: null, outputPath: '', tables: [] };
+		return { name: '', description: '', python: null, outputPath: '', requirements: '', tables: [] };
 	}
 
 	let data: Record<string, unknown>;
@@ -35,6 +35,7 @@ export function parseProjectText(text: string): Project {
 		description: toStr(data.description),
 		python,
 		outputPath: toStr(data.output_path),
+		requirements: toStr(data.requirements),
 		tables,
 	};
 }
@@ -141,6 +142,10 @@ export function serializeProject(project: Project): string {
 	if (project.outputPath.trim()) {
 		// Only written when set — empty means the default `output`.
 		lines.push(`output_path = ${tomlString(project.outputPath)}`);
+	}
+	if (project.requirements.trim()) {
+		// Only written when set — empty means no extra packages are required.
+		lines.push(`requirements = ${tomlString(project.requirements.trim())}`);
 	}
 
 	for (const table of project.tables) {

@@ -619,10 +619,42 @@ body.col-resizing .col-resize-handle {
 	white-space: nowrap;
 }
 
+/* Namensraum und Tabelle tragen dieselben Farben wie im Projekt-Editor, wo
+   der Auswahlbaum die Symbole aus icons/ verwendet (schema-*.svg gelb,
+   td-*.svg blau) — beide Bäume zeigen dieselben Dinge und sollen gleich
+   gelesen werden. Die Werte stammen direkt aus diesen Dateien. */
 .fk-icon {
 	flex: 0 0 auto;
 	font-size: 14px;
 	color: var(--vscode-descriptionForeground);
+}
+
+.fk-group .fk-icon {
+	color: #8f6b00;
+}
+
+.fk-table .fk-icon {
+	color: #0078c2;
+}
+
+/* Das helle High-Contrast-Theme trägt beide Klassen (vscode-high-contrast UND
+   vscode-high-contrast-light) — ohne das :not() bekäme es die dunklen
+   Varianten (dieselbe Regel wie bei den Icon-Dateien weiter unten). */
+body.vscode-dark .fk-group .fk-icon,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) .fk-group .fk-icon {
+	color: #ffc000;
+}
+
+body.vscode-dark .fk-table .fk-icon,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) .fk-table .fk-icon {
+	color: #009eff;
+}
+
+/* Auf der ausgewählten Zeile gewinnt die Auswahlfarbe, damit der Kontrast
+   stimmt. */
+.fk-selected .fk-icon,
+.fk-selected .fk-twisty {
+	color: inherit;
 }
 
 .fk-twisty {
@@ -674,9 +706,6 @@ body.col-resizing .col-resize-handle {
 	color: var(--vscode-list-activeSelectionForeground);
 }
 
-.fk-selected .fk-icon {
-	color: inherit;
-}
 
 .fk-empty {
 	color: var(--vscode-descriptionForeground);

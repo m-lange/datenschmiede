@@ -2,6 +2,23 @@
 
 ## 0.10.0
 
+- **Zusätzliche Python-Pakete je Projekt**: im Projekt-Editor lässt sich eine
+  **`requirements.txt`** angeben (relativ oder absolut, mit
+  Dateiauswahl-Dialog) mit den Paketen, die eigene Generatoren über
+  `pandas`/`numpy` hinaus importieren. Vor jedem Lauf wird der verknüpfte
+  Interpreter offline dagegen geprüft; fehlt etwas, bricht der Lauf ab und
+  bietet die Installation in einem sichtbaren Terminal an — installiert wird
+  nichts von allein.
+- **Tastenkürzel <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>** für die
+  Play-Aktion: im Projekt-Editor startet es den Lauf, im Table Editor die
+  Datei-Vorschau — dasselbe Kürzel startet also immer das, worum es im
+  offenen Editor geht.
+- Die **führende Nachschlageliste** steht im Übersicht-Tab jetzt in einer
+  eigenen Karte („Datensatzquelle“) statt zwischen den Beschreibungsfeldern,
+  und der **Fremdschlüssel-Baum** trägt für Namensräume und Tabellen dieselben
+  Farben wie der Auswahlbaum des Projekt-Editors.
+- Die Datei-Vorschau trägt wieder das **Play-Symbol**.
+
 - **Fremdschlüssel-Ziel wird jetzt in einem Dialog ausgewählt.** Die beiden
   Grid-Spalten „Referenzierte Tabelle“ und „Referenzierte Spalte“ sind weg;
   ein Klick auf die **FK-Checkbox** öffnet stattdessen einen Dialog mit
