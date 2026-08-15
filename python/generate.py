@@ -4,8 +4,8 @@
 # src/project/run.ts, where the plan is built from the .tdproject/.td/.lkp/
 # .tdgen files). Produces synthetic records for every table of the plan —
 # heavily vectorized via numpy/pandas so that even large data volumes are
-# generated quickly — and writes them as CSV according to the table's output
-# configuration.
+# generated quickly — and writes them as CSV, Excel, JSON or XML according to
+# the table's output configuration.
 #
 # Flow:
 #   1. Sort the tables topologically (foreign key and generator references),
@@ -17,8 +17,8 @@
 #      numpy.repeat).
 #   3. Fill every column with its generator (built-in ones directly here,
 #      custom ones from the Python code shipped in the plan).
-#   4. Write the CSV (separator, quoting, decimal/date formats, encoding as
-#      configured) and resolve the file name from its {…} template.
+#   4. Write the file in the configured format (see write_output) and resolve
+#      the file name from its {…} template.
 #
 # Progress and result are reported as JSON lines on stdout (events: start /
 # table_start / table_done / done / error) — the extension host translates them
@@ -29,13 +29,14 @@ import re
 import sys
 import traceback
 from datetime import datetime, timedelta
+from xml.sax.saxutils import escape as xml_escape, quoteattr as xml_quoteattr
 
 # The event protocol and the log output are UTF-8, independently of the
 # platform: with a piped stdout Python otherwise falls back to the locale
 # encoding (cp1252 on a German Windows), which turns every umlaut in a preview,
 # a log line or a traceback into garbage on the extension host — which decodes
-# UTF-8. Only the standard streams are affected here; the CSV keeps the
-# encoding configured for the table (see write_csv).
+# UTF-8. Only the standard streams are affected here; the generated file keeps
+# the encoding configured for the table (see write_csv/write_json/write_xml).
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8")
@@ -243,6 +244,148 @@ def sanitize_path_segment(part):
     if part in (".", ".."):
         return part
     return re.sub(r'[<>:"|?*\x00-\x1f]', "_", part).strip() or "_"
+
+
+def sanitize_sheet_name(name):
+    """
+    Excel worksheet name: at most 31 characters, without the characters Excel
+    forbids and never empty (otherwise openpyxl raises while writing).
+    """
+    cleaned = re.sub(r"[\[\]:*?/\\]", "_", str(name or "")).strip().strip("'")
+    return (cleaned or "Sheet1")[:31]
+
+
+def parse_cell_ref(ref):
+    """
+    Splits an A1-style cell reference into its 0-based (row, column) offsets —
+    the top-left corner the Excel table is written at. Anything unparseable
+    falls back to A1.
+    """
+    match = re.fullmatch(r"\s*([A-Za-z]{1,3})\s*(\d{1,7})\s*", str(ref or ""))
+    if not match:
+        return 0, 0
+    letters, digits = match.group(1).upper(), int(match.group(2))
+    column = 0
+    for char in letters:
+        column = column * 26 + (ord(char) - ord("A") + 1)
+    return max(0, digits - 1), max(0, column - 1)
+
+
+def sanitize_xml_name(name):
+    """
+    Turns a configured name into a usable XML element/attribute name: invalid
+    characters become underscores and a leading digit gets one prefixed.
+    """
+    cleaned = re.sub(r"[^\w.\-]", "_", str(name or ""), flags=re.UNICODE)
+    if not cleaned:
+        return "value"
+    if not re.match(r"[A-Za-z_]", cleaned[0]):
+        cleaned = "_" + cleaned
+    return cleaned
+
+
+def node_source_value(node, row):
+    """The raw value a mapped leaf takes from one record (a column value, or its constant)."""
+    if node.get("source_kind") == "constant":
+        return node.get("source", "")
+    return row.get(str(node.get("source") or ""), None)
+
+
+def json_scalar(value, value_type):
+    """
+    Converts one mapped value to the JSON type configured for the node.
+    `auto` keeps the generated value's own type (numbers stay numbers, dates
+    are already formatted as text); a value that does not fit the requested
+    type is written as text instead of failing the whole run.
+    """
+    if value is None or (isinstance(value, float) and value != value):
+        # None and NaN (pandas' missing marker) both become JSON null.
+        return None
+    if hasattr(value, "item"):
+        # numpy scalars (int64, bool_, float64) are not JSON-serializable.
+        value = value.item()
+    if value_type == "string":
+        return str(value)
+    if value_type == "boolean":
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "ja", "wahr")
+    if value_type in ("number", "integer"):
+        try:
+            number = float(str(value).replace(",", ".")) if not isinstance(value, (int, float)) else float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        return int(number) if value_type == "integer" else number
+    return value
+
+
+def json_node_value(node, row):
+    """Builds the JSON value of one structure node for one record (recursive)."""
+    kind = node.get("kind")
+    if kind == "object":
+        return {
+            sanitize_json_key(child, index): json_node_value(child, row)
+            for index, child in enumerate(node.get("children") or [])
+        }
+    if kind == "array":
+        # An array node writes one entry per child — the child names are
+        # irrelevant there, only their values and order.
+        return [json_node_value(child, row) for child in (node.get("children") or [])]
+    return json_scalar(node_source_value(node, row), node.get("value_type") or "auto")
+
+
+def sanitize_json_key(node, index):
+    """Property name of a JSON node — never empty, so no record loses a field."""
+    return str(node.get("name") or "").strip() or f"field_{index + 1}"
+
+
+def xml_text(value):
+    """Renders one mapped value as XML text (missing values become an empty element)."""
+    if value is None or (isinstance(value, float) and value != value):
+        return ""
+    if hasattr(value, "item"):
+        value = value.item()
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def xml_render_node(node, row, depth, step, newline, index=0):
+    """Renders ONE structure node (object/array/value) of one record as XML text parts."""
+    name = sanitize_xml_name(node.get("name") or f"field_{index + 1}")
+    kind = node.get("kind")
+    if kind == "object":
+        return xml_element(name, node.get("children") or [], row, depth, step, newline)
+    if kind == "array":
+        # An array writes its children as repeated sibling elements at the same
+        # level — the array's own name does not appear as an element.
+        parts = []
+        for child_index, child in enumerate(node.get("children") or []):
+            parts.extend(xml_render_node(child, row, depth, step, newline, child_index))
+        return parts
+    text = xml_escape(xml_text(node_source_value(node, row)))
+    return [f"{step * depth}<{name}>{text}</{name}>{newline}"]
+
+
+def xml_element(name, children, row, depth, step, newline):
+    """
+    Renders one XML element with its children for one record: `attribute`
+    children become attributes of this element, everything else a nested node.
+    Returns the text parts in order (joined by the caller).
+    """
+    pad = step * depth
+    attributes = ""
+    inner = []
+    for index, child in enumerate(children or []):
+        if child.get("kind") == "attribute":
+            attr_name = sanitize_xml_name(child.get("name") or f"attr_{index + 1}")
+            attributes += f" {attr_name}={xml_quoteattr(xml_text(node_source_value(child, row)))}"
+        else:
+            inner.extend(xml_render_node(child, row, depth + 1, step, newline, index))
+
+    if not inner:
+        return [f"{pad}<{name}{attributes} />{newline}"]
+    return [f"{pad}<{name}{attributes}>{newline}", *inner, f"{pad}</{name}>{newline}"]
 
 
 class Runner:
@@ -651,12 +794,11 @@ class Runner:
         )
         return os.path.normpath(os.path.join(self.plan.get("project_dir", "."), cleaned or "output"))
 
-    def resolve_filename(self, table, n, df):
-        """Resolves a table's file name template (without extension) for this run."""
-        template = (table["output"].get("file_name") or "").strip()
-        if not template:
-            schema = (table.get("schema") or "").strip()
-            template = f"{schema}_{table['name']}" if schema else table["name"]
+    def resolve_template(self, table, n, df, template):
+        """
+        Substitutes the `{…}` variables of a file name / sheet name template
+        (see FILE_NAME_VARIABLES in src/table/model.ts); unknown tokens vanish.
+        """
 
         def replace(match):
             token = match.group(1).strip()
@@ -681,13 +823,27 @@ class Runner:
                 return ""
             return ""
 
-        return sanitize_filename(re.sub(r"\{([^{}]+)\}", replace, template))
+        return re.sub(r"\{([^{}]+)\}", replace, template)
 
-    def format_dataframe(self, table, df):
-        """Renders date/time columns as text per the configured formats (shared by CSV and preview)."""
-        csv_cfg = table["output"].get("csv", {})
-        date_fmt = csv_cfg.get("date_format") or "%Y-%m-%d"
-        datetime_fmt = csv_cfg.get("datetime_format") or "%Y-%m-%d %H:%M:%S"
+    def resolve_filename(self, table, n, df):
+        """Resolves a table's file name template (without extension) for this run."""
+        template = (table["output"].get("file_name") or "").strip()
+        if not template:
+            schema = (table.get("schema") or "").strip()
+            template = f"{schema}_{table['name']}" if schema else table["name"]
+        return sanitize_filename(self.resolve_template(table, n, df, template))
+
+    def format_dataframe(self, table, df, cfg=None):
+        """
+        Renders date/time columns as text per the configured formats. `cfg` is
+        the file type's own settings block — every format brings its own
+        date/timestamp format; without one (the preview grid) the CSV settings
+        apply.
+        """
+        if cfg is None:
+            cfg = table["output"].get("csv", {})
+        date_fmt = cfg.get("date_format") or "%Y-%m-%d"
+        datetime_fmt = cfg.get("datetime_format") or "%Y-%m-%d %H:%M:%S"
         # A shallow copy suffices: below, only whole columns are REASSIGNED
         # (which leaves the original untouched) — a deep copy would needlessly
         # double the memory footprint on large runs.
@@ -712,22 +868,41 @@ class Runner:
                 pass
         return out
 
-    def write_csv(self, table, df, n):
-        """Writes one table as CSV and returns the path of the file created."""
+    def visible_frame(self, table, out):
+        """
+        Drops the hidden columns (hidden = true) — they are generated and
+        available up to this point (as an FK source for other tables, for
+        {column:...} file names) and are merely not written to the file.
+        """
+        visible = [c["name"] for c in table["columns"] if not c.get("hidden") and c["name"] in out.columns]
+        return out[visible]
+
+    def write_output(self, table, df, n):
+        """Writes one table in its configured file type and returns the path of the file created."""
         import os
 
-        csv_cfg = table["output"].get("csv", {})
         os.makedirs(self.out_dir, exist_ok=True)
+        fmt = (table["output"].get("format") or "csv").strip().lower()
+        if fmt == "xlsx":
+            return self.write_xlsx(table, df, n)
+        if fmt == "json":
+            return self.write_json(table, df, n)
+        if fmt == "xml":
+            return self.write_xml(table, df, n)
+        return self.write_csv(table, df, n)
 
-        out = self.format_dataframe(table, df)
-        file_name = self.resolve_filename(table, n, out) + ".csv"
-        path = os.path.join(self.out_dir, file_name)
-        # Hidden columns (hidden = true) are dropped only now: they are
-        # generated and available up to this point (as an FK source for other
-        # tables, for {column:...} file names) — they are merely not written to
-        # the file.
-        visible = [c["name"] for c in table["columns"] if not c.get("hidden") and c["name"] in out.columns]
-        out = out[visible]
+    def output_path(self, table, n, out, extension):
+        """Full path of the file to write, from the resolved file name template."""
+        import os
+
+        return os.path.join(self.out_dir, self.resolve_filename(table, n, out) + "." + extension)
+
+    def write_csv(self, table, df, n):
+        """Writes one table as CSV and returns the path of the file created."""
+        csv_cfg = table["output"].get("csv", {})
+        out = self.format_dataframe(table, df, csv_cfg)
+        path = self.output_path(table, n, out, "csv")
+        out = self.visible_frame(table, out)
         out.to_csv(
             path,
             index=False,
@@ -738,6 +913,152 @@ class Runner:
             encoding=csv_cfg.get("encoding") or "utf-8",
         )
         return path
+
+    def write_xlsx(self, table, df, n):
+        """
+        Writes one table as an Excel workbook (via pandas/openpyxl) and returns
+        the path of the file created: the sheet name comes from its own {…}
+        template, the table is placed at the configured start cell, and the
+        header row can optionally be frozen and given an auto filter.
+        """
+        try:
+            import openpyxl  # noqa: F401 — only needed as the pandas engine
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            emit("error", code="missing-packages", packages=["openpyxl"],
+                 message="Missing Python package: openpyxl (required for Excel output)")
+            sys.exit(3)
+
+        cfg = table["output"].get("xlsx", {})
+        out = self.format_dataframe(table, df, cfg)
+        path = self.output_path(table, n, out, "xlsx")
+        out = self.visible_frame(table, out)
+
+        header = bool(cfg.get("include_header", True))
+        start_row, start_col = parse_cell_ref(cfg.get("start_cell"))
+        sheet_name = sanitize_sheet_name(self.resolve_template(table, n, out, cfg.get("sheet_name") or "{table}"))
+
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            out.to_excel(writer, sheet_name=sheet_name, index=False, header=header,
+                         startrow=start_row, startcol=start_col)
+            sheet = writer.sheets[sheet_name]
+            first_data_row = start_row + (2 if header else 1)
+            last_row = start_row + (1 if header else 0) + len(out)
+            last_col = start_col + max(1, len(out.columns))
+            if header and len(out.columns) > 0:
+                if cfg.get("freeze_header", True):
+                    # Everything above the first data row stays visible while
+                    # scrolling (the columns left of the table are not frozen —
+                    # a start cell merely offsets the table, it does not make
+                    # those columns a row header).
+                    sheet.freeze_panes = f"A{first_data_row}"
+                if cfg.get("auto_filter"):
+                    sheet.auto_filter.ref = (
+                        f"{get_column_letter(start_col + 1)}{start_row + 1}"
+                        f":{get_column_letter(last_col)}{max(last_row, start_row + 1)}"
+                    )
+            if cfg.get("auto_fit_columns", True):
+                for index, name in enumerate(out.columns):
+                    # openpyxl has no real auto-fit (that needs Excel's own text
+                    # metrics) — the widest rendered value is a good enough
+                    # approximation, capped so a long text column does not push
+                    # everything else off screen.
+                    widest = max([len(str(name)) if header else 0]
+                                 + [len(str(v)) for v in out[name].head(1000)] + [1])
+                    sheet.column_dimensions[get_column_letter(start_col + index + 1)].width = min(60, widest + 2)
+        return path
+
+    def write_json(self, table, df, n):
+        """Writes one table as JSON (or JSON Lines) per its target structure."""
+        cfg = table["output"].get("json", {})
+        out = self.format_dataframe(table, df, cfg)
+        path = self.output_path(table, n, out, "json")
+        text = self.render_json(table, out)
+        with open(path, "w", encoding=cfg.get("encoding") or "utf-8", newline="") as handle:
+            handle.write(text)
+        return path
+
+    def write_xml(self, table, df, n):
+        """Writes one table as XML per its target structure."""
+        cfg = table["output"].get("xml", {})
+        out = self.format_dataframe(table, df, cfg)
+        path = self.output_path(table, n, out, "xml")
+        text = self.render_xml(table, out)
+        with open(path, "w", encoding=cfg.get("encoding") or "utf-8", newline="") as handle:
+            handle.write(text)
+        return path
+
+    # ------------------------------------------------------------------
+    # JSON/XML: target structure + mapping
+    # ------------------------------------------------------------------
+
+    def structure_nodes(self, table, cfg, leaf_kind="value"):
+        """
+        The configured target structure of a table — or, while none has been set
+        up, a flat fallback with one mapped leaf per written column, so that
+        switching a table to JSON/XML produces sensible output right away (the
+        counterpart of structureFromColumns in src/table/model.ts).
+        """
+        nodes = cfg.get("nodes") or []
+        if nodes:
+            return nodes
+        return [
+            {"name": c["name"], "kind": leaf_kind, "value_type": "auto",
+             "source_kind": "column", "source": c["name"], "children": []}
+            for c in table["columns"]
+            if not c.get("hidden") and str(c.get("name") or "").strip()
+        ]
+
+    def render_json(self, table, out):
+        """Renders the (already formatted) records as a JSON document."""
+        cfg = table["output"].get("json", {})
+        nodes = self.structure_nodes(table, cfg)
+        # JSON and XML are record-shaped formats: unlike CSV they cannot be
+        # written straight from the vectorized frame, so the values are taken
+        # row by row here.
+        records = [json_node_value({"kind": "object", "children": nodes}, row) for row in out.to_dict("records")]
+
+        indent = max(0, int(cfg.get("indent") or 0))
+        ensure_ascii = bool(cfg.get("ascii_only"))
+        if cfg.get("json_lines"):
+            # JSON Lines: one record per line, always compact — an indented
+            # object would span several lines and break the format.
+            return "".join(json.dumps(r, ensure_ascii=ensure_ascii) + "\n" for r in records)
+        root_name = str(cfg.get("root_name") or "").strip()
+        document = {root_name: records} if root_name else records
+        return json.dumps(document, ensure_ascii=ensure_ascii, indent=indent or None) + "\n"
+
+    def render_xml(self, table, out):
+        """Renders the (already formatted) records as an XML document."""
+        cfg = table["output"].get("xml", {})
+        nodes = self.structure_nodes(table, cfg, leaf_kind="value")
+        root = sanitize_xml_name(cfg.get("root_element") or "rows")
+        record = sanitize_xml_name(cfg.get("record_element") or "row")
+        indent = max(0, int(cfg.get("indent") or 0))
+        step = " " * indent
+        newline = "\n" if indent else ""
+
+        parts = []
+        if cfg.get("declaration", True):
+            parts.append(f'<?xml version="1.0" encoding="{cfg.get("encoding") or "utf-8"}"?>' + (newline or "\n"))
+        parts.append(f"<{root}>{newline}")
+        for row in out.to_dict("records"):
+            parts.extend(xml_element(record, nodes, row, 1, step, newline))
+        parts.append(f"</{root}>\n")
+        return "".join(parts)
+
+    def render_preview_text(self, table, df):
+        """
+        The preview records as the configured file type would write them — only
+        for JSON/XML, where the document itself is what needs checking; `None`
+        for CSV/Excel, whose preview is the value grid.
+        """
+        fmt = (table["output"].get("format") or "csv").strip().lower()
+        if fmt == "json":
+            return self.render_json(table, self.format_dataframe(table, df, table["output"].get("json", {})))
+        if fmt == "xml":
+            return self.render_xml(table, self.format_dataframe(table, df, table["output"].get("xml", {})))
+        return None
 
     def run(self):
         """Runs the whole plan: every table in dependency order, then the output."""
@@ -755,15 +1076,19 @@ class Runner:
                 # Preview mode: write nothing; only the target table is
                 # reported back at the end.
                 if table["label"] == preview.get("table"):
-                    out = self.format_dataframe(table, df).head(int(preview.get("limit", 20)))
+                    limited = df.head(int(preview.get("limit", 20)))
+                    out = self.format_dataframe(table, limited)
                     emit(
                         "preview",
                         table=table["label"],
                         columns=[c["name"] for c in table["columns"]],
                         rows=[["" if v is None else str(v) for v in row] for row in out.itertuples(index=False)],
+                        # For JSON/XML the mapping tab shows the rendered
+                        # document itself instead of a value grid.
+                        text=self.render_preview_text(table, limited),
                     )
                 continue
-            path = self.write_csv(table, df, n)
+            path = self.write_output(table, df, n)
             files.append({"table": table["label"], "file": path, "records": n})
             emit("table_done", table=table["label"], file=path, records=n, index=index, total=len(ordered))
         if not preview:

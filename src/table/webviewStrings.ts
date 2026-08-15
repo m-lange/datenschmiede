@@ -10,6 +10,9 @@
 export interface WebviewStrings {
 	tabOverview: string;
 	tabColumns: string;
+	/** Only shown for the JSON/XML file types (see media/table.js). */
+	tabSchema: string;
+	tabMapping: string;
 
 	fieldNameLabel: string;
 	fieldNamePlaceholder: string;
@@ -74,6 +77,11 @@ export interface WebviewStrings {
 	/** Title of the preview dialog; `{0}` = number of records. */
 	previewDialogTitle: string;
 	previewCloseLabel: string;
+	/** Title of the JSON/XML document preview; `{0}` = file type, `{1}` = number of records. */
+	previewDocumentDialogTitle: string;
+	previewDocumentButton: string;
+	previewCopyLabel: string;
+	previewCopiedLabel: string;
 
 	outputSectionTitle: string;
 	outputFileNameLabel: string;
@@ -101,6 +109,85 @@ export interface WebviewStrings {
 	csvIncludeHeaderLabel: string;
 	csvEncodingLabel: string;
 
+	/** Excel (.xlsx) settings. */
+	outputXlsxSectionLabel: string;
+	xlsxSheetNameLabel: string;
+	xlsxSheetNameHint: string;
+	xlsxSheetNamePlaceholder: string;
+	xlsxStartCellLabel: string;
+	xlsxStartCellHint: string;
+	xlsxIncludeHeaderLabel: string;
+	xlsxFreezeHeaderLabel: string;
+	xlsxAutoFilterLabel: string;
+	xlsxAutoFitColumnsLabel: string;
+
+	/** JSON settings. */
+	outputJsonSectionLabel: string;
+	jsonRootNameLabel: string;
+	jsonRootNameHint: string;
+	jsonRootNamePlaceholder: string;
+	jsonIndentLabel: string;
+	jsonIndentCompact: string;
+	jsonLinesLabel: string;
+	jsonAsciiOnlyLabel: string;
+
+	/** XML settings. */
+	outputXmlSectionLabel: string;
+	xmlRootElementLabel: string;
+	xmlRecordElementLabel: string;
+	xmlIndentLabel: string;
+	xmlDeclarationLabel: string;
+
+	/** Shared date/timestamp/encoding labels of the non-CSV file types. */
+	formatDateFormatLabel: string;
+	formatDatetimeFormatLabel: string;
+	formatEncodingLabel: string;
+
+	/** Schema tab (JSON/XML target structure). */
+	schemaSectionTitle: string;
+	schemaHintJson: string;
+	schemaHintXml: string;
+	schemaAddNodeButton: string;
+	schemaAddChildLabel: string;
+	schemaFromColumnsButton: string;
+	schemaClearButton: string;
+	schemaEmptyText: string;
+	schemaEmptyAction: string;
+	schemaColHeaderName: string;
+	schemaColHeaderKind: string;
+	schemaColHeaderType: string;
+	schemaNamePlaceholder: string;
+	schemaNameRequiredError: string;
+	schemaKindObject: string;
+	schemaKindArray: string;
+	schemaKindValue: string;
+	schemaKindAttribute: string;
+	schemaValueTypeAuto: string;
+	schemaValueTypeString: string;
+	schemaValueTypeNumber: string;
+	schemaValueTypeInteger: string;
+	schemaValueTypeBoolean: string;
+	schemaRemoveNodeLabel: string;
+	schemaMoveNodeUpLabel: string;
+	schemaMoveNodeDownLabel: string;
+
+	/** Mapping tab (which value fills which structure node). */
+	mappingSectionTitle: string;
+	mappingHint: string;
+	mappingColHeaderPath: string;
+	mappingColHeaderKind: string;
+	mappingColHeaderSourceKind: string;
+	mappingColHeaderSource: string;
+	mappingSourceKindColumn: string;
+	mappingSourceKindConstant: string;
+	mappingColumnEmptyOption: string;
+	mappingColumnNotFoundSuffix: string;
+	mappingConstantPlaceholder: string;
+	mappingColumnRequiredError: string;
+	mappingColumnNotFoundError: string;
+	mappingEmptyText: string;
+	mappingEmptyAction: string;
+
 	emptyStateText: string;
 	emptyStateAction: string;
 
@@ -112,6 +199,8 @@ export interface WebviewStrings {
 const en: WebviewStrings = {
 	tabOverview: 'Overview',
 	tabColumns: 'Columns',
+	tabSchema: 'Schema',
+	tabMapping: 'Mapping',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'e.g. customers',
@@ -174,6 +263,10 @@ const en: WebviewStrings = {
 	previewButton: 'Preview',
 	previewDialogTitle: 'Preview — {0} records',
 	previewCloseLabel: 'Close',
+	previewDocumentDialogTitle: '{0} preview — {1} records',
+	previewDocumentButton: 'Preview document',
+	previewCopyLabel: 'Copy',
+	previewCopiedLabel: 'Copied',
 
 	outputSectionTitle: 'Output',
 	outputFileNameLabel: 'File name',
@@ -201,6 +294,81 @@ const en: WebviewStrings = {
 	csvIncludeHeaderLabel: 'Write header row',
 	csvEncodingLabel: 'Encoding',
 
+	outputXlsxSectionLabel: 'Excel settings',
+	xlsxSheetNameLabel: 'Sheet name',
+	xlsxSheetNameHint: 'Supports the same {…} variables as the file name. Empty uses the table name.',
+	xlsxSheetNamePlaceholder: 'e.g. {table}',
+	xlsxStartCellLabel: 'Place table at',
+	xlsxStartCellHint: 'Top-left cell of the table, e.g. "A1" or "B3".',
+	xlsxIncludeHeaderLabel: 'Write header row',
+	xlsxFreezeHeaderLabel: 'Freeze header row',
+	xlsxAutoFilterLabel: 'Add auto filter to the header row',
+	xlsxAutoFitColumnsLabel: 'Fit column widths to the content',
+
+	outputJsonSectionLabel: 'JSON settings',
+	jsonRootNameLabel: 'Root property',
+	jsonRootNameHint: 'Wraps the records in {"name": [ … ]}. Empty writes a bare top-level array.',
+	jsonRootNamePlaceholder: 'e.g. customers',
+	jsonIndentLabel: 'Indentation',
+	jsonIndentCompact: 'None (one line)',
+	jsonLinesLabel: 'JSON Lines: one record per line, without the surrounding array',
+	jsonAsciiOnlyLabel: 'Escape non-ASCII characters as \\uXXXX',
+
+	outputXmlSectionLabel: 'XML settings',
+	xmlRootElementLabel: 'Root element',
+	xmlRecordElementLabel: 'Record element',
+	xmlIndentLabel: 'Indentation',
+	xmlDeclarationLabel: 'Write the <?xml …?> declaration',
+
+	formatDateFormatLabel: 'Date format',
+	formatDatetimeFormatLabel: 'Timestamp format',
+	formatEncodingLabel: 'Encoding',
+
+	schemaSectionTitle: 'Target structure',
+	schemaHintJson:
+		'Describes ONE record. Objects and arrays nest, values are the leaves that get a column mapped to them in the "Mapping" tab.',
+	schemaHintXml:
+		'Describes ONE record element. Objects become nested elements, values become child elements and attributes become attributes of their parent — the "Mapping" tab fills them with column values.',
+	schemaAddNodeButton: 'Add node',
+	schemaAddChildLabel: 'Add child node',
+	schemaFromColumnsButton: 'Derive from columns',
+	schemaClearButton: 'Clear structure',
+	schemaEmptyText: 'No structure defined — every column is written as a flat field.',
+	schemaEmptyAction: 'Derive structure from the columns',
+	schemaColHeaderName: 'Name',
+	schemaColHeaderKind: 'Kind',
+	schemaColHeaderType: 'Value type',
+	schemaNamePlaceholder: 'Node name',
+	schemaNameRequiredError: 'Give this node a name — it cannot be written without one.',
+	schemaKindObject: 'Object',
+	schemaKindArray: 'Array',
+	schemaKindValue: 'Value',
+	schemaKindAttribute: 'Attribute',
+	schemaValueTypeAuto: 'Automatic',
+	schemaValueTypeString: 'Text',
+	schemaValueTypeNumber: 'Number',
+	schemaValueTypeInteger: 'Integer',
+	schemaValueTypeBoolean: 'Boolean',
+	schemaRemoveNodeLabel: 'Remove node',
+	schemaMoveNodeUpLabel: 'Move node up',
+	schemaMoveNodeDownLabel: 'Move node down',
+
+	mappingSectionTitle: 'Value mapping',
+	mappingHint: 'One row per leaf of the target structure — pick the column (or the fixed text) that fills it.',
+	mappingColHeaderPath: 'Path in the structure',
+	mappingColHeaderKind: 'Kind',
+	mappingColHeaderSourceKind: 'Source',
+	mappingColHeaderSource: 'Value',
+	mappingSourceKindColumn: 'Column',
+	mappingSourceKindConstant: 'Fixed text',
+	mappingColumnEmptyOption: '— select column —',
+	mappingColumnNotFoundSuffix: ' (not found)',
+	mappingConstantPlaceholder: 'Fixed text',
+	mappingColumnRequiredError: 'Select a column.',
+	mappingColumnNotFoundError: 'This column was not found in the table. It may have been renamed or removed.',
+	mappingEmptyText: 'The target structure has no mapped leaves yet.',
+	mappingEmptyAction: 'Set up the structure',
+
 	emptyStateText: 'No columns yet.',
 	emptyStateAction: 'Add first column',
 
@@ -212,6 +380,8 @@ const en: WebviewStrings = {
 const de: WebviewStrings = {
 	tabOverview: 'Übersicht',
 	tabColumns: 'Spalten',
+	tabSchema: 'Schema',
+	tabMapping: 'Zuordnung',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'z. B. customers',
@@ -275,6 +445,10 @@ const de: WebviewStrings = {
 	previewButton: 'Vorschau',
 	previewDialogTitle: 'Vorschau — {0} Datensätze',
 	previewCloseLabel: 'Schließen',
+	previewDocumentDialogTitle: '{0}-Vorschau — {1} Datensätze',
+	previewDocumentButton: 'Dokument-Vorschau',
+	previewCopyLabel: 'Kopieren',
+	previewCopiedLabel: 'Kopiert',
 
 	outputSectionTitle: 'Ausgabe',
 	outputFileNameLabel: 'Dateiname',
@@ -301,6 +475,83 @@ const de: WebviewStrings = {
 	csvDatetimeFormatLabel: 'Zeitstempelformat',
 	csvIncludeHeaderLabel: 'Kopfzeile schreiben',
 	csvEncodingLabel: 'Encoding',
+
+	outputXlsxSectionLabel: 'Excel-Einstellungen',
+	xlsxSheetNameLabel: 'Blattname',
+	xlsxSheetNameHint: 'Unterstützt dieselben {…}-Variablen wie der Dateiname. Leer verwendet den Tabellennamen.',
+	xlsxSheetNamePlaceholder: 'z. B. {table}',
+	xlsxStartCellLabel: 'Tabelle platzieren ab',
+	xlsxStartCellHint: 'Linke obere Zelle der Tabelle, z. B. „A1“ oder „B3“.',
+	xlsxIncludeHeaderLabel: 'Kopfzeile schreiben',
+	xlsxFreezeHeaderLabel: 'Kopfzeile fixieren',
+	xlsxAutoFilterLabel: 'Autofilter auf der Kopfzeile setzen',
+	xlsxAutoFitColumnsLabel: 'Spaltenbreiten an den Inhalt anpassen',
+
+	outputJsonSectionLabel: 'JSON-Einstellungen',
+	jsonRootNameLabel: 'Wurzel-Eigenschaft',
+	jsonRootNameHint: 'Klammert die Datensätze in {"name": [ … ]}. Leer schreibt ein reines Array auf oberster Ebene.',
+	jsonRootNamePlaceholder: 'z. B. customers',
+	jsonIndentLabel: 'Einrückung',
+	jsonIndentCompact: 'Keine (eine Zeile)',
+	jsonLinesLabel: 'JSON Lines: ein Datensatz je Zeile, ohne umschließendes Array',
+	jsonAsciiOnlyLabel: 'Nicht-ASCII-Zeichen als \\uXXXX maskieren',
+
+	outputXmlSectionLabel: 'XML-Einstellungen',
+	xmlRootElementLabel: 'Wurzelelement',
+	xmlRecordElementLabel: 'Datensatz-Element',
+	xmlIndentLabel: 'Einrückung',
+	xmlDeclarationLabel: 'Deklaration <?xml …?> schreiben',
+
+	formatDateFormatLabel: 'Datumsformat',
+	formatDatetimeFormatLabel: 'Zeitstempelformat',
+	formatEncodingLabel: 'Encoding',
+
+	schemaSectionTitle: 'Zielstruktur',
+	schemaHintJson:
+		'Beschreibt EINEN Datensatz. Objekte und Arrays verschachteln, Werte sind die Blätter, denen im Tab „Zuordnung“ eine Spalte zugewiesen wird.',
+	schemaHintXml:
+		'Beschreibt EIN Datensatz-Element. Objekte werden zu verschachtelten Elementen, Werte zu Kindelementen und Attribute zu Attributen ihres Elternelements — der Tab „Zuordnung“ füllt sie mit Spaltenwerten.',
+	schemaAddNodeButton: 'Knoten hinzufügen',
+	schemaAddChildLabel: 'Unterknoten hinzufügen',
+	schemaFromColumnsButton: 'Aus Spalten erzeugen',
+	schemaClearButton: 'Struktur leeren',
+	schemaEmptyText: 'Keine Struktur festgelegt — jede Spalte wird als flaches Feld geschrieben.',
+	schemaEmptyAction: 'Struktur aus den Spalten erzeugen',
+	schemaColHeaderName: 'Name',
+	schemaColHeaderKind: 'Art',
+	schemaColHeaderType: 'Werttyp',
+	schemaNamePlaceholder: 'Name des Knotens',
+	schemaNameRequiredError: 'Diesem Knoten einen Namen geben — ohne Namen kann er nicht geschrieben werden.',
+	schemaKindObject: 'Objekt',
+	schemaKindArray: 'Array',
+	schemaKindValue: 'Wert',
+	schemaKindAttribute: 'Attribut',
+	schemaValueTypeAuto: 'Automatisch',
+	schemaValueTypeString: 'Text',
+	schemaValueTypeNumber: 'Zahl',
+	schemaValueTypeInteger: 'Ganzzahl',
+	schemaValueTypeBoolean: 'Wahrheitswert',
+	schemaRemoveNodeLabel: 'Knoten entfernen',
+	schemaMoveNodeUpLabel: 'Knoten nach oben verschieben',
+	schemaMoveNodeDownLabel: 'Knoten nach unten verschieben',
+
+	mappingSectionTitle: 'Wertzuordnung',
+	mappingHint:
+		'Eine Zeile je Blatt der Zielstruktur — die Spalte (oder den festen Text) auswählen, mit der es gefüllt wird.',
+	mappingColHeaderPath: 'Pfad in der Struktur',
+	mappingColHeaderKind: 'Art',
+	mappingColHeaderSourceKind: 'Quelle',
+	mappingColHeaderSource: 'Wert',
+	mappingSourceKindColumn: 'Spalte',
+	mappingSourceKindConstant: 'Fester Text',
+	mappingColumnEmptyOption: '— Spalte wählen —',
+	mappingColumnNotFoundSuffix: ' (nicht gefunden)',
+	mappingConstantPlaceholder: 'Fester Text',
+	mappingColumnRequiredError: 'Spalte auswählen.',
+	mappingColumnNotFoundError:
+		'Diese Spalte wurde in der Tabelle nicht gefunden. Sie wurde möglicherweise umbenannt oder entfernt.',
+	mappingEmptyText: 'Die Zielstruktur hat noch keine zugeordneten Blätter.',
+	mappingEmptyAction: 'Struktur einrichten',
 
 	emptyStateText: 'Noch keine Spalten vorhanden.',
 	emptyStateAction: 'Erste Spalte hinzufügen',

@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.7.0
+
+- **Drei neue Ausgabeformate neben CSV**: eine Tabelle lässt sich jetzt
+  auch als **Excel (XLSX)**, **JSON** oder **XML** schreiben — der
+  Dateityp wird wie bisher je Tabelle in der Ausgabe-Karte gewählt, die
+  Dateiendung neben dem Dateinamen folgt der Auswahl. Jeder Dateityp hat
+  eigene Einstellungen: Excel den **Blattnamen** (mit denselben
+  `{…}`-Variablen wie der Dateiname), die **Startzelle** der Tabelle
+  (z. B. `B3`), Kopfzeile, Kopfzeile fixieren, Autofilter und
+  inhaltsbasierte Spaltenbreiten; JSON die Wurzel-Eigenschaft (leer = reines
+  Array), Einrückung, **JSON Lines** und ASCII-Maskierung; XML das Wurzel-
+  und Datensatz-Element, Einrückung und die `<?xml …?>`-Deklaration. Datums-
+  und Zeitstempelformat sowie Encoding hat jeder Dateityp für sich.
+- **Zielstruktur und Zuordnung für JSON/XML**: bei diesen beiden Dateitypen
+  erscheinen im Table Editor zwei zusätzliche Tabs. **Schema** beschreibt
+  die Struktur *eines* Datensatzes als eingerückten Baum aus Objekten,
+  Arrays, Werten und (nur XML) Attributen — inklusive Werttyp je Blatt bei
+  JSON; **Zuordnung** füllt jedes Blatt mit einer Spalte oder einem festen
+  Text. Der Knopf **„Dokument-Vorschau“** dort erzeugt 20 Datensätze und
+  zeigt das fertige JSON-/XML-Dokument genau so, wie der Lauf es schreiben
+  würde. Ohne festgelegte Struktur wird eine flache Form mit einem Feld je
+  Spalte geschrieben, sodass ein Formatwechsel sofort brauchbare Ausgabe
+  liefert. Unbenannte oder nicht zugeordnete Knoten und Zuordnungen auf
+  gelöschte/umbenannte Spalten melden sich in der Problems-Ansicht.
+- **Neuer Befehl „Datenschmiede: Testdaten generieren (Projekt
+  auswählen)…“**: startet den Lauf aus der Befehlspalette heraus ohne
+  offenen Projekt-Editor — er fragt zuerst, welches `.tdproject` des
+  Workspace erzeugt werden soll (bei genau einem Projekt entfällt die
+  Frage) und übergibt danach an denselben Lauf wie der Run-Knopf.
+- **Drei neue Beispieltabellen**, je eine pro neuem Dateityp:
+  `samples/tables/sales_report.td` (Excel), `customer_profiles.td` (JSON
+  mit verschachtelter Struktur) und `order_messages.td` (XML im EDI-Stil).
+- Die Dateityp-Blöcke in `.td` (`[output.xlsx]`, `[output.json]`,
+  `[output.xml]`) werden nur geschrieben, wenn der Dateityp ausgewählt ist
+  oder vom Standard abweicht — bestehende CSV-Tabellen bleiben unverändert.
+  Der Dateityp Excel benötigt zusätzlich das Python-Paket `openpyxl`, das
+  erst beim Schreiben geladen und bei Bedarf wie die übrigen Pakete zur
+  Installation angeboten wird.
+
 ## 0.6.0
 
 - **Gemeinsamer Workspace-Index statt dreifacher Hintergrund-Scans**:

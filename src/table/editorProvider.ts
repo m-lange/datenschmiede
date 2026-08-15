@@ -18,7 +18,9 @@ export type { TableOption } from './repository';
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
 	| { type: 'edit'; table: Table }
-	| { type: 'preview' }
+	// `mode` decides which dialog the webview opens with the result: the value
+	// grid (columns tab) or the rendered JSON/XML document (mapping tab).
+	| { type: 'preview'; mode?: 'grid' | 'document' }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { table: Table } | { error: unknown };
 
@@ -214,11 +216,12 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					// Generates 20 records with the current configuration through
 					// the Python runner (see table/preview.ts); runTablePreview
 					// shows any error message itself.
+					const mode = message.mode ?? 'grid';
 					const result = await runTablePreview(this.context, document);
 					if (result) {
-						void webviewPanel.webview.postMessage({ type: 'previewResult', ...result });
+						void webviewPanel.webview.postMessage({ type: 'previewResult', mode, ...result });
 					} else {
-						void webviewPanel.webview.postMessage({ type: 'previewDone' });
+						void webviewPanel.webview.postMessage({ type: 'previewDone', mode });
 					}
 					break;
 				}

@@ -3,8 +3,8 @@ import { spawn } from 'child_process';
 import { ParseError } from './tomlUtil';
 import { createStreamDecoder, pythonEnv } from './encoding';
 import { resolveAnyInterpreter } from './project/python';
-import { ColumnLineInfo, findColumnLineInfo } from './table/toml';
-import { validateTable, findTableCycle, findColumnCycle, Issue } from './table/validation';
+import { ColumnLineInfo, findColumnLineInfo, findOutputLine } from './table/toml';
+import { validateTable, findTableCycle, findColumnCycle, Issue, OUTPUT_ISSUE_INDEX } from './table/validation';
 import { TableEntry, buildTableRefEdges, toTableOptions } from './table/repository';
 import { findTableLineInfo } from './project/toml';
 import { buildTableRows } from './project/editorProvider';
@@ -200,9 +200,18 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 		}
 
 		const issues = validateTable(table, ctx.tableOptions, ctx.generators, ctx.lookups);
+		// Only computed when an output problem actually turns up — scanning for
+		// the `[output]` line is pointless for the common column-only case.
+		let outputLine: number | null = null;
 		for (const issue of issues) {
-			const info = columnLines[issue.columnIndex];
-			const line = info ? info.nameLine ?? info.columnsLine : 0;
+			let line: number;
+			if (issue.columnIndex === OUTPUT_ISSUE_INDEX) {
+				outputLine ??= findOutputLine(entry.text);
+				line = outputLine;
+			} else {
+				const info = columnLines[issue.columnIndex];
+				line = info ? info.nameLine ?? info.columnsLine : 0;
+			}
 			diagnostics.push(
 				this.diagnostic(this.lineRange(lines, line), this.formatTableIssueMessage(issue), issue.kind, !!issue.warning),
 			);
@@ -248,6 +257,9 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 
 	/** Turns a validation {@link Issue} into the localized message shown in the Problems view. */
 	private formatTableIssueMessage(issue: Issue): string {
+		if (issue.columnIndex === OUTPUT_ISSUE_INDEX) {
+			return this.formatOutputIssueMessage(issue);
+		}
 		const label = issue.columnName.trim() || vscode.l10n.t('column {0}', issue.columnIndex + 1);
 		switch (issue.kind) {
 			case 'fk-missing-table':
@@ -322,6 +334,25 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 					'Column "{0}": parameter "{1}" references column "{2}" of this table, which does not exist (or is the column itself).',
 					label,
 					issue.paramName ?? '',
+					issue.detail ?? '',
+				);
+			default:
+				return issue.kind;
+		}
+	}
+
+	/** Message of a problem in the JSON/XML target structure (schema/mapping tabs). */
+	private formatOutputIssueMessage(issue: Issue): string {
+		const path = issue.nodePath?.trim() || vscode.l10n.t('(unnamed)');
+		switch (issue.kind) {
+			case 'output-node-unnamed':
+				return vscode.l10n.t('Structure node "{0}" has no name — it cannot be written without one.', path);
+			case 'output-mapping-missing':
+				return vscode.l10n.t('Structure node "{0}" has no column mapped to it.', path);
+			case 'output-mapping-column-not-found':
+				return vscode.l10n.t(
+					'Structure node "{0}" is mapped to column "{1}", which does not exist in this table. It may have been renamed or removed.',
+					path,
 					issue.detail ?? '',
 				);
 			default:

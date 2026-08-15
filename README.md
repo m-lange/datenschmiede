@@ -2,8 +2,9 @@
 
 Eine VS-Code-Extension für **synthetische Testdaten**: Tabellen visuell
 definieren, Spalten mit Generatoren belegen, Tabellen zu Projekten bündeln
-und die Daten vektorisiert über **pandas/numpy** erzeugen — als CSV, mit
-konsistenten Fremdschlüssel-Beziehungen über beliebig viele Ebenen.
+und die Daten vektorisiert über **pandas/numpy** erzeugen — als **CSV,
+Excel, JSON oder XML**, mit konsistenten Fremdschlüssel-Beziehungen über
+beliebig viele Ebenen.
 
 Alle Dateitypen sind unter der Haube normale Klartext-Dateien (TOML bzw.
 CSV) und damit git-freundlich; die Extension stellt dafür grafische Custom
@@ -35,10 +36,24 @@ Projekt — jede Datei mit ausführlicher Markdown-Beschreibung, welche
 Funktion sie demonstriert. Einstieg:
 [`samples/webshop-demo.tdproject`](samples/webshop-demo.tdproject).
 
+Dazu je eine eigenständige Tabelle für die übrigen Dateitypen — alle drei
+ohne Fremdschlüssel, also direkt über die **Vorschau** ausprobierbar:
+
+- [`samples/tables/sales_report.td`](samples/tables/sales_report.td) —
+  **Excel** mit eigenem Blattnamen, Startzelle `B3`, fixierter Kopfzeile
+  und Autofilter
+- [`samples/tables/customer_profiles.td`](samples/tables/customer_profiles.td)
+  — **JSON** mit verschachtelter Zielstruktur (Objekte, Array, Werttypen,
+  feste Texte)
+- [`samples/tables/order_messages.td`](samples/tables/order_messages.td) —
+  **XML** im EDI-Stil mit Attributen, verschachtelten Elementen und
+  Deklaration
+
 ## Tabellen (`.td`)
 
 Jede `.td`-Datei beschreibt **eine Tabelle** und öffnet als Editor mit zwei
-Tabs.
+Tabs — bei den Dateitypen JSON und XML kommen zwei weitere hinzu (siehe
+[Zielstruktur](#zielstruktur-json--xml)).
 
 **Übersicht**: **Schema**, **Name** und **Beschreibung** — Beschreibungen
 unterstützen überall in der Extension Markdown (fett, kursiv, Code, Links,
@@ -50,9 +65,20 @@ bearbeitet. Dazu die Karte **„Ausgabe“**:
   Zeitstempel, Schema, Tabellenname, Datensatzanzahl oder der Wert einer
   Spalte aus dem ersten generierten Datensatz (Menü **„Dynamischen Wert
   einfügen“**; Klick auf ein Tag entfernt es). Leer ergibt `schema_tabelle`
-- **Dateityp** (vorerst nur CSV) mit Spaltentrenner, „jeden Wert in
-  doppelte Anführungszeichen“, Dezimaltrenner, Datums-/Zeitstempelformat,
-  Kopfzeile und Encoding
+- **Dateityp** — **CSV**, **Excel (XLSX)**, **JSON** oder **XML**, je mit
+  eigenen Einstellungen (die Dateiendung neben dem Dateinamen folgt der
+  Auswahl):
+  - **CSV**: Spaltentrenner, „jeden Wert in doppelte Anführungszeichen“,
+    Dezimaltrenner, Datums-/Zeitstempelformat, Kopfzeile, Encoding
+  - **Excel**: **Blattname** (mit denselben `{…}`-Variablen wie der
+    Dateiname), **Startzelle** der Tabelle (z. B. `B3`), Kopfzeile,
+    Kopfzeile fixieren, Autofilter, Spaltenbreiten an den Inhalt anpassen,
+    Datums-/Zeitstempelformat
+  - **JSON**: Wurzel-Eigenschaft (leer = reines Array), Einrückung,
+    **JSON Lines**, Nicht-ASCII maskieren, Datums-/Zeitstempelformat,
+    Encoding
+  - **XML**: Wurzel- und Datensatz-Element, Einrückung,
+    `<?xml …?>`-Deklaration, Datums-/Zeitstempelformat, Encoding
 
 **Spalten**: ein Grid mit einer Zeile je Spalte — Name, Datentyp (`string`,
 `integer`, `uuid`, `email`, …), Beschreibung (Markdown, einzeilig mit
@@ -72,6 +98,40 @@ Python-Umgebung (3.10+), geschrieben wird nichts.
 Die Anzahl zu erzeugender Datensätze gehört bewusst **nicht** zur
 Tabellendefinition, sondern wird je Testdatenprojekt festgelegt.
 
+### Zielstruktur (JSON / XML)
+
+CSV und Excel schreiben die Spalten so, wie sie sind. JSON und XML sind
+dagegen **datensatzförmig** — die flach erzeugten Spalten müssen in eine
+verschachtelte Form gebracht werden. Dafür erscheinen bei diesen beiden
+Dateitypen zwei zusätzliche Tabs:
+
+**Schema**: die Zielstruktur **eines** Datensatzes als eingerückter Baum.
+Jeder Knoten hat einen Namen und eine Art:
+
+- **Objekt** — verschachtelt seine Kindknoten (JSON: `{ … }`, XML: ein
+  Element mit Kindelementen)
+- **Array** — schreibt seine Kindknoten als Liste (JSON) bzw. als
+  wiederholte Geschwister-Elemente (XML)
+- **Wert** — ein Blatt, das im Zuordnungs-Tab gefüllt wird; bei JSON
+  zusätzlich mit **Werttyp** (automatisch, Text, Zahl, Ganzzahl,
+  Wahrheitswert), bei XML entfällt der Typ, da XML nur Text kennt
+- **Attribut** (nur XML) — hängt als Attribut am übergeordneten Element
+
+Die Knöpfe **„Aus Spalten erzeugen“** und **„Struktur leeren“** erzeugen
+bzw. verwerfen eine flache Struktur mit einem Blatt je Spalte. Ohne
+festgelegte Struktur wird genau diese flache Form geschrieben — ein
+Wechsel auf JSON/XML liefert also sofort brauchbare Ausgabe.
+
+**Zuordnung**: eine Zeile je Blatt der Struktur mit dessen Pfad und der
+Quelle — entweder eine **Spalte** der Tabelle oder ein **fester Text**
+(z. B. eine Währung oder eine Systemkennung, die gar nicht generiert wird).
+Der Knopf **„Dokument-Vorschau“** erzeugt 20 Datensätze und zeigt das
+fertige JSON- bzw. XML-Dokument genau so, wie der Lauf es schreiben würde
+— mitsamt Kopier-Knopf.
+
+Der Dateityp entscheidet, welche Struktur gilt: JSON und XML halten ihre
+eigene, sodass ein Wechsel zwischen beiden nichts überschreibt.
+
 ### Validierung (Problems-Ansicht)
 
 Eine Workspace-weite Hintergrund-Prüfung validiert **alle** Datenschmiede-
@@ -81,7 +141,8 @@ dieselben Probleme zusätzlich direkt am Feld. Gemeldet werden u. a.
 fehlende oder nicht (mehr) existierende FK-Ziele, fehlende/ungültige
 Generator-Parameter, Referenzen auf umbenannte oder gelöschte
 Tabellen/Spalten/Nachschlagelisten/Generatoren, zyklische Referenzen,
-fehlende Gewichte, Python-Syntaxfehler in `.tdgen`-Code-Zellen sowie
+fehlende Gewichte, unbenannte oder nicht zugeordnete Knoten der
+JSON-/XML-Zielstruktur, Python-Syntaxfehler in `.tdgen`-Code-Zellen sowie
 kaputtes TOML/CSV mit genauer Zeile/Spalte.
 
 ## Spaltengeneratoren
@@ -240,7 +301,11 @@ Interpretern zu suchen:
 Der **Run-Knopf** in der Editor-Titelleiste des Projekt-Editors (bzw. der
 Start-Knopf im Übersicht-Tab, Befehl **„Datenschmiede: Testdaten
 generieren“**) startet die Generierung
-([`python/generate.py`](python/generate.py)):
+([`python/generate.py`](python/generate.py)). Ohne offenen Projekt-Editor
+führt der Befehl **„Datenschmiede: Testdaten generieren (Projekt
+auswählen)…“** zum selben Lauf — er fragt zuerst, welches `.tdproject` des
+Workspace erzeugt werden soll (bei genau einem Projekt entfällt die Frage).
+Ablauf des Laufs:
 
 1. **Reihenfolge bestimmen**: Tabellen topologisch nach Fremdschlüssel-
    und Generator-Referenzen, innerhalb einer Tabelle Spalte für Spalte
@@ -248,14 +313,15 @@ generieren“**) startet die Generierung
 2. **Daten erzeugen**: vektorisiert über pandas/numpy; referenzierte
    Tabellen entstehen über die Kardinalität je Datensatz der
    referenzierten Tabelle, die treibende FK-Spalte gleich mit
-3. **Schreiben**: eine CSV-Datei je Tabelle gemäß ihrer
-   Ausgabe-Konfiguration in den aufgelösten Ausgabeordner des Projekts
+3. **Schreiben**: eine Datei je Tabelle im konfigurierten Dateityp (CSV,
+   Excel, JSON oder XML) in den aufgelösten Ausgabeordner des Projekts
 
 Der Fortschritt erscheint als abbrechbare Benachrichtigung mit
 Fortschrittsbalken; das vollständige Protokoll (Tabellen, Spalten,
 `ctx.log`-Ausgaben, Python-Tracebacks) steht im Output-Channel
 **„Datenschmiede“**. Fehlende Python-Pakete werden mit
-Ein-Klick-Installation in einem sichtbaren Terminal gemeldet.
+Ein-Klick-Installation in einem sichtbaren Terminal gemeldet — der Dateityp
+Excel braucht zusätzlich `openpyxl`, das erst beim Schreiben geladen wird.
 
 ## Dateiformat (`.td`)
 
@@ -295,6 +361,39 @@ Parameter einer Spalte stehen als `generator = "…"` plus
 `.tdgen` sind ebenfalls TOML, `.lkp` ist CSV — alle Formate werden von den
 Editoren in einem festen, git-diff-freundlichen Layout geschrieben.
 
+Die Einstellungen eines Dateityps stehen in einem eigenen Block
+(`[output.csv]`, `[output.xlsx]`, `[output.json]`, `[output.xml]`).
+`[output.csv]` wird immer geschrieben; die übrigen nur, wenn der Dateityp
+ausgewählt ist oder vom Standard abweicht — eine reine CSV-Tabelle bleibt
+also so schlank wie bisher. Die JSON-/XML-Zielstruktur liegt als **flache**
+Liste in Dokumentreihenfolge darunter, jeder Knoten mit vollem Pfad:
+
+```toml
+[output.xml]
+root_element = "Orders"
+record_element = "Order"
+indent = 2
+declaration = true
+
+[[output.xml.nodes]]
+path = ["OrderId"]
+kind = "attribute"
+value_type = "auto"
+source_kind = "column"
+source = "order_no"
+
+[[output.xml.nodes]]
+path = ["Customer"]
+kind = "object"
+
+[[output.xml.nodes]]
+path = ["Customer", "Name"]
+kind = "value"
+value_type = "auto"
+source_kind = "column"
+source = "customer_name"
+```
+
 ## Entwicklung
 
 ```bash
@@ -313,6 +412,6 @@ nur beim regulären Marketplace-Install).
 
 ## Roadmap
 
-- Weitere Ausgabeformate (z. B. JSON, SQL-Inserts, Parquet)
+- Weitere Ausgabeformate (z. B. SQL-Inserts, Parquet)
 - Weitere eingebaute Generatoren (z. B. Sequenzen mit Mustern,
   Normalverteilungen)

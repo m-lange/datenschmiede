@@ -10,5 +10,6 @@
 	"command.newLookup.title": "New Lookup List…",
 	"command.newGenerator.title": "New Generator…",
 	"command.runGeneration.title": "Generate Test Data",
+	"command.generateTestData.title": "Generate Test Data (Select Project)…",
 	"command.selectPythonInterpreter.title": "Select Python Interpreter…"
 }

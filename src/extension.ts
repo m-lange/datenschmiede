@@ -9,6 +9,7 @@ import { newProjectCommand } from './project/commands/newProject';
 import { newLookupCommand } from './lookup/commands/newLookup';
 import { newGeneratorCommand } from './generator/commands/newGenerator';
 import { selectPythonInterpreterCommand } from './project/commands/selectPythonInterpreter';
+import { generateWithProjectPickCommand } from './project/commands/generateWithProjectPick';
 import { runGenerationCommand } from './project/run';
 import { checkPython310Available } from './project/python';
 import { disposeOutputChannel } from './outputChannel';
@@ -45,6 +46,13 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('datenschmiede.runGeneration', (resource?: vscode.Uri) =>
 			runGenerationCommand(context, resource),
+		),
+	);
+	// Command Palette variant: works without an open project editor by asking
+	// which .tdproject to run first.
+	context.subscriptions.push(
+		vscode.commands.registerCommand('datenschmiede.generateTestData', () =>
+			generateWithProjectPickCommand(context, index),
 		),
 	);
 

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { Table } from '../table/model';
-import type { Plan, PlanTable } from './run';
+import { StructureNode, Table } from '../table/model';
+import type { Plan, PlanOutput, PlanStructureNode } from './run';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
 import { createStreamDecoder, encodeUtf8, pythonEnv } from '../encoding';
 
@@ -15,20 +15,63 @@ import { createStreamDecoder, encodeUtf8, pythonEnv } from '../encoding';
  */
 
 /** A table's output configuration in plan format (counterpart to Table.output, snake_case for Python). */
-export function toPlanOutput(table: Table): PlanTable['output'] {
+export function toPlanOutput(table: Table): PlanOutput {
+	const { csv, xlsx, json, xml } = table.output;
 	return {
 		file_name: table.output.fileName,
 		format: table.output.format || 'csv',
 		csv: {
-			delimiter: table.output.csv.delimiter,
-			quote_all: table.output.csv.quoteAll,
-			decimal: table.output.csv.decimal,
-			date_format: table.output.csv.dateFormat,
-			datetime_format: table.output.csv.datetimeFormat,
-			include_header: table.output.csv.includeHeader,
-			encoding: table.output.csv.encoding,
+			delimiter: csv.delimiter,
+			quote_all: csv.quoteAll,
+			decimal: csv.decimal,
+			date_format: csv.dateFormat,
+			datetime_format: csv.datetimeFormat,
+			include_header: csv.includeHeader,
+			encoding: csv.encoding,
+		},
+		xlsx: {
+			sheet_name: xlsx.sheetName,
+			start_cell: xlsx.startCell,
+			include_header: xlsx.includeHeader,
+			freeze_header: xlsx.freezeHeader,
+			auto_filter: xlsx.autoFilter,
+			auto_fit_columns: xlsx.autoFitColumns,
+			date_format: xlsx.dateFormat,
+			datetime_format: xlsx.datetimeFormat,
+		},
+		json: {
+			root_name: json.rootName,
+			indent: json.indent,
+			json_lines: json.jsonLines,
+			ascii_only: json.asciiOnly,
+			date_format: json.dateFormat,
+			datetime_format: json.datetimeFormat,
+			encoding: json.encoding,
+			nodes: toPlanStructureNodes(json.nodes),
+		},
+		xml: {
+			root_element: xml.rootElement,
+			record_element: xml.recordElement,
+			indent: xml.indent,
+			declaration: xml.declaration,
+			date_format: xml.dateFormat,
+			datetime_format: xml.datetimeFormat,
+			encoding: xml.encoding,
+			nodes: toPlanStructureNodes(xml.nodes),
 		},
 	};
+}
+
+/** The JSON/XML target structure in plan format — nested, unlike the flat list on disk. */
+function toPlanStructureNodes(nodes: StructureNode[]): PlanStructureNode[] {
+	return nodes.map((node) => ({
+		name: node.name.trim(),
+		kind: node.kind,
+		value_type: node.valueType || 'auto',
+		source_kind: node.sourceKind || 'column',
+		source: node.source,
+		children: toPlanStructureNodes(node.children),
+	}));
 }
 
 /** Writes the plan as JSON into the extension's global storage (not part of the workspace); runPlanProcess deletes it again. */

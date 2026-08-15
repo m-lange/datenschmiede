@@ -2,7 +2,7 @@
   "name": "datenschmiede-td",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "l10n": "./l10n",
   "publisher": "datenschmiede",
   "private": true,
@@ -176,6 +176,12 @@
         "title": "%command.runGeneration.title%",
         "category": "Datenschmiede",
         "icon": "$(play)"
+      },
+      {
+        "command": "datenschmiede.generateTestData",
+        "title": "%command.generateTestData.title%",
+        "category": "Datenschmiede",
+        "icon": "$(play)"
       }
     ],
     "menus": {
@@ -222,6 +228,9 @@
         },
         {
           "command": "datenschmiede.runGeneration"
+        },
+        {
+          "command": "datenschmiede.generateTestData"
         }
       ]
     }

@@ -1,4 +1,4 @@
-import { Table, logicalTableName } from './model';
+import { StructureNode, Table, logicalTableName, walkStructure } from './model';
 import { GeneratorBase } from '../generator/base';
 import { GeneratorContext, GeneratorIssueKind, KnownLookupRef } from '../generator/types';
 
@@ -26,10 +26,22 @@ export type IssueKind =
 	| 'gen-not-found'
 	| 'gen-fk-only'
 	| 'gen-fk-mismatch'
+	| OutputIssueKind
 	| GeneratorIssueKind;
 
-/** A single problem found on one column of a table definition. */
+/**
+ * Problems of the JSON/XML target structure — they belong to the `[output]`
+ * block rather than to a single column, and are marked with
+ * `columnIndex === OUTPUT_ISSUE_INDEX`.
+ */
+export type OutputIssueKind = 'output-node-unnamed' | 'output-mapping-missing' | 'output-mapping-column-not-found';
+
+/** `Issue.columnIndex` of a problem that concerns the output configuration, not a column. */
+export const OUTPUT_ISSUE_INDEX = -1;
+
+/** A single problem found on one column of a table definition (or on its output configuration). */
 export interface Issue {
+	/** Index of the affected column, or {@link OUTPUT_ISSUE_INDEX} for output problems. */
 	columnIndex: number;
 	columnName: string;
 	kind: IssueKind;
@@ -37,6 +49,8 @@ export interface Issue {
 	detail?: string;
 	/** Name of the affected generator parameter (generator checks only). */
 	paramName?: string;
+	/** Dotted path of the affected structure node (output checks only). */
+	nodePath?: string;
 	/** `true` for generator checks — they appear as a warning rather than an error in the Problems view. */
 	warning?: boolean;
 }
@@ -229,5 +243,51 @@ export function validateTable(
 		}
 	});
 
+	issues.push(...validateOutputStructure(table));
+
+	return issues;
+}
+
+/**
+ * Checks the JSON/XML target structure of a table (schema + mapping tabs): every
+ * node needs a name, and every leaf mapped to a column needs one that actually
+ * exists — a column renamed or removed after the mapping was set up would
+ * otherwise silently write empty values.
+ *
+ * Only runs for the file type actually selected; a structure left over from a
+ * different file type is not written and therefore not reported.
+ */
+export function validateOutputStructure(table: Table): Issue[] {
+	const format = (table.output.format || 'csv').trim().toLowerCase();
+	let nodes: StructureNode[];
+	if (format === 'json') {
+		nodes = table.output.json.nodes;
+	} else if (format === 'xml') {
+		nodes = table.output.xml.nodes;
+	} else {
+		return [];
+	}
+
+	const ownColumns = new Set(table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0));
+	const issues: Issue[] = [];
+	walkStructure(nodes, (node, path) => {
+		const nodePath = path.join('.');
+		const base = { columnIndex: OUTPUT_ISSUE_INDEX, columnName: '', nodePath, warning: true } as const;
+		if (!node.name.trim()) {
+			issues.push({ ...base, kind: 'output-node-unnamed' });
+		}
+		if (node.kind !== 'value' && node.kind !== 'attribute') {
+			return;
+		}
+		if (node.sourceKind !== 'column') {
+			return;
+		}
+		const source = node.source.trim();
+		if (!source) {
+			issues.push({ ...base, kind: 'output-mapping-missing' });
+		} else if (!ownColumns.has(source)) {
+			issues.push({ ...base, kind: 'output-mapping-column-not-found', detail: source });
+		}
+	});
 	return issues;
 }

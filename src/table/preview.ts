@@ -16,6 +16,12 @@ const PREVIEW_LIMIT = 20;
 export interface PreviewResult {
 	columns: string[];
 	rows: string[][];
+	/**
+	 * The records rendered in the table's configured output format — only
+	 * present for JSON/XML, where the mapping tab shows the document itself
+	 * instead of a value grid (see python/generate.py).
+	 */
+	text?: string;
 }
 
 /**
@@ -127,6 +133,7 @@ export async function runTablePreview(
 						result = {
 							columns: Array.isArray(event.columns) ? (event.columns as string[]) : [],
 							rows: Array.isArray(event.rows) ? (event.rows as string[][]) : [],
+							text: typeof event.text === 'string' ? event.text : undefined,
 						};
 					}
 				},

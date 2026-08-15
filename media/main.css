@@ -565,6 +565,37 @@ body.col-resizing .col-resize-handle {
 	gap: 2px;
 }
 
+/* ---------- Table Editor: Zielstruktur (Tabs „Schema“/„Zuordnung“) ---------- */
+
+/* Namenszelle des Struktur-Grids: Einrückung nach Verschachtelungstiefe
+   (per Inline-padding-left aus table.js) plus ein Symbol für die Knotenart,
+   damit der Baum auf einen Blick lesbar bleibt. */
+.structure-name {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.structure-icon {
+	flex: 0 0 auto;
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Pfad und Art im Zuordnungs-Grid sind reine Anzeige — bearbeitet wird die
+   Struktur ausschließlich im Schema-Tab. */
+.mapping-path {
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.92em;
+	white-space: nowrap;
+}
+
+.columns-table td.mapping-kind {
+	color: var(--vscode-descriptionForeground);
+	white-space: nowrap;
+}
+
 /* „Ausgeblendete“ Spalte (Auge-Umschalter, rein visueller Merkzustand ohne
    weitere Funktion): Zeileninhalt gedimmt, die Aktionen bleiben voll
    sichtbar/bedienbar. */
@@ -1664,6 +1695,32 @@ body.vscode-high-contrast-light .chart-bar {
 .preview-table-wrap {
 	overflow: auto;
 	max-height: calc(80vh - 96px);
+}
+
+/* Inhaltsbereich der Vorschau-Dialoge (Wertegitter oder JSON-/XML-Dokument). */
+.preview-body {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* JSON-/XML-Dokument-Vorschau: der gerenderte Text genau so, wie ihn der
+   Lauf schreiben würde — bewusst mit Zeilenumbrüchen erhalten (pre) und
+   eigenem Scrollen in beide Richtungen. */
+.document-preview {
+	margin: 0;
+	padding: 10px 12px;
+	max-height: calc(80vh - 150px);
+	overflow: auto;
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius-lg);
+	background-color: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.92em;
+	line-height: 1.45;
+	white-space: pre;
+	tab-size: 2;
 }
 
 /* Kopfzeile bleibt beim Scrollen der Vorschau stehen (wie im Spalten-Grid).

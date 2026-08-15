@@ -220,18 +220,61 @@ export interface PlanTable {
 	driving_fk: { table: string; column: string } | null;
 	driving_fk_column: string | null;
 	columns: PlanColumn[];
-	output: {
-		file_name: string;
-		format: string;
-		csv: {
-			delimiter: string;
-			quote_all: boolean;
-			decimal: string;
-			date_format: string;
-			datetime_format: string;
-			include_header: boolean;
-			encoding: string;
-		};
+	output: PlanOutput;
+}
+
+/** One node of the JSON/XML target structure in plan format (see StructureNode). */
+export interface PlanStructureNode {
+	name: string;
+	kind: string;
+	value_type: string;
+	source_kind: string;
+	source: string;
+	children: PlanStructureNode[];
+}
+
+/** A table's output configuration in plan format (snake_case: this is the wire format). */
+export interface PlanOutput {
+	file_name: string;
+	format: string;
+	csv: {
+		delimiter: string;
+		quote_all: boolean;
+		decimal: string;
+		date_format: string;
+		datetime_format: string;
+		include_header: boolean;
+		encoding: string;
+	};
+	xlsx: {
+		sheet_name: string;
+		start_cell: string;
+		include_header: boolean;
+		freeze_header: boolean;
+		auto_filter: boolean;
+		auto_fit_columns: boolean;
+		date_format: string;
+		datetime_format: string;
+	};
+	json: {
+		root_name: string;
+		indent: number;
+		json_lines: boolean;
+		ascii_only: boolean;
+		date_format: string;
+		datetime_format: string;
+		encoding: string;
+		nodes: PlanStructureNode[];
+	};
+	xml: {
+		root_element: string;
+		record_element: string;
+		indent: number;
+		declaration: boolean;
+		date_format: string;
+		datetime_format: string;
+		encoding: string;
+		nodes: PlanStructureNode[];
 	};
 }
 

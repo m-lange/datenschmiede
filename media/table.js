@@ -3,12 +3,12 @@
 // uncompiled script (no bundling needed, no dependencies).
 //
 // The UI borrows from Oracle SQL Developer for VS Code: tabs (here "Overview" /
-// "Columns"), a slim bordered toolbar above the grid, and a grid with a row
-// number column, PK/FK checkbox columns, columns for the referenced
-// table/column and the generator column (picker + parameter dialog). The
-// overview tab additionally holds the output settings: the file name as a tag
-// field (dynamic variables as clickable tags, similar to Power Automate) and
-// the CSV configuration.
+// "Columns", plus "Schema"/"Mapping" for the JSON and XML file types), a slim
+// bordered toolbar above the grid, and a grid with a row number column, PK/FK
+// checkbox columns, columns for the referenced table/column and the generator
+// column (picker + parameter dialog). The overview tab additionally holds the
+// output settings: the file name as a tag field (dynamic variables as clickable
+// tags, similar to Power Automate) and the settings of the selected file type.
 (function () {
 	'use strict';
 
@@ -67,7 +67,17 @@
 	 * @typedef {{name:string,type:string,pk:boolean,fk:boolean,fkTable:string,fkColumn:string,description:string,hidden:boolean,generator?:GeneratorConfig}} Column
 	 */
 	/** @typedef {{delimiter:string,quoteAll:boolean,decimal:string,dateFormat:string,datetimeFormat:string,includeHeader:boolean,encoding:string}} CsvOptions */
-	/** @typedef {{fileName:string,format:string,csv:CsvOptions}} OutputConfig */
+	/** @typedef {{sheetName:string,startCell:string,includeHeader:boolean,freezeHeader:boolean,autoFilter:boolean,autoFitColumns:boolean,dateFormat:string,datetimeFormat:string}} XlsxOptions */
+	/**
+	 * One node of the JSON/XML target structure — the counterpart to
+	 * StructureNode in src/table/model.ts. Structure (name/kind/valueType) is
+	 * edited in the schema tab, the mapping (sourceKind/source) in the mapping
+	 * tab; both live on the same node.
+	 * @typedef {{name:string,kind:'object'|'array'|'value'|'attribute',valueType:string,sourceKind:'column'|'constant',source:string,children:StructureNode[]}} StructureNode
+	 */
+	/** @typedef {{rootName:string,indent:number,jsonLines:boolean,asciiOnly:boolean,dateFormat:string,datetimeFormat:string,encoding:string,nodes:StructureNode[]}} JsonOptions */
+	/** @typedef {{rootElement:string,recordElement:string,indent:number,declaration:boolean,dateFormat:string,datetimeFormat:string,encoding:string,nodes:StructureNode[]}} XmlOptions */
+	/** @typedef {{fileName:string,format:string,csv:CsvOptions,xlsx:XlsxOptions,json:JsonOptions,xml:XmlOptions}} OutputConfig */
 	/** @typedef {{schema:string,name:string,description:string,columns:Column[],output:OutputConfig}} Table */
 	/** @typedef {{label:string,columns:string[]}} TableOption */
 	/** @typedef {{name:string,type:string,description:string,choices?:string[],required?:boolean,placeholder?:string}} GeneratorParameter */
@@ -81,7 +91,7 @@
 	let state = { schema: '', name: '', description: '', columns: [], output: defaultOutput() };
 	/** @type {string | null} */
 	let parseError = null;
-	/** @type {'overview' | 'columns'} */
+	/** @type {'overview' | 'columns' | 'schema' | 'mapping'} 'schema'/'mapping' only exist for the JSON/XML file types */
 	let activeTab = 'columns';
 	/** @type {TableOption[]} Tables in the workspace (label + column names), for FK and generator references */
 	let tableOptions = [];
@@ -113,6 +123,14 @@
 
 	const app = document.getElementById('app');
 
+	/** Available output file types — the counterpart to OUTPUT_FORMATS in src/table/model.ts. */
+	const OUTPUT_FORMATS = [
+		{ value: 'csv', label: 'CSV' },
+		{ value: 'xlsx', label: 'Excel (XLSX)' },
+		{ value: 'json', label: 'JSON' },
+		{ value: 'xml', label: 'XML' },
+	];
+
 	/** @returns {OutputConfig} Default output until the extension host sends the real state (counterpart to createDefaultOutput in src/table/model.ts). */
 	function defaultOutput() {
 		return {
@@ -127,7 +145,81 @@
 				includeHeader: true,
 				encoding: 'utf-8',
 			},
+			xlsx: {
+				sheetName: '{table}',
+				startCell: 'A1',
+				includeHeader: true,
+				freezeHeader: true,
+				autoFilter: false,
+				autoFitColumns: true,
+				dateFormat: '%Y-%m-%d',
+				datetimeFormat: '%Y-%m-%d %H:%M:%S',
+			},
+			json: {
+				rootName: '',
+				indent: 2,
+				jsonLines: false,
+				asciiOnly: false,
+				dateFormat: '%Y-%m-%d',
+				datetimeFormat: '%Y-%m-%dT%H:%M:%S',
+				encoding: 'utf-8',
+				nodes: [],
+			},
+			xml: {
+				rootElement: 'rows',
+				recordElement: 'row',
+				indent: 2,
+				declaration: true,
+				dateFormat: '%Y-%m-%d',
+				datetimeFormat: '%Y-%m-%dT%H:%M:%S',
+				encoding: 'utf-8',
+				nodes: [],
+			},
 		};
+	}
+
+	/** Currently selected output file type ('csv' when nothing valid is set). */
+	function currentFormat() {
+		const format = ((state.output && state.output.format) || 'csv').trim().toLowerCase();
+		return OUTPUT_FORMATS.some((f) => f.value === format) ? format : 'csv';
+	}
+
+	/** `true` for the two structured file types, which get the schema and mapping tabs. */
+	function isStructuredFormat() {
+		const format = currentFormat();
+		return format === 'json' || format === 'xml';
+	}
+
+	/**
+	 * Fills in output blocks the extension host did not send (a `.td` file that
+	 * predates a file type, or a hand-written one) — done ONCE per incoming
+	 * state rather than on every access, so the render code can rely on the
+	 * objects existing and keep editing them by reference.
+	 */
+	function normalizeState() {
+		const defaults = defaultOutput();
+		state.output = Object.assign({}, defaults, state.output || {});
+		state.output.csv = Object.assign(defaults.csv, state.output.csv || {});
+		state.output.xlsx = Object.assign(defaults.xlsx, state.output.xlsx || {});
+		state.output.json = Object.assign(defaults.json, state.output.json || {});
+		state.output.xml = Object.assign(defaults.xml, state.output.xml || {});
+		if (!Array.isArray(state.output.json.nodes)) {
+			state.output.json.nodes = [];
+		}
+		if (!Array.isArray(state.output.xml.nodes)) {
+			state.output.xml.nodes = [];
+		}
+		if (!Array.isArray(state.columns)) {
+			state.columns = [];
+		}
+	}
+
+	/**
+	 * The structure options block of the selected file type (JSON or XML).
+	 * @returns {JsonOptions | XmlOptions}
+	 */
+	function structureOptions() {
+		return currentFormat() === 'xml' ? state.output.xml : state.output.json;
 	}
 
 	function postEdit() {
@@ -186,7 +278,7 @@
 			return;
 		}
 		app.appendChild(renderTabs());
-		content.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderColumnsTab());
+		content.appendChild(renderActiveTab());
 		app.appendChild(content);
 
 		// Only now (with the table in the real DOM) can the width actually
@@ -205,10 +297,34 @@
 		bar.setAttribute('role', 'tablist');
 		bar.appendChild(renderTabButton('overview', strings.tabOverview));
 		bar.appendChild(renderTabButton('columns', `${strings.tabColumns} (${state.columns.length})`));
+		if (isStructuredFormat()) {
+			// The target structure and its value mapping only exist for the
+			// record-shaped file types (JSON/XML) — CSV and Excel write the
+			// columns as they are.
+			bar.appendChild(renderTabButton('schema', strings.tabSchema));
+			bar.appendChild(renderTabButton('mapping', strings.tabMapping));
+		}
 		return bar;
 	}
 
-	/** @param {'overview'|'columns'} tab */
+	/** Content of the currently selected tab (falls back to the columns tab when the tab no longer exists). */
+	function renderActiveTab() {
+		if ((activeTab === 'schema' || activeTab === 'mapping') && !isStructuredFormat()) {
+			activeTab = 'columns';
+		}
+		switch (activeTab) {
+			case 'overview':
+				return renderOverviewTab();
+			case 'schema':
+				return renderSchemaTab();
+			case 'mapping':
+				return renderMappingTab();
+			default:
+				return renderColumnsTab();
+		}
+	}
+
+	/** @param {'overview'|'columns'|'schema'|'mapping'} tab */
 	function renderTabButton(tab, label) {
 		const btn = el('button', { className: 'tab' + (activeTab === tab ? ' active' : ''), text: label });
 		btn.type = 'button';
@@ -307,7 +423,7 @@
 			},
 		});
 		row.appendChild(tagField.element);
-		row.appendChild(el('span', { className: 'filename-ext', text: `.${(state.output.format || 'csv').toLowerCase()}` }));
+		row.appendChild(el('span', { className: 'filename-ext', text: `.${currentFormat()}` }));
 		nameField.appendChild(row);
 
 		// "Insert dynamic value" on its own line below the field (the same
@@ -328,82 +444,272 @@
 		nameField.appendChild(el('p', { className: 'hint', text: strings.outputFileNameHint }));
 		card.appendChild(nameField);
 
-		// --- File type (CSV only for now) ---
+		// --- File type ---
 		const formatField = el('div', { className: 'field field-narrow' });
 		const formatLabel = el('label', { text: strings.outputFormatLabel });
 		formatLabel.htmlFor = 'f-format';
 		formatField.appendChild(formatLabel);
 		const formatSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
 		formatSelect.id = 'f-format';
-		const csvOption = /** @type {HTMLOptionElement} */ (el('option', { text: 'CSV' }));
-		csvOption.value = 'csv';
-		csvOption.selected = true;
-		formatSelect.appendChild(csvOption);
+		for (const format of OUTPUT_FORMATS) {
+			const option = /** @type {HTMLOptionElement} */ (el('option', { text: format.label }));
+			option.value = format.value;
+			formatSelect.appendChild(option);
+		}
+		formatSelect.value = currentFormat();
 		formatSelect.addEventListener('change', () => {
 			state.output.format = formatSelect.value;
 			postEdit();
+			// The file extension, the settings section and the tab bar (schema
+			// and mapping only exist for JSON/XML) all follow the file type.
+			render();
 		});
 		formatField.appendChild(wrapSelectWithChevron(formatSelect));
 		card.appendChild(formatField);
 
-		// --- CSV settings ---
-		const csvSection = el('div', { className: 'csv-settings' });
-		csvSection.appendChild(el('h4', { className: 'csv-settings-title', text: strings.outputCsvSectionLabel }));
+		// --- Settings of the selected file type ---
+		card.appendChild(renderFormatSettings());
+		return card;
+	}
+
+	/** Settings section of the currently selected file type. */
+	function renderFormatSettings() {
+		switch (currentFormat()) {
+			case 'xlsx':
+				return renderXlsxSettings();
+			case 'json':
+				return renderJsonSettings();
+			case 'xml':
+				return renderXmlSettings();
+			default:
+				return renderCsvSettings();
+		}
+	}
+
+	/** Frame of a settings section: a title plus the grid its fields go into. */
+	function renderSettingsSection(title) {
+		const section = el('div', { className: 'csv-settings' });
+		section.appendChild(el('h4', { className: 'csv-settings-title', text: title }));
 		const grid = el('div', { className: 'csv-settings-grid' });
+		section.appendChild(grid);
+		return { section, grid };
+	}
+
+	/** Shared encoding picker of the file types that write text files. */
+	function renderEncodingSelect(current, onChange) {
+		return renderCsvSelect(strings.formatEncodingLabel, current, [
+			{ value: 'utf-8', label: 'UTF-8' },
+			{ value: 'utf-8-sig', label: 'UTF-8 (BOM)' },
+			{ value: 'latin-1', label: 'Latin-1' },
+			{ value: 'cp1252', label: 'Windows-1252' },
+		], onChange);
+	}
+
+	/** Shared indentation picker of the JSON/XML settings. */
+	function renderIndentSelect(labelText, current, compactLabel, onChange) {
+		return renderCsvSelect(labelText, String(current), [
+			{ value: '0', label: compactLabel },
+			{ value: '2', label: '2' },
+			{ value: '4', label: '4' },
+			{ value: '8', label: '8' },
+		], (value) => onChange(Number(value) || 0));
+	}
+
+	function renderCsvSettings() {
+		const csv = state.output.csv;
+		const { section, grid } = renderSettingsSection(strings.outputCsvSectionLabel);
 
 		grid.appendChild(
-			renderCsvSelect(strings.csvDelimiterLabel, state.output.csv.delimiter, [
+			renderCsvSelect(strings.csvDelimiterLabel, csv.delimiter, [
 				{ value: ';', label: ';' },
 				{ value: ',', label: ',' },
 				{ value: '|', label: '|' },
 				{ value: '\t', label: strings.csvDelimiterTab },
 			], (v) => {
-				state.output.csv.delimiter = v;
+				csv.delimiter = v;
 			}),
 		);
 		grid.appendChild(
-			renderCsvSelect(strings.csvDecimalLabel, state.output.csv.decimal, [
+			renderCsvSelect(strings.csvDecimalLabel, csv.decimal, [
 				{ value: '.', label: '.' },
 				{ value: ',', label: ',' },
 			], (v) => {
-				state.output.csv.decimal = v;
+				csv.decimal = v;
 			}),
 		);
 		grid.appendChild(
-			renderCsvTextInput(strings.csvDateFormatLabel, state.output.csv.dateFormat, '%Y-%m-%d', (v) => {
-				state.output.csv.dateFormat = v;
+			renderCsvTextInput(strings.csvDateFormatLabel, csv.dateFormat, '%Y-%m-%d', (v) => {
+				csv.dateFormat = v;
 			}),
 		);
 		grid.appendChild(
-			renderCsvTextInput(strings.csvDatetimeFormatLabel, state.output.csv.datetimeFormat, '%Y-%m-%d %H:%M:%S', (v) => {
-				state.output.csv.datetimeFormat = v;
+			renderCsvTextInput(strings.csvDatetimeFormatLabel, csv.datetimeFormat, '%Y-%m-%d %H:%M:%S', (v) => {
+				csv.datetimeFormat = v;
 			}),
 		);
-		grid.appendChild(
-			renderCsvSelect(strings.csvEncodingLabel, state.output.csv.encoding, [
-				{ value: 'utf-8', label: 'UTF-8' },
-				{ value: 'utf-8-sig', label: 'UTF-8 (BOM)' },
-				{ value: 'latin-1', label: 'Latin-1' },
-				{ value: 'cp1252', label: 'Windows-1252' },
-			], (v) => {
-				state.output.csv.encoding = v;
-			}),
-		);
-		csvSection.appendChild(grid);
+		grid.appendChild(renderEncodingSelect(csv.encoding, (v) => {
+			csv.encoding = v;
+		}));
 
-		csvSection.appendChild(
-			renderCsvCheckbox(strings.csvQuoteAllLabel, state.output.csv.quoteAll, (v) => {
-				state.output.csv.quoteAll = v;
+		section.appendChild(
+			renderCsvCheckbox(strings.csvQuoteAllLabel, csv.quoteAll, (v) => {
+				csv.quoteAll = v;
 			}),
 		);
-		csvSection.appendChild(
-			renderCsvCheckbox(strings.csvIncludeHeaderLabel, state.output.csv.includeHeader, (v) => {
-				state.output.csv.includeHeader = v;
+		section.appendChild(
+			renderCsvCheckbox(strings.csvIncludeHeaderLabel, csv.includeHeader, (v) => {
+				csv.includeHeader = v;
+			}),
+		);
+		return section;
+	}
+
+	function renderXlsxSettings() {
+		const xlsx = state.output.xlsx;
+		const { section, grid } = renderSettingsSection(strings.outputXlsxSectionLabel);
+
+		grid.appendChild(
+			renderCsvTextInput(
+				strings.xlsxSheetNameLabel,
+				xlsx.sheetName,
+				strings.xlsxSheetNamePlaceholder,
+				(v) => {
+					xlsx.sheetName = v;
+				},
+				strings.xlsxSheetNameHint,
+			),
+		);
+		grid.appendChild(
+			renderCsvTextInput(
+				strings.xlsxStartCellLabel,
+				xlsx.startCell,
+				'A1',
+				(v) => {
+					xlsx.startCell = v;
+				},
+				strings.xlsxStartCellHint,
+			),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDateFormatLabel, xlsx.dateFormat, '%Y-%m-%d', (v) => {
+				xlsx.dateFormat = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDatetimeFormatLabel, xlsx.datetimeFormat, '%Y-%m-%d %H:%M:%S', (v) => {
+				xlsx.datetimeFormat = v;
 			}),
 		);
 
-		card.appendChild(csvSection);
-		return card;
+		section.appendChild(
+			renderCsvCheckbox(strings.xlsxIncludeHeaderLabel, xlsx.includeHeader, (v) => {
+				xlsx.includeHeader = v;
+			}),
+		);
+		section.appendChild(
+			renderCsvCheckbox(strings.xlsxFreezeHeaderLabel, xlsx.freezeHeader, (v) => {
+				xlsx.freezeHeader = v;
+			}),
+		);
+		section.appendChild(
+			renderCsvCheckbox(strings.xlsxAutoFilterLabel, xlsx.autoFilter, (v) => {
+				xlsx.autoFilter = v;
+			}),
+		);
+		section.appendChild(
+			renderCsvCheckbox(strings.xlsxAutoFitColumnsLabel, xlsx.autoFitColumns, (v) => {
+				xlsx.autoFitColumns = v;
+			}),
+		);
+		return section;
+	}
+
+	function renderJsonSettings() {
+		const json = state.output.json;
+		const { section, grid } = renderSettingsSection(strings.outputJsonSectionLabel);
+
+		grid.appendChild(
+			renderCsvTextInput(
+				strings.jsonRootNameLabel,
+				json.rootName,
+				strings.jsonRootNamePlaceholder,
+				(v) => {
+					json.rootName = v;
+				},
+				strings.jsonRootNameHint,
+			),
+		);
+		grid.appendChild(
+			renderIndentSelect(strings.jsonIndentLabel, json.indent, strings.jsonIndentCompact, (v) => {
+				json.indent = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDateFormatLabel, json.dateFormat, '%Y-%m-%d', (v) => {
+				json.dateFormat = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDatetimeFormatLabel, json.datetimeFormat, '%Y-%m-%dT%H:%M:%S', (v) => {
+				json.datetimeFormat = v;
+			}),
+		);
+		grid.appendChild(renderEncodingSelect(json.encoding, (v) => {
+			json.encoding = v;
+		}));
+
+		section.appendChild(
+			renderCsvCheckbox(strings.jsonLinesLabel, json.jsonLines, (v) => {
+				json.jsonLines = v;
+			}),
+		);
+		section.appendChild(
+			renderCsvCheckbox(strings.jsonAsciiOnlyLabel, json.asciiOnly, (v) => {
+				json.asciiOnly = v;
+			}),
+		);
+		return section;
+	}
+
+	function renderXmlSettings() {
+		const xml = state.output.xml;
+		const { section, grid } = renderSettingsSection(strings.outputXmlSectionLabel);
+
+		grid.appendChild(
+			renderCsvTextInput(strings.xmlRootElementLabel, xml.rootElement, 'rows', (v) => {
+				xml.rootElement = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.xmlRecordElementLabel, xml.recordElement, 'row', (v) => {
+				xml.recordElement = v;
+			}),
+		);
+		grid.appendChild(
+			renderIndentSelect(strings.xmlIndentLabel, xml.indent, strings.jsonIndentCompact, (v) => {
+				xml.indent = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDateFormatLabel, xml.dateFormat, '%Y-%m-%d', (v) => {
+				xml.dateFormat = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDatetimeFormatLabel, xml.datetimeFormat, '%Y-%m-%dT%H:%M:%S', (v) => {
+				xml.datetimeFormat = v;
+			}),
+		);
+		grid.appendChild(renderEncodingSelect(xml.encoding, (v) => {
+			xml.encoding = v;
+		}));
+
+		section.appendChild(
+			renderCsvCheckbox(strings.xmlDeclarationLabel, xml.declaration, (v) => {
+				xml.declaration = v;
+			}),
+		);
+		return section;
 	}
 
 	/**
@@ -440,13 +746,14 @@
 	}
 
 	/**
-	 * Labelled text input of the CSV settings.
+	 * Labelled text input of a file type's settings.
 	 * @param {string} labelText
 	 * @param {string} current
 	 * @param {string} placeholder
 	 * @param {(value: string) => void} onChange
+	 * @param {string} [hint] Explanatory text below the field.
 	 */
-	function renderCsvTextInput(labelText, current, placeholder, onChange) {
+	function renderCsvTextInput(labelText, current, placeholder, onChange, hint) {
 		const field = el('div', { className: 'field' });
 		field.appendChild(el('label', { text: labelText }));
 		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
@@ -455,6 +762,9 @@
 		input.value = current || '';
 		bindText(input, onChange, postEditDebounced, postEdit);
 		field.appendChild(input);
+		if (hint) {
+			field.appendChild(el('p', { className: 'hint', text: hint }));
+		}
 		return field;
 	}
 
@@ -503,6 +813,497 @@
 		showFloatingMenu(x, y, entries);
 	}
 
+
+	// ---------------------------------------------------------------------
+	// "Schema" tab: the JSON/XML target structure as an indented tree grid.
+	// It describes ONE record; the writer repeats it per generated row (see
+	// python/generate.py). Structure and mapping are deliberately split across
+	// two tabs but share the same nodes — the mapping belongs to the leaf it
+	// fills, so renaming or moving a node keeps it attached.
+	// ---------------------------------------------------------------------
+
+	/**
+	 * Flattens the structure tree into grid rows in document order, each with
+	 * its nesting depth and its sibling list (which the move/remove actions
+	 * operate on).
+	 * @param {StructureNode[]} nodes
+	 * @param {number} [depth]
+	 * @param {string[]} [parentPath]
+	 * @returns {{node:StructureNode,depth:number,siblings:StructureNode[],index:number,path:string[]}[]}
+	 */
+	function flattenStructure(nodes, depth, parentPath) {
+		const level = depth || 0;
+		const base = parentPath || [];
+		const rows = [];
+		nodes.forEach((node, index) => {
+			const path = base.concat([node.name || '']);
+			rows.push({ node, depth: level, siblings: nodes, index, path });
+			if (node.kind === 'object' || node.kind === 'array') {
+				rows.push(...flattenStructure(node.children || [], level + 1, path));
+			}
+		});
+		return rows;
+	}
+
+	/** @returns {StructureNode} A blank node (counterpart to createStructureNode in src/table/model.ts). */
+	function createStructureNode(kind) {
+		return { name: '', kind: kind || 'value', valueType: 'auto', sourceKind: 'column', source: '', children: [] };
+	}
+
+	/** Node kinds available for the current file type — attributes only exist in XML. */
+	function structureKindOptions() {
+		const kinds = [
+			{ value: 'value', label: strings.schemaKindValue },
+			{ value: 'object', label: strings.schemaKindObject },
+			{ value: 'array', label: strings.schemaKindArray },
+		];
+		if (currentFormat() === 'xml') {
+			kinds.push({ value: 'attribute', label: strings.schemaKindAttribute });
+		}
+		return kinds;
+	}
+
+	/** `true` for the node kinds that carry a mapped value (rather than children). */
+	function isLeafKind(kind) {
+		return kind === 'value' || kind === 'attribute';
+	}
+
+	/** Localized label of a node kind, for the mapping grid's read-only kind column. */
+	function structureKindLabel(kind) {
+		switch (kind) {
+			case 'object':
+				return strings.schemaKindObject;
+			case 'array':
+				return strings.schemaKindArray;
+			case 'attribute':
+				return strings.schemaKindAttribute;
+			default:
+				return strings.schemaKindValue;
+		}
+	}
+
+	function renderSchemaTab() {
+		const section = el('section', { className: 'tab-panel columns-section' });
+		const options = structureOptions();
+
+		const toolbar = el('div', { className: 'toolbar' });
+		toolbar.appendChild(
+			renderToolbarButton('add', strings.schemaAddNodeButton, () => {
+				options.nodes.push(createStructureNode('value'));
+				postEdit();
+				render();
+				focusLastStructureName();
+			}),
+		);
+		toolbar.appendChild(
+			renderToolbarButton('list-tree', strings.schemaFromColumnsButton, () => {
+				options.nodes = structureFromColumns();
+				postEdit();
+				render();
+			}),
+		);
+		if (options.nodes.length > 0) {
+			toolbar.appendChild(
+				renderToolbarButton('clear-all', strings.schemaClearButton, () => {
+					options.nodes = [];
+					postEdit();
+					render();
+				}),
+			);
+		}
+		section.appendChild(toolbar);
+		section.appendChild(
+			el('p', { className: 'hint', text: currentFormat() === 'xml' ? strings.schemaHintXml : strings.schemaHintJson }),
+		);
+
+		if (options.nodes.length === 0) {
+			section.appendChild(
+				renderStructureEmptyState('symbol-structure', strings.schemaEmptyText, strings.schemaEmptyAction, () => {
+					options.nodes = structureFromColumns();
+					postEdit();
+					render();
+				}),
+			);
+			return section;
+		}
+
+		const showValueType = currentFormat() === 'json';
+		const wrap = el('div', { className: 'columns-table-wrap' });
+		const table = el('table', { className: 'columns-table' });
+
+		const thead = el('thead');
+		const headRow = el('tr');
+		headRow.appendChild(el('th', { className: 'col-num' }));
+		headRow.appendChild(el('th', { className: 'col-name', text: strings.schemaColHeaderName }));
+		headRow.appendChild(el('th', { className: 'col-type', text: strings.schemaColHeaderKind }));
+		if (showValueType) {
+			// XML writes every leaf as text — a value type would have no effect
+			// there, so the column only exists for JSON.
+			headRow.appendChild(el('th', { className: 'col-type', text: strings.schemaColHeaderType }));
+		}
+		headRow.appendChild(el('th', { className: 'col-actions col-actions-wide' }));
+		headRow.appendChild(el('th', { className: 'col-spacer' }));
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+
+		const tbody = el('tbody');
+		flattenStructure(options.nodes).forEach((row, position) => {
+			tbody.appendChild(renderSchemaRow(row, position, showValueType));
+		});
+		table.appendChild(tbody);
+
+		wrap.appendChild(table);
+		section.appendChild(wrap);
+		return section;
+	}
+
+	/**
+	 * One row of the schema grid.
+	 * @param {{node:StructureNode,depth:number,siblings:StructureNode[],index:number,path:string[]}} entry
+	 * @param {number} position Running number across the whole (flattened) tree.
+	 * @param {boolean} showValueType
+	 */
+	function renderSchemaRow(entry, position, showValueType) {
+		const { node, depth, siblings, index } = entry;
+		const row = el('tr');
+		row.appendChild(el('td', { className: 'col-num', text: String(position + 1) }));
+
+		// --- Name (indented by nesting depth) ---
+		const nameTd = el('td');
+		const nameWrap = el('div', { className: 'structure-name' });
+		nameWrap.style.paddingLeft = `${depth * 18}px`;
+		const icon = el('i', { className: `codicon codicon-${structureIcon(node.kind)} structure-icon` });
+		nameWrap.appendChild(icon);
+		const nameInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input cell-input' }));
+		nameInput.type = 'text';
+		nameInput.placeholder = strings.schemaNamePlaceholder;
+		nameInput.value = node.name || '';
+		nameInput.setAttribute('data-role', 'structure-name');
+		const refreshNameError = () => updateFieldError(nameInput, strings.schemaNameRequiredError, !nameInput.value.trim());
+		bindText(
+			nameInput,
+			(v) => {
+				node.name = v;
+				refreshNameError();
+			},
+			postEditDebounced,
+			postEdit,
+		);
+		refreshNameError();
+		nameWrap.appendChild(nameInput);
+		nameTd.appendChild(nameWrap);
+		row.appendChild(nameTd);
+
+		// --- Kind ---
+		const kindTd = el('td');
+		const kindSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		for (const kind of structureKindOptions()) {
+			const option = /** @type {HTMLOptionElement} */ (el('option', { text: kind.label }));
+			option.value = kind.value;
+			kindSelect.appendChild(option);
+		}
+		kindSelect.value = node.kind;
+		kindSelect.addEventListener('change', () => {
+			node.kind = /** @type {StructureNode['kind']} */ (kindSelect.value);
+			if (isLeafKind(node.kind)) {
+				// A leaf carries a mapping instead of children — drop them
+				// rather than keeping an invisible subtree around.
+				node.children = [];
+			}
+			postEdit();
+			render();
+		});
+		kindTd.appendChild(wrapSelectWithChevron(kindSelect));
+		row.appendChild(kindTd);
+
+		// --- Value type (JSON only, leaves only) ---
+		if (showValueType) {
+			const typeTd = el('td');
+			if (isLeafKind(node.kind)) {
+				const typeSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+				for (const type of [
+					{ value: 'auto', label: strings.schemaValueTypeAuto },
+					{ value: 'string', label: strings.schemaValueTypeString },
+					{ value: 'number', label: strings.schemaValueTypeNumber },
+					{ value: 'integer', label: strings.schemaValueTypeInteger },
+					{ value: 'boolean', label: strings.schemaValueTypeBoolean },
+				]) {
+					const option = /** @type {HTMLOptionElement} */ (el('option', { text: type.label }));
+					option.value = type.value;
+					typeSelect.appendChild(option);
+				}
+				typeSelect.value = node.valueType || 'auto';
+				typeSelect.addEventListener('change', () => {
+					node.valueType = typeSelect.value;
+					postEdit();
+				});
+				typeTd.appendChild(wrapSelectWithChevron(typeSelect));
+			}
+			row.appendChild(typeTd);
+		}
+
+		// --- Actions ---
+		const actionsTd = el('td', { className: 'col-actions col-actions-wide' });
+		const actions = el('div', { className: 'row-actions' });
+		actions.appendChild(
+			renderRowActionButton('add', strings.schemaAddChildLabel, () => {
+				node.children = (node.children || []).concat([createStructureNode('value')]);
+				postEdit();
+				render();
+				focusLastStructureName();
+			}, { disabled: isLeafKind(node.kind) }),
+		);
+		actions.appendChild(
+			renderRowActionButton('chevron-up', strings.schemaMoveNodeUpLabel, () => moveStructureNode(siblings, index, -1), {
+				disabled: index === 0,
+			}),
+		);
+		actions.appendChild(
+			renderRowActionButton('chevron-down', strings.schemaMoveNodeDownLabel, () => moveStructureNode(siblings, index, 1), {
+				disabled: index === siblings.length - 1,
+			}),
+		);
+		actions.appendChild(
+			renderRowActionButton('trash', strings.schemaRemoveNodeLabel, () => {
+				siblings.splice(index, 1);
+				postEdit();
+				render();
+			}, { danger: true }),
+		);
+		actionsTd.appendChild(actions);
+		row.appendChild(actionsTd);
+		row.appendChild(el('td', { className: 'col-spacer' }));
+		return row;
+	}
+
+	/** Icon of a node kind, so the tree stays readable at a glance. */
+	function structureIcon(kind) {
+		switch (kind) {
+			case 'object':
+				return 'symbol-namespace';
+			case 'array':
+				return 'symbol-array';
+			case 'attribute':
+				return 'symbol-property';
+			default:
+				return 'symbol-field';
+		}
+	}
+
+	/** Moves a node one position up (-1) or down (+1) among its siblings. */
+	function moveStructureNode(siblings, index, delta) {
+		const target = index + delta;
+		if (target < 0 || target >= siblings.length) {
+			return;
+		}
+		const [node] = siblings.splice(index, 1);
+		siblings.splice(target, 0, node);
+		postEdit();
+		render();
+	}
+
+	/** Flat structure with one mapped leaf per written column (see structureFromColumns in src/table/model.ts). */
+	function structureFromColumns() {
+		const leafKind = 'value';
+		return state.columns
+			.filter((column) => !column.hidden && (column.name || '').trim() !== '')
+			.map((column) => ({
+				name: column.name.trim(),
+				kind: /** @type {StructureNode['kind']} */ (leafKind),
+				valueType: 'auto',
+				sourceKind: /** @type {StructureNode['sourceKind']} */ ('column'),
+				source: column.name.trim(),
+				children: [],
+			}));
+	}
+
+	/** Focuses the name field of the row just added, so it can be typed straight away. */
+	function focusLastStructureName() {
+		const inputs = app.querySelectorAll('input[data-role="structure-name"]');
+		const last = inputs[inputs.length - 1];
+		if (last instanceof HTMLInputElement) {
+			last.focus();
+		}
+	}
+
+	/** Toolbar button with a codicon (schema/mapping toolbars). */
+	function renderToolbarButton(icon, label, onClick) {
+		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
+		btn.type = 'button';
+		btn.appendChild(el('i', { className: `codicon codicon-${icon}` }));
+		btn.appendChild(document.createTextNode(label));
+		btn.addEventListener('click', onClick);
+		return btn;
+	}
+
+	/** Empty state of the schema/mapping tabs (same layout as the columns tab's). */
+	function renderStructureEmptyState(icon, text, actionLabel, onAction) {
+		const empty = el('div', { className: 'empty-state' });
+		empty.appendChild(el('i', { className: `codicon codicon-${icon}` }));
+		empty.appendChild(el('p', { text }));
+		const link = el('button', { className: 'link-button', text: actionLabel });
+		link.type = 'button';
+		link.addEventListener('click', onAction);
+		empty.appendChild(link);
+		return empty;
+	}
+
+	// ---------------------------------------------------------------------
+	// "Mapping" tab: one row per leaf of the target structure — which column
+	// (or which fixed text) fills it. The preview button here renders the
+	// records as the real JSON/XML document instead of a value grid.
+	// ---------------------------------------------------------------------
+
+	function renderMappingTab() {
+		const section = el('section', { className: 'tab-panel columns-section' });
+		const options = structureOptions();
+		const leaves = flattenStructure(options.nodes).filter((entry) => isLeafKind(entry.node.kind));
+
+		const toolbar = el('div', { className: 'toolbar' });
+		toolbar.appendChild(renderDocumentPreviewButton());
+		section.appendChild(toolbar);
+		section.appendChild(el('p', { className: 'hint', text: strings.mappingHint }));
+
+		if (leaves.length === 0) {
+			section.appendChild(
+				renderStructureEmptyState('symbol-structure', strings.mappingEmptyText, strings.mappingEmptyAction, () => {
+					activeTab = 'schema';
+					render();
+				}),
+			);
+			return section;
+		}
+
+		const wrap = el('div', { className: 'columns-table-wrap' });
+		const table = el('table', { className: 'columns-table' });
+
+		const thead = el('thead');
+		const headRow = el('tr');
+		headRow.appendChild(el('th', { className: 'col-num' }));
+		headRow.appendChild(el('th', { className: 'col-name', text: strings.mappingColHeaderPath }));
+		headRow.appendChild(el('th', { className: 'col-type', text: strings.mappingColHeaderKind }));
+		headRow.appendChild(el('th', { className: 'col-type', text: strings.mappingColHeaderSourceKind }));
+		headRow.appendChild(el('th', { className: 'col-ref-table', text: strings.mappingColHeaderSource }));
+		headRow.appendChild(el('th', { className: 'col-spacer' }));
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+
+		const tbody = el('tbody');
+		leaves.forEach((entry, position) => {
+			tbody.appendChild(renderMappingRow(entry, position));
+		});
+		table.appendChild(tbody);
+
+		wrap.appendChild(table);
+		section.appendChild(wrap);
+		return section;
+	}
+
+	/**
+	 * One row of the mapping grid.
+	 * @param {{node:StructureNode,depth:number,path:string[]}} entry
+	 * @param {number} position
+	 */
+	function renderMappingRow(entry, position) {
+		const node = entry.node;
+		const row = el('tr');
+		row.appendChild(el('td', { className: 'col-num', text: String(position + 1) }));
+
+		// Full path in the structure — read-only here; renaming happens in the
+		// schema tab, which is the single place the structure is edited.
+		const pathText = entry.path.map((part) => part.trim() || '?').join(' › ');
+		const pathTd = el('td');
+		pathTd.appendChild(el('span', { className: 'mapping-path', text: pathText }));
+		row.appendChild(pathTd);
+
+		row.appendChild(el('td', { className: 'mapping-kind', text: structureKindLabel(node.kind) }));
+
+		// --- Source kind: a column of this table, or a fixed text ---
+		const sourceKindTd = el('td');
+		const sourceKindSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		for (const kind of [
+			{ value: 'column', label: strings.mappingSourceKindColumn },
+			{ value: 'constant', label: strings.mappingSourceKindConstant },
+		]) {
+			const option = /** @type {HTMLOptionElement} */ (el('option', { text: kind.label }));
+			option.value = kind.value;
+			sourceKindSelect.appendChild(option);
+		}
+		sourceKindSelect.value = node.sourceKind === 'constant' ? 'constant' : 'column';
+		sourceKindTd.appendChild(wrapSelectWithChevron(sourceKindSelect));
+		row.appendChild(sourceKindTd);
+
+		// --- The value itself: a column picker or a free text field ---
+		const sourceTd = el('td', { className: 'col-ref-table' });
+		const rebuildSource = () => {
+			sourceTd.innerHTML = '';
+			sourceTd.appendChild(node.sourceKind === 'constant' ? buildConstantInput(node) : buildColumnSelect(node));
+		};
+		sourceKindSelect.addEventListener('change', () => {
+			node.sourceKind = /** @type {StructureNode['sourceKind']} */ (sourceKindSelect.value);
+			// The two source kinds mean completely different things — keeping
+			// the old text as a column name (or vice versa) would only produce
+			// a confusing "not found".
+			node.source = '';
+			postEdit();
+			rebuildSource();
+		});
+		rebuildSource();
+		row.appendChild(sourceTd);
+		row.appendChild(el('td', { className: 'col-spacer' }));
+		return row;
+	}
+
+	/**
+	 * Column picker of a mapping row. Deliberately offers hidden columns too:
+	 * `hidden` keeps a column out of the *default* structure, but an explicitly
+	 * mapped one is written — the mapping is the deliberate choice.
+	 * @param {StructureNode} node
+	 */
+	function buildColumnSelect(node) {
+		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		const columnNames = state.columns.map((c) => (c.name || '').trim()).filter((name) => name !== '');
+		populateSelectOptions(
+			select,
+			columnNames,
+			(node.source || '').trim(),
+			strings.mappingColumnEmptyOption,
+			strings.mappingColumnNotFoundSuffix,
+		);
+		const refreshError = () => {
+			const value = select.value.trim();
+			const notFound = !!value && !columnNames.includes(value);
+			updateFieldError(
+				select,
+				value ? strings.mappingColumnNotFoundError : strings.mappingColumnRequiredError,
+				!value || notFound,
+			);
+		};
+		select.addEventListener('change', () => {
+			node.source = select.value;
+			postEdit();
+			refreshError();
+		});
+		refreshError();
+		return wrapSelectWithChevron(select);
+	}
+
+	/** Fixed-text input of a mapping row. @param {StructureNode} node */
+	function buildConstantInput(node) {
+		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input cell-input' }));
+		input.type = 'text';
+		input.placeholder = strings.mappingConstantPlaceholder;
+		input.value = node.source || '';
+		bindText(
+			input,
+			(v) => {
+				node.source = v;
+			},
+			postEditDebounced,
+			postEdit,
+		);
+		return input;
+	}
 
 	// ---------------------------------------------------------------------
 	// Generators: display text + warning checks (a small counterpart to
@@ -1469,18 +2270,34 @@
 	/** @type {HTMLButtonElement | null} Preview button of the current render, used to toggle the spinner. */
 	let previewButton = null;
 
+	/** Value grid preview (columns tab). */
 	function renderPreviewButton() {
+		return buildPreviewButton(strings.previewButton, 'grid');
+	}
+
+	/** Document preview (mapping tab): shows the rendered JSON/XML instead of a value grid. */
+	function renderDocumentPreviewButton() {
+		return buildPreviewButton(strings.previewDocumentButton, 'document');
+	}
+
+	/**
+	 * Both preview buttons run the same generation — only the dialog showing
+	 * the result differs (see the `mode` round trip in table/editorProvider.ts).
+	 * @param {string} label
+	 * @param {'grid'|'document'} mode
+	 */
+	function buildPreviewButton(label, mode) {
 		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
 		btn.appendChild(el('i', { className: 'codicon codicon-play' }));
-		btn.appendChild(document.createTextNode(strings.previewButton));
+		btn.appendChild(document.createTextNode(label));
 		btn.addEventListener('click', () => {
 			if (previewRunning) {
 				return;
 			}
 			previewRunning = true;
 			refreshPreviewButton();
-			vscode.postMessage({ type: 'preview' });
+			vscode.postMessage({ type: 'preview', mode });
 		});
 		previewButton = btn;
 		refreshPreviewButton();
@@ -1508,27 +2325,7 @@
 	 * @param {string[][]} rows
 	 */
 	function showPreviewDialog(columns, rows) {
-		if (closePreviewDialog) {
-			closePreviewDialog();
-		}
-
-		const overlay = el('div', { className: 'dialog-overlay' });
-		const dialog = el('div', { className: 'param-dialog preview-dialog card' });
-		dialog.setAttribute('role', 'dialog');
-
-		const titleRow = el('div', { className: 'param-dialog-title' });
-		const heading = el('h3');
-		heading.appendChild(el('i', { className: 'codicon codicon-table param-dialog-icon' }));
-		heading.appendChild(document.createTextNode(strings.previewDialogTitle.replace('{0}', String(rows.length))));
-		titleRow.appendChild(heading);
-		const closeBtn = el('button', { className: 'icon-button param-dialog-close' });
-		closeBtn.type = 'button';
-		closeBtn.title = strings.previewCloseLabel;
-		closeBtn.setAttribute('aria-label', strings.previewCloseLabel);
-		closeBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
-		closeBtn.addEventListener('click', () => closePreviewDialog && closePreviewDialog());
-		titleRow.appendChild(closeBtn);
-		dialog.appendChild(titleRow);
+		const { body } = openPreviewShell('table', strings.previewDialogTitle.replace('{0}', String(rows.length)));
 
 		const wrap = el('div', { className: 'columns-table-wrap preview-table-wrap' });
 		const table = el('table', { className: 'columns-table preview-table' });
@@ -1551,7 +2348,81 @@
 		});
 		table.appendChild(tbody);
 		wrap.appendChild(table);
-		dialog.appendChild(wrap);
+		body.appendChild(wrap);
+	}
+
+	/**
+	 * Shows the JSON/XML document preview: the generated records rendered
+	 * exactly as the run would write them (see render_json/render_xml in
+	 * python/generate.py), so the target structure and its mapping can be
+	 * checked without a full run.
+	 * @param {string} text
+	 * @param {number} recordCount
+	 */
+	function showDocumentPreviewDialog(text, recordCount) {
+		const { dialog, body, close } = openPreviewShell(
+			'file-code',
+			strings.previewDocumentDialogTitle
+				.replace('{0}', currentFormat().toUpperCase())
+				.replace('{1}', String(recordCount)),
+		);
+
+		const pre = el('pre', { className: 'document-preview', text });
+		body.appendChild(pre);
+
+		// The webview has no VS Code editor to open the result in — a copy
+		// button is the practical way to get it out (e.g. into a scratch file).
+		const footer = el('div', { className: 'param-dialog-footer' });
+		const copyBtn = el('button', { className: 'toolbar-btn', text: strings.previewCopyLabel });
+		copyBtn.type = 'button';
+		copyBtn.addEventListener('click', () => {
+			void navigator.clipboard.writeText(text).then(() => {
+				copyBtn.textContent = strings.previewCopiedLabel;
+				window.setTimeout(() => {
+					copyBtn.textContent = strings.previewCopyLabel;
+				}, 1500);
+			});
+		});
+		const closeBtn = el('button', { className: 'button-primary', text: strings.previewCloseLabel });
+		closeBtn.type = 'button';
+		closeBtn.addEventListener('click', close);
+		footer.appendChild(copyBtn);
+		footer.appendChild(closeBtn);
+		dialog.appendChild(footer);
+	}
+
+	/**
+	 * Modal shell shared by the preview dialogs (title row with a close button,
+	 * Escape/click-outside handling) — returns the dialog, the content area to
+	 * fill and the close function.
+	 * @param {string} icon
+	 * @param {string} title
+	 */
+	function openPreviewShell(icon, title) {
+		if (closePreviewDialog) {
+			closePreviewDialog();
+		}
+
+		const overlay = el('div', { className: 'dialog-overlay' });
+		const dialog = el('div', { className: 'param-dialog preview-dialog card' });
+		dialog.setAttribute('role', 'dialog');
+
+		const titleRow = el('div', { className: 'param-dialog-title' });
+		const heading = el('h3');
+		heading.appendChild(el('i', { className: `codicon codicon-${icon} param-dialog-icon` }));
+		heading.appendChild(document.createTextNode(title));
+		titleRow.appendChild(heading);
+		const closeIcon = el('button', { className: 'icon-button param-dialog-close' });
+		closeIcon.type = 'button';
+		closeIcon.title = strings.previewCloseLabel;
+		closeIcon.setAttribute('aria-label', strings.previewCloseLabel);
+		closeIcon.appendChild(el('i', { className: 'codicon codicon-close' }));
+		closeIcon.addEventListener('click', () => closePreviewDialog && closePreviewDialog());
+		titleRow.appendChild(closeIcon);
+		dialog.appendChild(titleRow);
+
+		const body = el('div', { className: 'preview-body' });
+		dialog.appendChild(body);
 
 		overlay.appendChild(dialog);
 		document.body.appendChild(overlay);
@@ -1575,6 +2446,7 @@
 			document.removeEventListener('keydown', onKeyDown, true);
 			overlay.remove();
 		};
+		return { dialog, body, close: () => closePreviewDialog && closePreviewDialog() };
 	}
 
 	function addColumn() {
@@ -1699,6 +2571,7 @@
 				parseError = 'parseError' in message ? message.parseError : null;
 				if ('table' in message) {
 					state = message.table;
+					normalizeState();
 				}
 				render();
 				break;
@@ -1711,6 +2584,7 @@
 				}
 				parseError = null;
 				state = message.table;
+				normalizeState();
 				render();
 				break;
 			case 'parseError':
@@ -1738,14 +2612,17 @@
 				}
 				break;
 			}
-			case 'previewResult':
+			case 'previewResult': {
 				previewRunning = false;
 				refreshPreviewButton();
-				showPreviewDialog(
-					Array.isArray(message.columns) ? message.columns : [],
-					Array.isArray(message.rows) ? message.rows : [],
-				);
+				const rows = Array.isArray(message.rows) ? message.rows : [];
+				if (message.mode === 'document' && typeof message.text === 'string') {
+					showDocumentPreviewDialog(message.text, rows.length);
+				} else {
+					showPreviewDialog(Array.isArray(message.columns) ? message.columns : [], rows);
+				}
 				break;
+			}
 			case 'previewDone':
 				// Run finished without a result (the extension host already showed
 				// the error as a notification) — just reset the button.
