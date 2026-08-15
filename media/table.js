@@ -30,6 +30,8 @@
 		variableLabel: variableLabelCommon,
 		createDeferredRenderer,
 		updateFieldError,
+		renderSearchField,
+		renderAutoSizeColumnsButton,
 		wrapSelectWithChevron,
 		populateSelectOptions,
 		buildColGroup,
@@ -1991,6 +1993,16 @@
 		addBtn.addEventListener('click', addColumn);
 		toolbar.appendChild(addBtn);
 		toolbar.appendChild(renderPreviewButton());
+		toolbar.appendChild(
+			renderAutoSizeColumnsButton({
+				label: strings.autoSizeColumnsLabel,
+				widths: columnWidths,
+				onReset: (widths) => {
+					vscode.postMessage({ type: 'columnWidths', columnWidths: widths });
+					render();
+				},
+			}),
+		);
 		section.appendChild(toolbar);
 
 		if (state.columns.length === 0) {
@@ -2733,11 +2745,13 @@
 			dialog.appendChild(badge);
 		}
 
-		const search = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input fk-search' }));
-		search.type = 'text';
-		search.placeholder = strings.fkPickerSearchPlaceholder;
-		search.setAttribute('aria-label', strings.fkPickerSearchPlaceholder);
-		dialog.appendChild(search);
+		const search = renderSearchField({
+			placeholder: strings.fkPickerSearchPlaceholder,
+			clearLabel: strings.searchClearLabel,
+			extraClass: 'fk-search',
+			onChange: () => renderTree(),
+		});
+		dialog.appendChild(search.element);
 
 		const treeWrap = el('div', { className: 'fk-tree' });
 		dialog.appendChild(treeWrap);
@@ -2765,7 +2779,7 @@
 
 		function renderTree() {
 			treeWrap.innerHTML = '';
-			const query = search.value.trim().toLowerCase();
+			const query = search.input.value.trim().toLowerCase();
 			const root = buildFkTree(ownTableLabel());
 
 			if (root.groups.length === 0 && root.tables.length === 0) {
@@ -2914,7 +2928,6 @@
 			treeWrap.appendChild(body);
 		}
 
-		search.addEventListener('input', renderTree);
 		renderTree();
 
 		overlay.appendChild(dialog);
@@ -2944,7 +2957,7 @@
 			deferredRender.flushIfIdle();
 		};
 
-		search.focus();
+		search.input.focus();
 	}
 
 	// ---------------------------------------------------------------------

@@ -569,11 +569,16 @@ body.col-resizing .col-resize-handle {
 /* Referenzierte Tabelle UND Spalte werden gemeinsam ausgewählt — das Grid
    trägt dafür keine eigenen Spalten mehr (siehe openFkPicker in table.js). */
 
-.fk-dialog {
+/* Zusammengesetzter Selektor, weil .param-dialog weiter unten in dieser Datei
+   steht: bei gleicher Spezifität gewänne sonst dessen width (420px) — dieselbe
+   Falle wie bei .columns-table.structure-table. */
+.param-dialog.fk-dialog {
 	/* Breit genug, dass lange Namensraum-/Tabellennamen samt Einrückung ohne
 	   Umbruch nebeneinander stehen. */
 	width: min(760px, calc(100vw - 48px));
 	max-height: 80vh;
+	/* Der Baum scrollt selbst (siehe .fk-tree), der Dialog also nicht. */
+	overflow-y: hidden;
 	display: flex;
 	flex-direction: column;
 }
@@ -598,6 +603,7 @@ body.col-resizing .col-resize-handle {
 
 .fk-search {
 	margin-top: 4px;
+	flex: 0 0 auto;
 }
 
 .fk-tree {
@@ -1047,16 +1053,20 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .fk-table .fk-icon {
 
 /* ---------- Projekt-Editor: Tabellen-Tab — Suche + Auswahlbaum ---------- */
 
-.tables-search {
+/* Gemeinsames Suchfeld (siehe renderSearchField in common.js): Lupe links,
+   Löschen-× rechts, das nur bei Text erscheint. */
+.search-field {
 	position: relative;
-	margin-bottom: 10px;
+	display: block;
 }
 
-.tables-search .text-input {
+.search-field .text-input {
 	padding-left: 28px;
+	padding-right: 28px;
+	width: 100%;
 }
 
-.tables-search-icon {
+.search-field-icon {
 	position: absolute;
 	top: 50%;
 	left: 8px;
@@ -1065,6 +1075,47 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .fk-table .fk-icon {
 	color: var(--vscode-input-placeholderForeground);
 	pointer-events: none;
 }
+
+/* Immer sichtbar (die Basisregel blendet Icon-Knöpfe erst beim Zeilen-Hover
+   ein) — versteckt wird es über das hidden-Attribut, wenn das Feld leer ist. */
+.search-field-clear {
+	position: absolute;
+	top: 50%;
+	right: 4px;
+	transform: translateY(-50%);
+	opacity: 1;
+}
+
+.search-field-clear .codicon {
+	font-size: 13px;
+}
+
+.tables-search {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Suchfeld plus die (sekundäre) Spaltenbreiten-Aktion in einer Zeile. */
+.tables-search-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+/* Sekundäre Aktion in einer Werkzeugleiste: ein Icon-Knopf, kein voller
+   Knopf — dauerhaft sichtbar (die Basisregel blendet Icon-Knöpfe sonst erst
+   beim Zeilen-Hover ein) und im Ruhezustand zurückhaltend. */
+.toolbar-icon-button {
+	opacity: 1;
+	margin-left: 2px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.toolbar-icon-button:hover:not(:disabled) {
+	color: var(--vscode-foreground);
+}
+
 
 /* Namensraum-Zwischenzeile (aus den Punkt-getrennten Segmenten des
    `schema`-Felds, z. B. "ag.cor.sapbp" -> drei Ebenen) — eigener

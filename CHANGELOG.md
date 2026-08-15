@@ -2,6 +2,18 @@
 
 ## 0.10.0
 
+- **Suchfelder haben jetzt ein Löschen-×** (Tabellen-Tab des Projekt-Editors,
+  Fremdschlüssel-Auswahl) — es erscheint nur, solange Text drinsteht; Escape
+  leert das Feld weiterhin. Beide Felder teilen sich denselben Baustein.
+- **Spaltenbreiten an den Inhalt anpassen**: eine sekundäre Aktion (ein
+  kleiner Icon-Knopf, kein voller Knopf) in der Werkzeugleiste des
+  Spalten-Grids und neben der Suche im Tabellen-Tab verwirft die von Hand
+  gezogenen Breiten, sodass sich jede Spalte wieder am Inhalt ausrichtet.
+- Der **Fremdschlüssel-Dialog ist jetzt tatsächlich breiter**: seine Breite
+  wurde von `.param-dialog` überschrieben, das weiter unten in derselben
+  Datei steht (gleiche Spezifität, spätere Regel gewinnt) — er blieb dadurch
+  bei 420 px statt der gesetzten 760 px.
+
 - **Zusätzliche Python-Pakete je Projekt**: im Projekt-Editor lässt sich eine
   **`requirements.txt`** angeben (relativ oder absolut, mit
   Dateiauswahl-Dialog) mit den Paketen, die eigene Generatoren über

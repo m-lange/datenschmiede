@@ -70,6 +70,9 @@ export interface ProjectWebviewStrings {
 	outputVarProject: string;
 
 	tablesSearchPlaceholder: string;
+	/** Shared: clear a search field, and reset manually dragged grid column widths. */
+	searchClearLabel: string;
+	autoSizeColumnsLabel: string;
 	tablesColHeaderTable: string;
 	tablesColHeaderPath: string;
 	tablesColHeaderRecords: string;
@@ -168,6 +171,8 @@ const en: ProjectWebviewStrings = {
 	outputVarProject: 'Project name',
 
 	tablesSearchPlaceholder: 'Search tables…',
+	searchClearLabel: 'Clear search',
+	autoSizeColumnsLabel: 'Fit column widths to the content',
 	tablesColHeaderTable: 'Table',
 	tablesColHeaderPath: 'File',
 	tablesColHeaderRecords: 'Records',
@@ -257,6 +262,8 @@ const de: ProjectWebviewStrings = {
 	outputVarProject: 'Projektname',
 
 	tablesSearchPlaceholder: 'Tabellen durchsuchen…',
+	searchClearLabel: 'Suche leeren',
+	autoSizeColumnsLabel: 'Spaltenbreiten an den Inhalt anpassen',
 	tablesColHeaderTable: 'Tabelle',
 	tablesColHeaderPath: 'Datei',
 	tablesColHeaderRecords: 'Datensätze',

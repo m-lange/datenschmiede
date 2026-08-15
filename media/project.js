@@ -19,6 +19,8 @@
 	const {
 		el,
 		bindText,
+		renderSearchField,
+		renderAutoSizeColumnsButton,
 		debounce,
 		renderTextField: renderTextFieldCommon,
 		renderLabeledMarkdownField,
@@ -653,26 +655,31 @@
 
 		const treeContainer = el('div');
 
-		const searchWrap = el('div', { className: 'tables-search' });
-		searchWrap.appendChild(el('i', { className: 'codicon codicon-search tables-search-icon' }));
-		const searchInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
-		searchInput.type = 'text';
-		searchInput.placeholder = strings.tablesSearchPlaceholder;
-		searchInput.setAttribute('aria-label', strings.tablesSearchPlaceholder);
-		searchInput.value = tablesFilterText;
-		searchInput.addEventListener('input', () => {
-			tablesFilterText = searchInput.value;
-			renderTablesTree(treeContainer);
-		});
-		searchInput.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape' && searchInput.value) {
-				searchInput.value = '';
-				tablesFilterText = '';
+		const search = renderSearchField({
+			value: tablesFilterText,
+			placeholder: strings.tablesSearchPlaceholder,
+			clearLabel: strings.searchClearLabel,
+			extraClass: 'tables-search',
+			onChange: (value) => {
+				tablesFilterText = value;
 				renderTablesTree(treeContainer);
-			}
+			},
 		});
-		searchWrap.appendChild(searchInput);
-		section.appendChild(searchWrap);
+		// Search and the (secondary) column-fit control share one row — the tables
+		// tab has no toolbar of its own.
+		const searchRow = el('div', { className: 'tables-search-row' });
+		searchRow.appendChild(search.element);
+		searchRow.appendChild(
+			renderAutoSizeColumnsButton({
+				label: strings.autoSizeColumnsLabel,
+				widths: columnWidths,
+				onReset: (widths) => {
+					vscode.postMessage({ type: 'columnWidths', columnWidths: widths });
+					render();
+				},
+			}),
+		);
+		section.appendChild(searchRow);
 
 		section.appendChild(treeContainer);
 		renderTablesTree(treeContainer);

@@ -35,6 +35,9 @@ export interface WebviewStrings {
 	fieldDrivingLookupNotFoundError: string;
 
 	addColumnButton: string;
+	/** Shared: clear a search field, and reset manually dragged grid column widths. */
+	searchClearLabel: string;
+	autoSizeColumnsLabel: string;
 
 	colHeaderName: string;
 	colHeaderType: string;
@@ -268,6 +271,8 @@ const en: WebviewStrings = {
 	fieldDrivingLookupNotFoundError: 'This lookup list was not found. It may have been deleted or renamed.',
 
 	addColumnButton: 'Add Column',
+	searchClearLabel: 'Clear search',
+	autoSizeColumnsLabel: 'Fit column widths to the content',
 
 	colHeaderName: 'Name',
 	colHeaderType: 'Data Type',
@@ -490,6 +495,8 @@ const de: WebviewStrings = {
 		'Diese Nachschlageliste wurde nicht gefunden. Sie wurde möglicherweise gelöscht oder umbenannt.',
 
 	addColumnButton: 'Spalte hinzufügen',
+	searchClearLabel: 'Suche leeren',
+	autoSizeColumnsLabel: 'Spaltenbreiten an den Inhalt anpassen',
 
 	colHeaderName: 'Name',
 	colHeaderType: 'Datentyp',

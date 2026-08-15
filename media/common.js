@@ -556,6 +556,107 @@
 	}
 
 	/**
+	 * "Fit column widths to the content": a small, secondary icon control (not a
+	 * full button) for the grid toolbars. It discards the widths dragged by hand
+	 * for that grid, so every column measures itself against its content again
+	 * on the next render — the state a fresh grid starts in.
+	 * @param {{
+	 *   label: string,
+	 *   widths: Record<string, number>,
+	 *   onReset: (widths: Record<string, number>) => void,
+	 * }} config
+	 */
+	function renderAutoSizeColumnsButton(config) {
+		const button = /** @type {HTMLButtonElement} */ (
+			el('button', { className: 'icon-button toolbar-icon-button' })
+		);
+		button.type = 'button';
+		button.title = config.label;
+		button.setAttribute('aria-label', config.label);
+		button.appendChild(el('i', { className: 'codicon codicon-arrow-both' }));
+		// Deliberately never disabled: dragging a column does not re-render, so a
+		// state computed here would go stale the moment a width is changed. With
+		// nothing dragged the click is simply a no-op.
+		button.addEventListener('click', () => {
+			for (const key of Object.keys(config.widths)) {
+				delete config.widths[key];
+			}
+			config.onReset(config.widths);
+		});
+		return button;
+	}
+
+	/**
+	 * Search field with a magnifier and a clear button — the same shape in every
+	 * place that filters a list (the project editor's table tree, the foreign
+	 * key picker). The × only appears while there is text, and Escape clears the
+	 * field as well.
+	 *
+	 * Returns the wrapper to place plus the input itself, so callers can focus
+	 * it or read its value.
+	 * @param {{
+	 *   value?: string,
+	 *   placeholder: string,
+	 *   ariaLabel?: string,
+	 *   clearLabel: string,
+	 *   extraClass?: string,
+	 *   onChange: (value: string) => void,
+	 * }} config
+	 */
+	function renderSearchField(config) {
+		const wrap = el('div', { className: config.extraClass ? `search-field ${config.extraClass}` : 'search-field' });
+		wrap.appendChild(el('i', { className: 'codicon codicon-search search-field-icon' }));
+
+		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
+		input.type = 'text';
+		input.placeholder = config.placeholder;
+		input.setAttribute('aria-label', config.ariaLabel || config.placeholder);
+		input.value = config.value || '';
+		wrap.appendChild(input);
+
+		const clear = /** @type {HTMLButtonElement} */ (el('button', { className: 'icon-button search-field-clear' }));
+		clear.type = 'button';
+		clear.title = config.clearLabel;
+		clear.setAttribute('aria-label', config.clearLabel);
+		clear.appendChild(el('i', { className: 'codicon codicon-close' }));
+		// Keeps focus in the field, so typing can continue right after clearing.
+		clear.addEventListener('mousedown', (event) => event.preventDefault());
+		wrap.appendChild(clear);
+
+		const refreshClear = () => {
+			clear.hidden = input.value === '';
+		};
+
+		const commit = () => {
+			refreshClear();
+			config.onChange(input.value);
+		};
+
+		const clearValue = () => {
+			if (input.value === '') {
+				return;
+			}
+			input.value = '';
+			input.focus();
+			commit();
+		};
+
+		input.addEventListener('input', commit);
+		input.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && input.value) {
+				// Swallowed on purpose: clearing the search must not also close the
+				// surrounding dialog.
+				event.stopPropagation();
+				clearValue();
+			}
+		});
+		clear.addEventListener('click', clearValue);
+		refreshClear();
+
+		return { element: wrap, input, clear: clearValue };
+	}
+
+	/**
 	 * Replaces a <select>'s native browser arrow with a custom chevron icon
 	 * inside a wrapper element: in very narrow columns (e.g. after resizing) the
 	 * native arrow can otherwise scroll out of view, because the browser does
@@ -850,6 +951,8 @@
 		isEditing,
 		createDeferredRenderer,
 		updateFieldError,
+		renderSearchField,
+		renderAutoSizeColumnsButton,
 		wrapSelectWithChevron,
 		populateSelectOptions,
 		buildColGroup,
