@@ -202,11 +202,6 @@
 					"id": "datenschmiede.generatorsView",
 					"name": "%view.generators.name%",
 					"icon": "./icons/tdgen-dark.svg"
-				},
-				{
-					"id": "datenschmiede.fileGeneratorsView",
-					"name": "%view.fileGenerators.name%",
-					"icon": "./icons/filegen-dark.svg"
 				}
 			]
 		},
@@ -364,18 +359,18 @@
 			],
 			"view/title": [
 				{
-					"command": "datenschmiede.expandSchemaView",
-					"when": "view == datenschmiede.schemaView",
-					"group": "navigation@1"
-				},
-				{
 					"command": "datenschmiede.filterSchemaView",
 					"when": "view == datenschmiede.schemaView && !datenschmiede.schemaFiltered",
-					"group": "navigation@2"
+					"group": "navigation@1"
 				},
 				{
 					"command": "datenschmiede.clearSchemaViewFilter",
 					"when": "view == datenschmiede.schemaView && datenschmiede.schemaFiltered",
+					"group": "navigation@1"
+				},
+				{
+					"command": "datenschmiede.expandSchemaView",
+					"when": "view == datenschmiede.schemaView",
 					"group": "navigation@2"
 				}
 			]

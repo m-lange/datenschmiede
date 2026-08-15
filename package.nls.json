@@ -20,7 +20,6 @@
 	"view.lookups.name": "Lookup Lists",
 	"view.generators.name": "Generators",
 	"view.schema.name": "Schema",
-	"view.fileGenerators.name": "File Generators",
 	"command.filterSchemaView.title": "Filter Schema…",
 	"command.clearSchemaViewFilter.title": "Clear Schema Filter",
 	"command.expandSchemaView.title": "Expand All"

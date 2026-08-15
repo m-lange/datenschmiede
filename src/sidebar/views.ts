@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import { IndexedFileKind, WorkspaceIndex, WorkspaceSnapshot } from '../workspaceIndex';
 
 /**
- * The Datenschmiede sidebar (own container in the activity bar): five read-only
- * tree views over the workspace index — projects, the schema tree of all
- * tables, lookup lists, data generators and file generators.
+ * The Datenschmiede sidebar (own container in the activity bar): four
+ * read-only tree views over the workspace index — projects, the schema tree of
+ * all tables, lookup lists and generators.
  *
  * Everything here is a VIEW of the index, never a second source of truth: the
  * lists come from `index.snapshot()`, and every view refreshes on
@@ -47,6 +47,8 @@ interface FileNode {
 	path: string;
 	/** `false` when the file could not be parsed. */
 	valid: boolean;
+	/** Overrides the view's icon — the generator list mixes two kinds of file. */
+	icon?: string;
 }
 
 /**
@@ -151,7 +153,7 @@ class FlatFileView extends IndexView<FileNode> {
 		item.tooltip = element.path;
 		item.command = openCommand(element.uri);
 		item.contextValue = this.config.contextValue;
-		item.iconPath = element.valid ? fileIcon(this.context, this.config.icon) : invalidIcon();
+		item.iconPath = element.valid ? fileIcon(this.context, element.icon ?? this.config.icon) : invalidIcon();
 		return item;
 	}
 
@@ -379,30 +381,30 @@ export function registerSidebar(context: vscode.ExtensionContext, index: Workspa
 			})),
 	});
 
-	const generators = new FlatFileView(context, index, ['tdgen'], {
+	// Data generators and file generators share one list: they are named the
+	// same way and used in the same place, and the file icon already says which
+	// of the two a line is - a second view (or a group level) would only add a
+	// click without adding information.
+	const generators = new FlatFileView(context, index, ['tdgen', 'filegen'], {
 		icon: 'tdgen',
 		contextValue: 'datenschmiede.generator',
 		emptyText: vscode.l10n.t('No generators in this workspace.'),
-		items: (snapshot) =>
-			snapshot.generators.map((entry) => ({
+		items: (snapshot) => [
+			...snapshot.generators.map((entry) => ({
 				uri: entry.uri,
 				label: entry.generator?.name.trim() || entry.file?.name.trim() || entry.relativePath,
 				path: entry.relativePath,
 				valid: !!entry.file,
+				icon: 'tdgen',
 			})),
-	});
-
-	const fileGenerators = new FlatFileView(context, index, ['filegen'], {
-		icon: 'filegen',
-		contextValue: 'datenschmiede.fileGenerator',
-		emptyText: vscode.l10n.t('No file generators in this workspace.'),
-		items: (snapshot) =>
-			snapshot.fileGenerators.map((entry) => ({
+			...snapshot.fileGenerators.map((entry) => ({
 				uri: entry.uri,
 				label: entry.file?.name.trim() || entry.relativePath,
 				path: entry.relativePath,
 				valid: !!entry.file,
+				icon: 'filegen',
 			})),
+		],
 	});
 
 	context.subscriptions.push(
@@ -410,7 +412,6 @@ export function registerSidebar(context: vscode.ExtensionContext, index: Workspa
 		...schema.register('datenschmiede.schemaView'),
 		...lookups.register('datenschmiede.lookupsView'),
 		...generators.register('datenschmiede.generatorsView'),
-		...fileGenerators.register('datenschmiede.fileGeneratorsView'),
 		vscode.commands.registerCommand('datenschmiede.filterSchemaView', () => schema.promptFilter()),
 		vscode.commands.registerCommand('datenschmiede.clearSchemaViewFilter', () => schema.clearFilter()),
 		vscode.commands.registerCommand('datenschmiede.expandSchemaView', () => schema.expandAll()),
