@@ -23,9 +23,23 @@ export function disposeOutputChannel(): void {
 	channel = undefined;
 }
 
+/**
+ * Formats a point in time as `yyyy-MM-dd HH:mm:ss` in local time - the one date
+ * format the extension shows anywhere (the webviews use formatDateTime in
+ * media/common.js for exactly the same result).
+ */
+export function formatDateTime(value: Date | number): string {
+	const date = value instanceof Date ? value : new Date(value);
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return (
+		`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+		`${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+	);
+}
+
 /** Appends a timestamped log line. */
 export function log(message: string): void {
-	getOutputChannel().appendLine(`[${new Date().toISOString()}] ${message}`);
+	getOutputChannel().appendLine(`[${formatDateTime(new Date())}] ${message}`);
 }
 
 /** Error notification with a "Show Details" button that reveals the output channel. */

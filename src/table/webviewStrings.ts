@@ -105,6 +105,8 @@ export interface WebviewStrings {
 	previewCloseLabel: string;
 
 	outputSectionTitle: string;
+	/** Title of the second output card: file type and its settings. */
+	outputFormatSectionTitle: string;
 	outputFileNameLabel: string;
 	outputFileNameHint: string;
 	outputFileNamePlaceholder: string;
@@ -334,7 +336,8 @@ const en: WebviewStrings = {
 	previewDialogTitle: 'Preview — {0} records',
 	previewCloseLabel: 'Close',
 
-	outputSectionTitle: 'Output',
+	outputSectionTitle: 'File name',
+	outputFormatSectionTitle: 'File type',
 	outputFileNameLabel: 'File name',
 	outputFileNameHint:
 		'Combine fixed text with dynamic values. Dynamic parts appear as tags — click a tag to remove it. Empty uses "schema_table".',
@@ -559,7 +562,8 @@ const de: WebviewStrings = {
 	previewDialogTitle: 'Vorschau — {0} Datensätze',
 	previewCloseLabel: 'Schließen',
 
-	outputSectionTitle: 'Ausgabe',
+	outputSectionTitle: 'Dateiname',
+	outputFormatSectionTitle: 'Dateityp',
 	outputFileNameLabel: 'Dateiname',
 	outputFileNameHint:
 		'Fester Text kombiniert mit dynamischen Werten. Dynamische Teile erscheinen als Tags — Klick auf ein Tag entfernt es. Leer verwendet „schema_tabelle“.',

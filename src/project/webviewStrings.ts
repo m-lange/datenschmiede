@@ -28,6 +28,8 @@ export interface ProjectWebviewStrings {
 	fieldDescriptionLabel: string;
 	fieldDescriptionPlaceholder: string;
 
+	/** Card holding the linked interpreter and the requirements file. */
+	environmentSectionTitle: string;
 	pythonSectionLabel: string;
 	pythonNotLinkedText: string;
 	pythonUnresolvedText: string;
@@ -36,6 +38,14 @@ export interface ProjectWebviewStrings {
 	pythonLinkButton: string;
 
 	runButtonLabel: string;
+	/** Title of the card holding the run button and the output folder. */
+	generateSectionTitle: string;
+	/** Time of the last run, `{0}` = formatted timestamp. */
+	generateLastRunText: string;
+	/** Column of the file overview showing the last run's real record count. */
+	outputFilesColLastRun: string;
+	/** Tooltip of that column's values, `{0}` = count, `{1}` = timestamp. */
+	outputFilesLastRunTitle: string;
 	outputFilesTitle: string;
 	outputFilesHint: string;
 	outputFilesColTable: string;
@@ -130,6 +140,7 @@ const en: ProjectWebviewStrings = {
 	fieldDescriptionLabel: 'Description',
 	fieldDescriptionPlaceholder: 'What is this test data project for? Supports Markdown.',
 
+	environmentSectionTitle: 'Python environment',
 	pythonSectionLabel: 'Python Interpreter',
 	pythonNotLinkedText: 'No Python interpreter linked yet.',
 	pythonUnresolvedText: 'This interpreter could not be found. It may have been removed.',
@@ -138,6 +149,10 @@ const en: ProjectWebviewStrings = {
 	pythonLinkButton: 'Select Interpreter…',
 
 	runButtonLabel: 'Generate Test Data',
+	generateSectionTitle: 'Generate test data',
+	generateLastRunText: 'Last run: {0}',
+	outputFilesColLastRun: 'Last run',
+	outputFilesLastRunTitle: '{0} records generated on {1}',
 	outputFilesTitle: 'Generated files',
 	outputFilesHint:
 		'One file per selected table. File name and format are configured in the table editor, the number of records in the Tables tab.',
@@ -221,6 +236,7 @@ const de: ProjectWebviewStrings = {
 	fieldDescriptionLabel: 'Beschreibung',
 	fieldDescriptionPlaceholder: 'Wofür wird dieses Testdatenprojekt verwendet? Markdown wird unterstützt.',
 
+	environmentSectionTitle: 'Python-Umgebung',
 	pythonSectionLabel: 'Python-Interpreter',
 	pythonNotLinkedText: 'Noch kein Python-Interpreter verknüpft.',
 	pythonUnresolvedText: 'Dieser Interpreter wurde nicht gefunden. Er wurde möglicherweise entfernt.',
@@ -229,6 +245,10 @@ const de: ProjectWebviewStrings = {
 	pythonLinkButton: 'Interpreter auswählen…',
 
 	runButtonLabel: 'Testdaten generieren',
+	generateSectionTitle: 'Testdaten generieren',
+	generateLastRunText: 'Letzter Lauf: {0}',
+	outputFilesColLastRun: 'Letzter Lauf',
+	outputFilesLastRunTitle: '{0} Datensätze erzeugt am {1}',
 	outputFilesTitle: 'Generierte Dateien',
 	outputFilesHint:
 		'Eine Datei je ausgewählter Tabelle. Dateiname und Format werden im Table Editor konfiguriert, die Datensatzanzahl im Tabellen-Tab.',

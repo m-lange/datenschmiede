@@ -20,6 +20,8 @@ export interface LookupWebviewStrings {
 
 	addRowButton: string;
 	addColumnButton: string;
+	/** Secondary action next to the toolbar buttons: reset manual column widths. */
+	autoSizeColumnsLabel: string;
 	/** Toolbar button: distribute 100 % evenly across all rows. */
 	distributeEvenlyButton: string;
 	distributeEvenlyTooltip: string;
@@ -61,6 +63,7 @@ const en: LookupWebviewStrings = {
 
 	addRowButton: 'Add Row',
 	addColumnButton: 'Add Column',
+	autoSizeColumnsLabel: 'Fit column widths to the content',
 	distributeEvenlyButton: 'Distribute Evenly',
 	distributeEvenlyTooltip: 'Set all weights to the same value so the total is 100%.',
 	normalizeWeightsButton: 'Scale to 100%',
@@ -100,6 +103,7 @@ const de: LookupWebviewStrings = {
 
 	addRowButton: 'Zeile hinzufügen',
 	addColumnButton: 'Spalte hinzufügen',
+	autoSizeColumnsLabel: 'Spaltenbreiten an den Inhalt anpassen',
 	distributeEvenlyButton: 'Gleichmäßig verteilen',
 	distributeEvenlyTooltip: 'Alle Gewichte auf denselben Wert setzen, sodass die Summe 100 % ergibt.',
 	normalizeWeightsButton: 'Auf 100 % skalieren',

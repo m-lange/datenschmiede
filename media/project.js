@@ -19,6 +19,7 @@
 	const {
 		el,
 		bindText,
+		formatDateTime,
 		renderSearchField,
 		renderAutoSizeColumnsButton,
 		debounce,
@@ -42,7 +43,7 @@
 	/** @typedef {{kind:'table',path:string,label:string,found:boolean,checked:boolean,locked:boolean,secondary:boolean,referencedTable?:string,records?:string}} ProjectPickerTableNode */
 	/** @typedef {ProjectPickerGroupNode | ProjectPickerTableNode} ProjectPickerNode */
 	/** @typedef {{path:string,label:string,resolved:boolean,ok:boolean}} PythonStatus */
-	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,estimatedMin?:number,estimatedMax?:number,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
+	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,estimatedMin?:number,estimatedMax?:number,lastRunRecords?:number,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
 	/** @typedef {import('../src/project/diagram').ProjectDiagram} ProjectDiagram */
 	/** @typedef {import('../src/project/webviewStrings').ProjectWebviewStrings} ProjectWebviewStrings */
 
@@ -58,6 +59,8 @@
 	let pickerTree = [];
 	/** @type {OutputFileRow[]} Output files overview (one row per selected table), supplied by the extension host. */
 	let outputFiles = [];
+	/** Time of the last generator run (epoch ms), or undefined if there was none. */
+	let lastRunAt;
 	/** @type {ProjectDiagram | null} ER diagram of the selected tables (see src/project/diagram.ts), supplied by the extension host. */
 	let diagram = null;
 	/** @type {PythonStatus | null} */
@@ -243,9 +246,10 @@
 			),
 		);
 		section.appendChild(renderDescriptionField());
-		section.appendChild(renderPythonField());
 		stack.appendChild(section);
 
+		stack.appendChild(renderEnvironmentCard());
+		stack.appendChild(renderGenerateCard());
 		stack.appendChild(renderOutputFilesCard());
 
 		return stack;
@@ -436,7 +440,12 @@
 	 * table (td file, name, file name, record count) — editing happens in the
 	 * table editor or on the tables tab.
 	 */
-	function renderOutputFilesCard() {
+	/**
+	 * "Generate test data": the start button and where the files land. Next to
+	 * the button stands the time of the last run, so it is visible without
+	 * switching to the diagram whether what one sees below is fresh.
+	 */
+	function renderGenerateCard() {
 		const card = el('section', { className: 'field-group card' });
 
 		const toolbar = el('div', { className: 'run-toolbar' });
@@ -448,11 +457,20 @@
 			vscode.postMessage({ type: 'runGeneration' });
 		});
 		toolbar.appendChild(runBtn);
+		const lastRun = formatDateTime(lastRunAt);
+		if (lastRun) {
+			toolbar.appendChild(
+				el('span', { className: 'run-last-time', text: strings.generateLastRunText.replace('{0}', lastRun) }),
+			);
+		}
 		card.appendChild(toolbar);
 
 		card.appendChild(renderOutputPathField());
-		card.appendChild(renderRequirementsField());
+		return card;
+	}
 
+	function renderOutputFilesCard() {
+		const card = el('section', { className: 'field-group card' });
 		card.appendChild(el('h3', { className: 'card-title', text: strings.outputFilesTitle }));
 		card.appendChild(el('p', { className: 'hint', text: strings.outputFilesHint }));
 
@@ -470,6 +488,7 @@
 		headRow.appendChild(el('th', { className: 'col-desc', text: strings.outputFilesColFile }));
 		headRow.appendChild(el('th', { className: 'col-desc', text: strings.outputFilesColFileName }));
 		headRow.appendChild(el('th', { className: 'col-records-wide', text: strings.outputFilesColRecords }));
+		headRow.appendChild(el('th', { className: 'col-records-wide', text: strings.outputFilesColLastRun }));
 		headRow.appendChild(el('th', { className: 'col-spacer' }));
 		thead.appendChild(headRow);
 		table.appendChild(thead);
@@ -501,7 +520,9 @@
 			tr.appendChild(fileNameTd);
 
 			const recordsTd = el('td', { className: 'col-records-wide' });
-			if (row.records) {
+			// A leading lookup list sets the count without any configured value,
+			// so the estimate alone is reason enough to fill the cell.
+			if (row.records || row.estimatedMin !== undefined) {
 				const recordsWrap = el('span', { className: 'records-cell-row' });
 				recordsWrap.appendChild(
 					el('i', {
@@ -534,6 +555,24 @@
 			}
 			tr.appendChild(recordsTd);
 
+			// What the last run really wrote - next to the estimate, so a
+			// configuration changed since then is visible as a difference.
+			const lastRunTd = el('td', { className: 'col-records-wide' });
+			if (row.lastRunRecords !== undefined) {
+				const lastRunWrap = el('span', { className: 'records-cell-row' });
+				lastRunWrap.appendChild(el('i', { className: 'codicon codicon-history records-type-icon' }));
+				const value = el('span', { text: formatRecordsNumber(row.lastRunRecords) });
+				const time = formatDateTime(lastRunAt);
+				if (time) {
+					value.title = strings.outputFilesLastRunTitle
+						.replace('{0}', formatRecordsNumber(row.lastRunRecords))
+						.replace('{1}', time);
+				}
+				lastRunWrap.appendChild(value);
+				lastRunTd.appendChild(lastRunWrap);
+			}
+			tr.appendChild(lastRunTd);
+
 			tr.appendChild(el('td', { className: 'col-spacer' }));
 			tbody.appendChild(tr);
 		}
@@ -563,6 +602,20 @@
 	}
 
 	/** Linked Python interpreter: status text + icon, plus a button to (re-)link it (see project/python.ts). */
+	/**
+	 * "Python environment": the linked interpreter and the requirements.txt that
+	 * says what it has to provide. Both describe the same thing — where the run
+	 * executes — so they sit in one card rather than among the project's
+	 * description fields.
+	 */
+	function renderEnvironmentCard() {
+		const card = el('section', { className: 'field-group card' });
+		card.appendChild(el('h3', { className: 'card-title', text: strings.environmentSectionTitle }));
+		card.appendChild(renderPythonField());
+		card.appendChild(renderRequirementsField());
+		return card;
+	}
+
 	function renderPythonField() {
 		const field = el('div', { className: 'field' });
 		field.appendChild(el('label', { text: strings.pythonSectionLabel }));
@@ -1297,6 +1350,7 @@
 			window.DatenschmiedeDiagram.renderErDiagram(diagram, {
 				strings,
 				formatNumber: formatRecordsNumber,
+				formatDateTime,
 				onOpenTable: (path) => vscode.postMessage({ type: 'openTable', path }),
 			}),
 		);
@@ -1314,6 +1368,7 @@
 				strings = message.strings;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
+				lastRunAt = message.lastRunAt;
 				diagram = message.diagram || null;
 				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles, message.diagram]);
 				pythonStatus = message.pythonStatus || null;
@@ -1330,6 +1385,7 @@
 				project = message.project;
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				outputFiles = Array.isArray(message.outputFiles) ? message.outputFiles : [];
+				lastRunAt = message.lastRunAt;
 				diagram = message.diagram || null;
 				lastBroadcastJson = JSON.stringify([message.pickerTree, message.outputFiles, message.diagram]);
 				pythonStatus = message.pythonStatus || null;
@@ -1348,6 +1404,7 @@
 				pickerTree = Array.isArray(message.pickerTree) ? message.pickerTree : [];
 				if (Array.isArray(message.outputFiles)) {
 					outputFiles = message.outputFiles;
+					lastRunAt = message.lastRunAt;
 				}
 				if (message.diagram) {
 					diagram = message.diagram;

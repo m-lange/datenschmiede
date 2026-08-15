@@ -447,9 +447,18 @@
 			),
 		);
 		section.appendChild(
-			renderTextField('f-schema', strings.fieldSchemaLabel, state.schema, strings.fieldSchemaPlaceholder, (v) => {
-				state.schema = v;
-			}),
+			renderTextField(
+				'f-schema',
+				strings.fieldSchemaLabel,
+				state.schema,
+				strings.fieldSchemaPlaceholder,
+				(v) => {
+					state.schema = v;
+				},
+				// Same size as the name above it - both together form the table's
+				// identity, so one must not look subordinate to the other.
+				'title-input',
+			),
 		);
 		section.appendChild(
 			renderLabeledMarkdownField(
@@ -467,6 +476,7 @@
 
 		stack.appendChild(renderDrivingLookupCard());
 		stack.appendChild(renderOutputCard());
+		stack.appendChild(renderFormatCard());
 
 		return stack;
 	}
@@ -568,8 +578,18 @@
 
 		nameField.appendChild(el('p', { className: 'hint', text: strings.outputFileNameHint }));
 		card.appendChild(nameField);
+		return card;
+	}
 
-		// --- File type ---
+	/**
+	 * File type and everything that depends on it. Its own card, because the
+	 * settings below the selection can grow long (structure, fixed layout) and
+	 * would otherwise bury the file name at the top of the same box.
+	 */
+	function renderFormatCard() {
+		const card = el('section', { className: 'field-group card' });
+		card.appendChild(el('h3', { className: 'card-title', text: strings.outputFormatSectionTitle }));
+
 		const formatField = el('div', { className: 'field field-narrow' });
 		const formatLabel = el('label', { text: strings.outputFormatLabel });
 		formatLabel.htmlFor = 'f-format';

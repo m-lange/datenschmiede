@@ -20,6 +20,7 @@
 	 * @typedef {Object} DiagramOptions
 	 * @property {any} strings Translated texts (see project/webviewStrings.ts).
 	 * @property {(n: number) => string} formatNumber Number with the webview language's thousands separator.
+	 * @property {(v: number|undefined) => string} formatDateTime Time as `yyyy-MM-dd HH:mm:ss` (see common.js).
 	 * @property {(path: string) => void} onOpenTable Opens the `.td` file of a box.
 	 */
 
@@ -418,20 +419,17 @@
 	 * @param {DiagramOptions} options
 	 */
 	function renderErDiagram(diagram, options) {
-		const { strings, formatNumber, onOpenTable } = options;
+		const { strings, formatNumber, formatDateTime, onOpenTable } = options;
 		const fonts = fontSet();
 		const iconChars = { key: codiconChar('key'), references: codiconChar('references') };
 
 		/**
-		 * Display text of a box's record count: preferably the real count from
-		 * the last generator run ("812"), otherwise the estimated min/max count
-		 * ("100..300") or the configured value; empty when nothing is known.
+		 * What a run WILL produce: the estimated min/max count ("100..300", the
+		 * cardinality multiplied along the FK chain) or, when that is not
+		 * computable, the configured value. Empty when nothing is known.
 		 * @param {DiagramTable} table
 		 */
-		function recordsText(table) {
-			if (table.lastRunRecords !== undefined) {
-				return formatNumber(table.lastRunRecords);
-			}
+		function estimateText(table) {
 			if (table.estimatedMin !== undefined && table.estimatedMax !== undefined) {
 				return table.estimatedMin === table.estimatedMax
 					? formatNumber(table.estimatedMin)
@@ -441,19 +439,66 @@
 			return /^\d+$/.test(raw) ? formatNumber(Number(raw)) : raw;
 		}
 
+		/**
+		 * The counters of a box, right-aligned in the header in this order: what
+		 * the last run really produced, then what the next one will produce.
+		 * Both are shown, because a single number could not say which of the two
+		 * it is - and they differ exactly when the configuration changed since
+		 * the run.
+		 * @param {DiagramTable} table
+		 * @returns {{text:string,kind:'last'|'estimate',title:string}[]}
+		 */
+		function recordPills(table) {
+			/** @type {{text:string,kind:'last'|'estimate',title:string}[]} */
+			const pills = [];
+			// The configured value as text: for referenced tables including
+			// "per record of ...", otherwise the fixed count.
+			const configured = table.records
+				? table.secondary
+					? `${table.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', table.referencedTable || '')}`
+					: table.records
+				: '';
+			if (table.lastRunRecords !== undefined) {
+				pills.push({
+					text: formatNumber(table.lastRunRecords),
+					kind: 'last',
+					title: strings.diagramRecordsLastRun
+						.replace('{0}', formatNumber(table.lastRunRecords))
+						.replace('{1}', lastRunText),
+				});
+			}
+			const estimate = estimateText(table);
+			if (estimate) {
+				let title = strings.diagramRecordsTitle;
+				if (configured && (table.secondary || table.lastRunRecords !== undefined)) {
+					title += `
+${strings.diagramRecordsConfigured.replace('{0}', configured)}`;
+				}
+				pills.push({ text: estimate, kind: 'estimate', title });
+			}
+			return pills;
+		}
+
+		/**
+		 * Total width of a box's counters including the gap between them.
+		 * @param {DiagramTable} table
+		 */
+		function pillsWidth(table) {
+			const pills = recordPills(table);
+			return (
+				pills.reduce((sum, pill) => sum + measure(pill.text, fonts.pill) + 16, 0) +
+				Math.max(0, pills.length - 1) * 4
+			);
+		}
+
 		// Time of the last run, formatted in the webview language — for the
 		// tooltips of counters showing real counts.
-		const lastRunText = diagram.lastRunAt
-			? new Intl.DateTimeFormat(document.documentElement.lang === 'de' ? 'de-DE' : 'en-US', {
-					dateStyle: 'short',
-					timeStyle: 'short',
-				}).format(new Date(diagram.lastRunAt))
-			: '';
+		const lastRunText = formatDateTime(diagram.lastRunAt);
 
 		// --- Derive the box width from the contents (uniform for all boxes) ---
 		let needed = MIN_BOX_W;
 		for (const table of diagram.tables) {
-			const pillW = recordsText(table) ? measure(recordsText(table), fonts.pill) + 16 : 0;
+			const pillW = pillsWidth(table);
 			needed = Math.max(needed, 12 + measure(table.name, fonts.name) + 8 + pillW + 12);
 			if (table.schema) {
 				needed = Math.max(needed, 12 + measure(table.schema.toUpperCase(), fonts.schema) + table.schema.length * 0.6 + 8 + pillW + 12);
@@ -627,8 +672,8 @@
 			}
 			group.appendChild(svgEl('rect', { class: `er-stripe er-accent-${accent}`, y: HEAD_H - 2, width: boxW, height: 2 }));
 
-			const pillText = recordsText(table);
-			const pillW = pillText ? measure(pillText, fonts.pill) + 16 : 0;
+			const pills = recordPills(table);
+			const pillW = pillsWidth(table);
 
 			if (table.schema) {
 				const schema = svgEl('text', { class: `er-schema er-accent-text-${accent}`, x: 12, y: 18 });
@@ -639,49 +684,32 @@
 			name.textContent = truncate(table.name, fonts.name, boxW - 24 - pillW - (pillW ? 8 : 0));
 			group.appendChild(name);
 
-			if (pillText) {
+			// Right-aligned, in reading order: last run first, next run last.
+			let pillX = boxW - 12 - pillW;
+			for (const pill of pills) {
+				const width = measure(pill.text, fonts.pill) + 16;
 				const pillGroup = svgEl('g', { class: 'er-pill-group' });
-				// The configured value as text — for referenced tables including
-				// "per record of …", otherwise the fixed count.
-				const configured = table.records
-					? table.secondary
-						? `${table.records} ${strings.outputFilesPerRecordSuffix.replace('{0}', table.referencedTable || '')}`
-						: table.records
-					: '';
-				let pillTitle;
-				if (table.lastRunRecords !== undefined) {
-					pillTitle = strings.diagramRecordsLastRun
-						.replace('{0}', formatNumber(table.lastRunRecords))
-						.replace('{1}', lastRunText);
-					if (configured) {
-						pillTitle += `\n${strings.diagramRecordsConfigured.replace('{0}', configured)}`;
-					}
-				} else {
-					pillTitle = strings.diagramRecordsTitle;
-					if (table.secondary && configured) {
-						pillTitle += `\n${configured}`;
-					}
-				}
-				appendTitle(pillGroup, pillTitle);
+				appendTitle(pillGroup, pill.title);
 				pillGroup.appendChild(
 					svgEl('rect', {
-						class: 'er-pill',
-						x: boxW - 12 - pillW,
+						class: pill.kind === 'last' ? 'er-pill er-pill-last' : 'er-pill',
+						x: pillX,
 						y: (HEAD_H - PILL_H) / 2,
-						width: pillW,
+						width,
 						height: PILL_H,
 						rx: PILL_H / 2,
 					}),
 				);
 				const pillLabel = svgEl('text', {
-					class: 'er-pill-text',
-					x: boxW - 12 - pillW / 2,
+					class: pill.kind === 'last' ? 'er-pill-text er-pill-text-last' : 'er-pill-text',
+					x: pillX + width / 2,
 					y: HEAD_H / 2 + 4,
 					'text-anchor': 'middle',
 				});
-				pillLabel.textContent = pillText;
+				pillLabel.textContent = pill.text;
 				pillGroup.appendChild(pillLabel);
 				group.appendChild(pillGroup);
+				pillX += width + 4;
 			}
 
 			table.columns.forEach((column, index) => {

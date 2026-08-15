@@ -29,6 +29,7 @@
 		renderLabeledMarkdownField,
 		renderErrorState,
 		updateFieldError,
+		renderAutoSizeColumnsButton,
 		buildColGroup,
 		attachColumnResizeHandle,
 		fixColumnWidths,
@@ -268,6 +269,16 @@
 		);
 		normalizeButton.disabled = true;
 		toolbar.appendChild(normalizeButton);
+		toolbar.appendChild(
+			renderAutoSizeColumnsButton({
+				label: strings.autoSizeColumnsLabel,
+				widths: columnWidths,
+				onReset: (widths) => {
+					vscode.postMessage({ type: 'columnWidths', columnWidths: widths });
+					render();
+				},
+			}),
+		);
 		section.appendChild(toolbar);
 
 		const wrap = el('div', { className: 'columns-table-wrap' });

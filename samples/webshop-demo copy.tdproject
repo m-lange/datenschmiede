@@ -1,0 +1,56 @@
+# Datenschmiede Testdatenprojekt
+name = "Webshop Demo"
+description = """
+**Durchgängiges Beispielprojekt** über alle Funktionen der Extension: ein
+kleiner Webshop mit fünf Tabellen in zwei Namensräumen (`shop.core` und
+`shop.sales`), drei Nachschlagelisten und sieben benutzerdefinierten
+Generatoren (`sequential_id`, `tracking_code`, `related_sum`,
+`value_category`, `parent_value`, `iban`, `lei`).
+
+**Datenmodell** (Pfeile = Fremdschlüssel):
+
+- `shop.core.customers` *(primär, 25.000 Datensätze)*
+- `shop.core.products` *(primär, 80.000 Datensätze)*
+- `shop.sales.orders` → customers *(1..5 je Kunde)*
+- `shop.sales.order_items` → orders *(1..4 je Bestellung)*, → products
+- `shop.sales.shipments` → orders *(genau 1 je Bestellung)*
+
+**Was sich hier ausprobieren lässt:**
+
+- der **Run-Knopf** (Editor-Titelleiste oder unten im Übersicht-Tab)
+  generiert alle Dateien in den konfigurierten **Ausgabeordner**
+  `output/webshop_{date}` — mit Fortschrittsanzeige, abbrechbar
+- die Übersicht **Generierte Dateien** zeigt vorab Dateinamen (mit
+  Variablen-Tags) und die **berechneten** Datensatzmengen (z. B.
+  `25000..125000` für die Bestellungen)
+- im Tabellen-Tab lassen sich Tabellen (ab)wählen — automatisch über
+  FK-Ketten und Generator-Referenzen mitgenommene bleiben gesperrt
+- die **Vorschau** im Table Editor (20 Datensätze) funktioniert für jede
+  Tabelle auch ohne Projekt
+
+Benötigte Python-Pakete: `pandas`, `numpy`, `faker` — fehlen sie, bietet
+der Lauf die Installation per Klick an.
+"""
+python_path = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+python_id = "C:\\Users\\mar.lange\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+output_path = "output/webshop_{date}"
+
+[[tables]]
+path = "tables/customers.td"
+records = 100
+
+[[tables]]
+path = "tables/order_items.td"
+records = "1..10"
+
+[[tables]]
+path = "tables/orders.td"
+records = "1..50"
+
+[[tables]]
+path = "tables/products.td"
+records = 500
+
+[[tables]]
+path = "tables/shipments.td"
+records = "1..3"

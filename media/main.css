@@ -252,6 +252,19 @@ select.has-chevron:disabled ~ .select-chevron {
 	line-height: 1.4;
 }
 
+/* Die grosse Beschreibung im Uebersicht-Tab liest sich als Text, nicht als
+   Eingabefeld: kein Feldhintergrund, kein Rahmen. Beim Hover bleibt die
+   Feldoptik erhalten, damit erkennbar ist, dass man hineinklicken kann.
+   Beschreibungen in Tabellenzellen (.cell-input) sind nicht betroffen. */
+.md-preview:not(.cell-input) {
+	background-color: transparent;
+	border-color: transparent;
+}
+
+.md-preview:not(.cell-input):hover {
+	background-color: var(--vscode-input-background);
+}
+
 .md-preview:hover {
 	border-color: var(--vscode-input-border, var(--vscode-widget-border, var(--vscode-panel-border)));
 }
@@ -1613,6 +1626,14 @@ body.vscode-high-contrast-light .chart-bar {
 	flex: 0 0 auto;
 }
 
+/* Ein einfaches Textfeld in dieser Zeile (Requirements-Datei) verhaelt sich wie
+   das Tag-Feld: Es teilt sich die Zeile mit dem Auswahlknopf, statt sie mit
+   width:100% ganz zu belegen und den Knopf umzubrechen. */
+.filename-row .text-input {
+	flex: 1 1 260px;
+	width: auto;
+}
+
 /* Feste Dateiendung hinter dem Tag-Feld (ergibt sich aus dem Dateityp). */
 .filename-ext {
 	flex: 0 0 auto;
@@ -1848,6 +1869,16 @@ body.vscode-high-contrast-light .chart-bar {
 }
 
 /* ---------- Projekt-Editor: Ausgabedateien-Übersicht (Übersicht-Tab) ---------- */
+
+/* Die beiden Zaehler-Spalten (zu erzeugende Datensaetze, letzter Lauf) sind so
+   breit wie ihr Inhalt und brechen nicht um - dadurch stehen sie direkt
+   nebeneinander und der uebrige Platz faellt an die Spacer-Spalte, statt die
+   Zahlen ueber die halbe Tabelle zu verteilen. */
+.output-files-table .col-records-wide {
+	min-width: 0;
+	width: 1%;
+	white-space: nowrap;
+}
 
 .output-files-table .path-cell {
 	color: var(--vscode-descriptionForeground);
@@ -2267,6 +2298,18 @@ body.vscode-high-contrast .er-table {
 	font-size: 11px;
 	font-weight: 600;
 	fill: var(--vscode-badge-foreground);
+}
+
+/* Zaehler des letzten Laufs: steht links neben dem Zaehler des naechsten und
+   tritt optisch zurueck, damit die zu erzeugende Menge die auffaellige bleibt. */
+.er-pill-last {
+	fill: transparent;
+	stroke: var(--vscode-badge-background);
+	stroke-width: 1;
+}
+
+.er-pill-text-last {
+	fill: var(--vscode-descriptionForeground);
 }
 
 /* --- Spaltenzeilen --- */

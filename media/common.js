@@ -937,6 +937,29 @@
 		return { element: field, insertVariable };
 	}
 
+	/**
+	 * Formats a point in time as `yyyy-MM-dd HH:mm:ss` in local time — the one
+	 * date format the UI uses, in every editor and every tooltip, so a
+	 * timestamp reads the same everywhere and never depends on the display
+	 * language.
+	 * @param {number|string|Date|null|undefined} value epoch ms, ISO string or Date
+	 * @returns {string} the formatted time, or '' when there is nothing to format
+	 */
+	function formatDateTime(value) {
+		if (value === null || value === undefined || value === '') {
+			return '';
+		}
+		const date = value instanceof Date ? value : new Date(value);
+		if (Number.isNaN(date.getTime())) {
+			return '';
+		}
+		const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
+		return (
+			`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+			`${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+		);
+	}
+
 	window.DatenschmiedeCommon = {
 		el,
 		bindText,
@@ -951,6 +974,7 @@
 		isEditing,
 		createDeferredRenderer,
 		updateFieldError,
+		formatDateTime,
 		renderSearchField,
 		renderAutoSizeColumnsButton,
 		wrapSelectWithChevron,

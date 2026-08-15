@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { LookupEntry } from '../lookup/repository';
 import { Project, ProjectTable } from './model';
 import { buildProjectDiagram } from './diagram';
-import { getRunResult, onDidSaveRunResult } from './runResults';
+import { getRunResult, onDidSaveRunResult, RunResult } from './runResults';
 import { parseProjectText, serializeProject } from './toml';
 import { ParseError } from '../tomlUtil';
 import { fullDocumentRange, getNonce } from '../util';
@@ -134,6 +135,8 @@ export interface OutputFileRow {
 	 */
 	estimatedMin?: number;
 	estimatedMax?: number;
+	/** Real record count of the last generator run, if this table was part of it. */
+	lastRunRecords?: number;
 	/** `false` if the `.td` file is no longer readable. */
 	found: boolean;
 	/** `true` for a referenced (secondary) table — `records` then applies per record of `referencedTable`. */
@@ -142,7 +145,20 @@ export interface OutputFileRow {
 }
 
 /** Builds the overview tab's output files list (one row per selected table). */
-function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRow[] {
+function buildOutputFiles(
+	project: Project,
+	entries: TableEntry[],
+	lookups: LookupEntry[] = [],
+	lastRun?: RunResult | null,
+): OutputFileRow[] {
+	// Row count per referenceable list name — a leading lookup list decides the
+	// record count of the table it leads (see Table.drivingLookup).
+	const lookupRows = new Map<string, number>();
+	for (const lookup of lookups) {
+		if (lookup.lookup) {
+			lookupRows.set(lookup.name, lookup.lookup.rows.length);
+		}
+	}
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
 
 	// Selected tables keyed by logical identity, so a referenced table's FK
@@ -178,6 +194,14 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 		const selected = byLabel.get(label);
 		if (!selected || visiting.has(label)) {
 			return null;
+		}
+		// A leading lookup list wins over everything else: the table gets exactly
+		// one record per list row, so neither the configured count nor an
+		// outgoing FK has any say (see run_table in python/generate.py).
+		const driving = selected.entry.table?.drivingLookup.trim();
+		if (driving) {
+			const rows = lookupRows.get(driving);
+			return rows === undefined ? null : { min: rows, max: rows };
 		}
 		const raw = (selected.records ?? '').trim();
 		const parentLabel = outgoingLabel(selected.entry);
@@ -224,6 +248,7 @@ function buildOutputFiles(project: Project, entries: TableEntry[]): OutputFileRo
 			records: table.records,
 			estimatedMin: estimated?.min,
 			estimatedMax: estimated?.max,
+			...(lastRun?.counts[label] !== undefined ? { lastRunRecords: lastRun.counts[label] } : {}),
 			found: true,
 			secondary: !!referencedTable,
 			referencedTable,
@@ -257,6 +282,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	private cachedEntries: TableEntry[] = [];
 	/** Most recently determined generator list (built-in + `.tdgen` files), used by computeRequiredClosure. */
 	private cachedGenerators: GeneratorBase[] = [];
+	private cachedLookups: LookupEntry[] = [];
 	private readonly indexSub: vscode.Disposable;
 	private readonly runResultSub: vscode.Disposable;
 	/**
@@ -347,13 +373,9 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			const state = this.readState(document);
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
-				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
-				const diagram = buildProjectDiagram(
-					state.project,
-					this.cachedEntries,
-					outputFiles,
-					getRunResult(this.context, document.uri),
-				);
+				const lastRun = getRunResult(this.context, document.uri);
+				const outputFiles = buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun);
+				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles, lastRun);
 				const pythonStatus = state.project.python ? await this.resolvePythonStatus(state.project.python, false) : null;
 				void webviewPanel.webview.postMessage({
 					type: 'update',
@@ -361,6 +383,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					pickerTree,
 					outputFiles,
 					diagram,
+					lastRunAt: lastRun?.finishedAt,
 					pythonStatus,
 				});
 			} else {
@@ -394,11 +417,11 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 					const state = this.readState(document);
 					const pickerTree =
 						'project' in state ? buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators) : [];
-					const outputFiles = 'project' in state ? buildOutputFiles(state.project, this.cachedEntries) : [];
+					const lastRun = getRunResult(this.context, document.uri);
+					const outputFiles =
+						'project' in state ? buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun) : [];
 					const diagram =
-						'project' in state
-							? buildProjectDiagram(state.project, this.cachedEntries, outputFiles, getRunResult(this.context, document.uri))
-							: null;
+						'project' in state ? buildProjectDiagram(state.project, this.cachedEntries, outputFiles, lastRun) : null;
 					const pythonStatus =
 						'project' in state && state.project.python ? await this.resolvePythonStatus(state.project.python, true) : null;
 					const columnWidths = this.context.globalState.get<Record<string, number>>(COLUMN_WIDTHS_STATE_KEY, {});
@@ -408,6 +431,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						pickerTree,
 						outputFiles,
 						diagram,
+						lastRunAt: lastRun?.finishedAt,
 						pythonStatus,
 						icons,
 						columnWidths,
@@ -719,6 +743,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		const snapshot = await this.index.snapshot();
 		this.cachedEntries = snapshot.tables;
 		this.cachedGenerators = toGeneratorList(snapshot.generators);
+		this.cachedLookups = snapshot.lookups;
 		return this.cachedEntries;
 	}
 
@@ -735,14 +760,16 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			const state = this.readState(document);
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
-				const outputFiles = buildOutputFiles(state.project, this.cachedEntries);
-				const diagram = buildProjectDiagram(
-					state.project,
-					this.cachedEntries,
+				const lastRun = getRunResult(this.context, document.uri);
+				const outputFiles = buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun);
+				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles, lastRun);
+				void panel.webview.postMessage({
+					type: 'pickerTree',
+					pickerTree,
 					outputFiles,
-					getRunResult(this.context, document.uri),
-				);
-				void panel.webview.postMessage({ type: 'pickerTree', pickerTree, outputFiles, diagram });
+					diagram,
+					lastRunAt: lastRun?.finishedAt,
+				});
 			}
 		}
 	}
