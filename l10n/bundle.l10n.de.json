@@ -103,7 +103,6 @@
 	"Fixed-length field \"{0}\" uses column \"{1}\", which does not exist in this table. It may have been renamed or removed.": "Feld „{0}“ mit fester Länge verwendet die Spalte „{1}“, die es in dieser Tabelle nicht gibt. Sie wurde möglicherweise umbenannt oder entfernt.",
 	"Table \"{0}\": leading lookup list \"{1}\" was not found.": "Tabelle „{0}“: führende Nachschlageliste „{1}“ wurde nicht gefunden.",
 	"This table is led by lookup list \"{0}\", which was not found. It may have been deleted or renamed.": "Diese Tabelle wird von der Nachschlageliste „{0}“ geführt, die nicht gefunden wurde. Sie wurde möglicherweise gelöscht oder umbenannt.",
-	"Open a table definition (.td) first.": "Zuerst eine Tabellendefinition (.td) öffnen.",
 	"This table is temporary — it generates records but writes no file.": "Diese Tabelle ist temporär — sie erzeugt Datensätze, schreibt aber keine Datei.",
 	"\"{0}\" writes a binary file, which cannot be previewed as text.": "„{0}“ schreibt eine Binärdatei, die sich nicht als Text anzeigen lässt.",
 	"Select Requirements File": "Requirements-Datei auswählen",

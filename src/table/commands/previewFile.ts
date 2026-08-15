@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { parseTableText } from '../toml';
 import { runTablePreview } from '../preview';
+import { tableLabel } from '../repository';
 import { isCustomFormat } from '../../filegen/model';
+import { WorkspaceIndex } from '../../workspaceIndex';
 
 /**
  * "Preview File" command (play button in the table editor's title bar, mirroring
@@ -11,11 +13,20 @@ import { isCustomFormat } from '../../filegen/model';
  * resulting file in a new **untitled** editor — the real thing the run would
  * write, for every file type, so it can be read, searched and copied with the
  * normal editor instead of a dialog. Nothing is written to disk.
+ *
+ * Which table is meant is resolved in three steps, so the one command covers
+ * both the button and the Command Palette: an explicitly passed resource (the
+ * title bar hands one over), otherwise the table editor in front, otherwise the
+ * user is asked — with a single `.td` in the workspace that question is skipped
+ * too.
  */
-export async function previewFileCommand(context: vscode.ExtensionContext, resource?: vscode.Uri): Promise<void> {
-	const uri = resource ?? activeTableUri();
+export async function previewFileCommand(
+	context: vscode.ExtensionContext,
+	index: WorkspaceIndex,
+	resource?: vscode.Uri,
+): Promise<void> {
+	const uri = resource ?? activeTableUri() ?? (await pickTable(index));
 	if (!uri) {
-		void vscode.window.showErrorMessage(vscode.l10n.t('Open a table definition (.td) first.'));
 		return;
 	}
 
@@ -57,6 +68,51 @@ export async function previewFileCommand(context: vscode.ExtensionContext, resou
 		language: previewLanguage(format),
 	});
 	await vscode.window.showTextDocument(preview, { preview: false });
+}
+
+/** One entry of the table quick pick — carries the `.td` file it stands for. */
+interface TablePickItem extends vscode.QuickPickItem {
+	uri: vscode.Uri;
+}
+
+/**
+ * Asks which `.td` of the workspace to preview — used when the command is
+ * invoked without a table in front (typically from the Command Palette).
+ * Returns `undefined` when there is nothing to pick or the user cancelled.
+ */
+async function pickTable(index: WorkspaceIndex): Promise<vscode.Uri | undefined> {
+	// Read from the shared workspace index rather than scanning again — it
+	// already holds every .td including its parsed model.
+	const tables = (await index.snapshot()).tables;
+	if (tables.length === 0) {
+		void vscode.window.showErrorMessage(
+			vscode.l10n.t('No table definition (.td) was found in this workspace.'),
+		);
+		return undefined;
+	}
+	if (tables.length === 1) {
+		return tables[0].uri;
+	}
+
+	const items: TablePickItem[] = tables.map((entry) => ({
+		// A broken table still needs to be pickable — its path is the fallback
+		// label, and previewing it reports the real problem.
+		label: entry.table ? tableLabel(entry.table, entry.relativePath) : entry.relativePath,
+		description: entry.relativePath,
+		detail: entry.error
+			? vscode.l10n.t('This .td file contains invalid TOML.')
+			: // The file type decides what the preview produces, so it is worth
+				// seeing before picking.
+				vscode.l10n.t('File type: {0}', (entry.table?.output.format || 'csv').toUpperCase()),
+		uri: entry.uri,
+	}));
+
+	const picked = await vscode.window.showQuickPick(items, {
+		title: vscode.l10n.t('Preview File'),
+		placeHolder: vscode.l10n.t('Select the table to preview'),
+		matchOnDescription: true,
+	});
+	return picked?.uri;
 }
 
 /** URI of the `.td` file in the active table editor, or `undefined`. */

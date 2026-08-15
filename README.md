@@ -138,11 +138,11 @@ Lauf und beide mit 20 Datensätzen inklusive aller referenzierten Tabellen:
   Datei; geschrieben wird nichts. Excel entfällt hier, da eine Binärdatei
   sich nicht als Text anzeigen lässt
 
-Ohne offenen Table Editor führt der Befehl **„Datenschmiede: Datei-Vorschau
-(Tabelle auswählen)…“** zur selben Vorschau — er fragt zuerst, welche `.td`
-des Workspace er erzeugen soll (bei genau einer Tabelle entfällt die Frage)
-und zeigt je Eintrag den konfigurierten Dateityp. Das Gegenstück zu
-**„Testdaten generieren (Projekt auswählen)…“** bei den Projekten.
+Derselbe Befehl funktioniert auch aus der Befehlspalette heraus, ohne dass
+eine Tabelle offen ist: Er nimmt dann den Table Editor im Vordergrund — und
+gibt es keinen, fragt er, welche `.td` des Workspace gemeint ist (bei genau
+einer Tabelle entfällt die Frage) und zeigt je Eintrag den konfigurierten
+Dateityp.
 
 Beide Vorschauen brauchen kein Projekt: sie nutzen die in VS Code aktive
 Python-Umgebung (3.10+).
