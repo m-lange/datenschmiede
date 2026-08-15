@@ -1313,12 +1313,26 @@ class Runner:
         is the value grid.
         """
         fmt = (table["output"].get("format") or "csv").strip().lower()
+        if fmt == "temp":
+            # Nothing is written for a temporary table, so there is no file to show.
+            return None
         if fmt == "json":
             return self.render_json(table, self.format_dataframe(table, df, table["output"].get("json", {})))
         if fmt == "xml":
             return self.render_xml(table, self.format_dataframe(table, df, table["output"].get("xml", {})))
         if fmt == "fixed":
             return self.render_fixed(table, self.format_dataframe(table, df, table["output"].get("fixed", {})))
+        if fmt == "csv":
+            csv_cfg = table["output"].get("csv", {})
+            out = self.visible_frame(table, self.format_dataframe(table, df, csv_cfg))
+            return out.to_csv(
+                index=False,
+                sep=csv_cfg.get("delimiter") or ";",
+                decimal=csv_cfg.get("decimal") or ".",
+                header=csv_cfg.get("include_header", True),
+                quoting=csv_module.QUOTE_ALL if csv_cfg.get("quote_all", True) else csv_module.QUOTE_MINIMAL,
+                lineterminator="\n",
+            )
         if fmt.startswith("custom:"):
             # Run the custom writer over the preview records so its output can be
             # checked without writing anything.

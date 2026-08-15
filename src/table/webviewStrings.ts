@@ -89,11 +89,6 @@ export interface WebviewStrings {
 	/** Title of the preview dialog; `{0}` = number of records. */
 	previewDialogTitle: string;
 	previewCloseLabel: string;
-	/** Title of the JSON/XML document preview; `{0}` = file type, `{1}` = number of records. */
-	previewDocumentDialogTitle: string;
-	previewDocumentButton: string;
-	previewCopyLabel: string;
-	previewCopiedLabel: string;
 
 	outputSectionTitle: string;
 	outputFileNameLabel: string;
@@ -313,10 +308,6 @@ const en: WebviewStrings = {
 	previewButton: 'Preview',
 	previewDialogTitle: 'Preview — {0} records',
 	previewCloseLabel: 'Close',
-	previewDocumentDialogTitle: '{0} preview — {1} records',
-	previewDocumentButton: 'Preview document',
-	previewCopyLabel: 'Copy',
-	previewCopiedLabel: 'Copied',
 
 	outputSectionTitle: 'Output',
 	outputFileNameLabel: 'File name',
@@ -530,10 +521,6 @@ const de: WebviewStrings = {
 	previewButton: 'Vorschau',
 	previewDialogTitle: 'Vorschau — {0} Datensätze',
 	previewCloseLabel: 'Schließen',
-	previewDocumentDialogTitle: '{0}-Vorschau — {1} Datensätze',
-	previewDocumentButton: 'Dokument-Vorschau',
-	previewCopyLabel: 'Kopieren',
-	previewCopiedLabel: 'Kopiert',
 
 	outputSectionTitle: 'Ausgabe',
 	outputFileNameLabel: 'Dateiname',

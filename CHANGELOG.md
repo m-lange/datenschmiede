@@ -2,6 +2,17 @@
 
 ## 0.9.0
 
+- **Datei-Vorschau als echter Editor**: die bisherigen
+  „Dokument-Vorschau“-Knöpfe in den Tabs sind einem **Play-Knopf in der
+  Editor-Titelleiste** gewichen — an derselben Stelle, an der der
+  Projekt-Editor seinen Run-Knopf hat. Er erzeugt 20 Datensätze und öffnet
+  die fertige Datei als **neuen, ungespeicherten Editor** statt in einem
+  Dialog, sodass sie sich lesen, durchsuchen und kopieren lässt wie jede
+  andere Datei. Die Vorschau gilt jetzt für **jeden** Dateityp, auch CSV;
+  Excel entfällt, da eine Binärdatei sich nicht als Text anzeigen lässt, und
+  eine temporäre Tabelle schreibt ohnehin keine Datei. Die Wert-Vorschau
+  (Tabelle im Dialog) bleibt im Spalten-Tab.
+
 - **Eigene Dateigeneratoren (`.filegen`)**: eine neue Dateiart, die die
   Ausgabedatei komplett selbst schreibt — für Formate, die die eingebauten
   Schreiber nicht abdecken (ein CSV hinter einem Block Kopfzeilen, ein

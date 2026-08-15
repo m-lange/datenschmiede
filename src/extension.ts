@@ -6,6 +6,7 @@ import { GeneratorNotebook } from './generator/notebook';
 import { FileGeneratorNotebook } from './filegen/notebook';
 import { WorkspaceDiagnostics } from './diagnostics';
 import { newTableCommand } from './table/commands/newTable';
+import { previewFileCommand } from './table/commands/previewFile';
 import { newProjectCommand } from './project/commands/newProject';
 import { newLookupCommand } from './lookup/commands/newLookup';
 import { newGeneratorCommand } from './generator/commands/newGenerator';
@@ -52,6 +53,13 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('datenschmiede.runGeneration', (resource?: vscode.Uri) =>
 			runGenerationCommand(context, resource),
+		),
+	);
+	// Play button in the table editor's title bar — mirrors the project
+	// editor's run button (see contributes.menus in package.json).
+	context.subscriptions.push(
+		vscode.commands.registerCommand('datenschmiede.previewFile', (resource?: vscode.Uri) =>
+			previewFileCommand(context, resource),
 		),
 	);
 	// Command Palette variant: works without an open project editor by asking

@@ -115,11 +115,21 @@ Ellipsis), **PK**/**FK**-Checkboxen, **Referenzierte Tabelle** und
 verschieben und entfernen; Spaltenbreiten passen sich dem Inhalt an und
 sind per Ziehgriff einstellbar (geräteweit gemerkt).
 
-Der **Vorschau-Knopf** in der Toolbar erzeugt 20 Datensätze mit der
-aktuellen Konfiguration — inklusive aller referenzierten Tabellen — über
-denselben Python-Läufer wie der echte Lauf und zeigt sie als Tabelle im
-Dialog. Die Vorschau braucht kein Projekt: sie nutzt die in VS Code aktive
-Python-Umgebung (3.10+), geschrieben wird nichts.
+Es gibt zwei Vorschauen, beide über denselben Python-Läufer wie der echte
+Lauf und beide mit 20 Datensätzen inklusive aller referenzierten Tabellen:
+
+- der **Vorschau-Knopf** in der Toolbar des Spalten-Tabs zeigt die **Werte**
+  als Tabelle im Dialog
+- der **Play-Knopf in der Editor-Titelleiste** (Befehl **„Datenschmiede:
+  Datei-Vorschau“**, an derselben Stelle wie der Run-Knopf des
+  Projekt-Editors) erzeugt die **fertige Datei** — für *jeden* Dateityp,
+  auch CSV — und öffnet sie als **neuen, ungespeicherten Editor**. Damit
+  lässt sich das Ergebnis lesen, durchsuchen und kopieren wie jede andere
+  Datei; geschrieben wird nichts. Excel entfällt hier, da eine Binärdatei
+  sich nicht als Text anzeigen lässt
+
+Beide Vorschauen brauchen kein Projekt: sie nutzen die in VS Code aktive
+Python-Umgebung (3.10+).
 
 Die Anzahl zu erzeugender Datensätze gehört bewusst **nicht** zur
 Tabellendefinition, sondern wird je Testdatenprojekt festgelegt — außer bei
@@ -190,10 +200,9 @@ Objekte und Arrays sind reiner Aufbau und lassen diese beiden Spalten leer.
 Die Knöpfe **„Aus Spalten erzeugen“** und **„Struktur leeren“** erzeugen
 bzw. verwerfen eine flache Struktur mit einem Blatt je Spalte. Ohne
 festgelegte Struktur wird genau diese flache Form geschrieben — ein
-Wechsel auf JSON/XML liefert also sofort brauchbare Ausgabe. Der Knopf
-**„Dokument-Vorschau“** erzeugt 20 Datensätze und zeigt das fertige JSON-
-bzw. XML-Dokument genau so, wie der Lauf es schreiben würde — mitsamt
-Kopier-Knopf.
+Wechsel auf JSON/XML liefert also sofort brauchbare Ausgabe. Die **Datei-Vorschau** (Play-Knopf in der
+Titelleiste) erzeugt 20 Datensätze und öffnet das fertige JSON- bzw.
+XML-Dokument als ungespeicherten Editor.
 
 Der Dateityp entscheidet, welche Struktur gilt: JSON und XML halten ihre
 eigene, sodass ein Wechsel zwischen beiden nichts überschreibt.
@@ -218,9 +227,9 @@ ihr Feld passen, werden standardmäßig abgeschnitten (abschaltbar) —
 andernfalls verschöbe ein zu langer Wert alle folgenden Felder, was ein
 Fixed-Length-Leser gerade nicht verkraftet; bei rechtsbündigen Feldern
 bleiben dabei die *hinteren* Zeichen stehen, damit einer Zahl nicht die
-niedrigen Stellen fehlen. Auch hier zeigt **„Dokument-Vorschau“** 20 Sätze
-genau so, wie der Lauf sie schreiben würde — die beste Kontrolle dafür, ob
-die Spalten wirklich untereinander stehen.
+niedrigen Stellen fehlen. Auch hier zeigt die **Datei-Vorschau** (Play-Knopf in
+der Titelleiste) 20 Sätze genau so, wie der Lauf sie schreiben würde — die
+beste Kontrolle dafür, ob die Spalten wirklich untereinander stehen.
 
 ### Eigene Dateigeneratoren (`.filegen`)
 
@@ -252,9 +261,10 @@ ein Generator, der die Datensätze nur *umhüllt*, sie nicht nachbauen muss:
 `ctx.records`, `ctx.file_name`, `ctx.now`, `ctx.columns` und `ctx.log(…)`.
 
 In der Ausgabe-Karte der Tabelle erscheinen alle Dateigeneratoren des
-Workspace unter **„Eigene Dateigeneratoren“**; der Knopf
-**„Dokument-Vorschau“** dort ruft den Generator mit 20 Vorschau-Datensätzen
-auf und zeigt die entstehende Datei, ohne etwas zu schreiben.
+Workspace unter **„Eigene Dateigeneratoren“**; die **Datei-Vorschau**
+(Play-Knopf in der Titelleiste) ruft den Generator mit 20
+Vorschau-Datensätzen auf und öffnet die entstehende Datei, ohne etwas zu
+schreiben.
 
 ### Validierung (Problems-Ansicht)
 

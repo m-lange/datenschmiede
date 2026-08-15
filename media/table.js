@@ -660,9 +660,6 @@
 			section.appendChild(el('p', { className: 'hint', text: generator.description }));
 		}
 		section.appendChild(el('p', { className: 'hint', text: strings.outputCustomHint }));
-		const actions = el('div', { className: 'filename-actions' });
-		actions.appendChild(renderDocumentPreviewButton());
-		section.appendChild(actions);
 		section.appendChild(renderCsvSettings());
 		return section;
 	}
@@ -1140,7 +1137,6 @@
 					render();
 				}),
 			);
-			toolbar.appendChild(renderDocumentPreviewButton());
 		}
 		section.appendChild(toolbar);
 		section.appendChild(
@@ -1528,7 +1524,6 @@
 					render();
 				}),
 			);
-			toolbar.appendChild(renderDocumentPreviewButton());
 		}
 		section.appendChild(toolbar);
 		section.appendChild(el('p', { className: 'hint', text: strings.fixedLayoutHint }));
@@ -2721,34 +2716,23 @@
 	/** @type {HTMLButtonElement | null} Preview button of the current render, used to toggle the spinner. */
 	let previewButton = null;
 
-	/** Value grid preview (columns tab). */
-	function renderPreviewButton() {
-		return buildPreviewButton(strings.previewButton, 'grid');
-	}
-
-	/** Document preview (mapping tab): shows the rendered JSON/XML instead of a value grid. */
-	function renderDocumentPreviewButton() {
-		return buildPreviewButton(strings.previewDocumentButton, 'document');
-	}
-
 	/**
-	 * Both preview buttons run the same generation — only the dialog showing
-	 * the result differs (see the `mode` round trip in table/editorProvider.ts).
-	 * @param {string} label
-	 * @param {'grid'|'document'} mode
+	 * Value grid preview (columns tab): 20 generated records as a table. The
+	 * FILE preview lives in the editor's title bar instead and opens the result
+	 * as a real editor (see table/commands/previewFile.ts).
 	 */
-	function buildPreviewButton(label, mode) {
+	function renderPreviewButton() {
 		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
 		btn.appendChild(el('i', { className: 'codicon codicon-play' }));
-		btn.appendChild(document.createTextNode(label));
+		btn.appendChild(document.createTextNode(strings.previewButton));
 		btn.addEventListener('click', () => {
 			if (previewRunning) {
 				return;
 			}
 			previewRunning = true;
 			refreshPreviewButton();
-			vscode.postMessage({ type: 'preview', mode });
+			vscode.postMessage({ type: 'preview', mode: 'grid' });
 		});
 		previewButton = btn;
 		refreshPreviewButton();
@@ -2800,46 +2784,6 @@
 		table.appendChild(tbody);
 		wrap.appendChild(table);
 		body.appendChild(wrap);
-	}
-
-	/**
-	 * Shows the JSON/XML document preview: the generated records rendered
-	 * exactly as the run would write them (see render_json/render_xml in
-	 * python/generate.py), so the target structure and its mapping can be
-	 * checked without a full run.
-	 * @param {string} text
-	 * @param {number} recordCount
-	 */
-	function showDocumentPreviewDialog(text, recordCount) {
-		const { dialog, body, close } = openPreviewShell(
-			'file-code',
-			strings.previewDocumentDialogTitle
-				.replace('{0}', currentFormat().toUpperCase())
-				.replace('{1}', String(recordCount)),
-		);
-
-		const pre = el('pre', { className: 'document-preview', text });
-		body.appendChild(pre);
-
-		// The webview has no VS Code editor to open the result in — a copy
-		// button is the practical way to get it out (e.g. into a scratch file).
-		const footer = el('div', { className: 'param-dialog-footer' });
-		const copyBtn = el('button', { className: 'toolbar-btn', text: strings.previewCopyLabel });
-		copyBtn.type = 'button';
-		copyBtn.addEventListener('click', () => {
-			void navigator.clipboard.writeText(text).then(() => {
-				copyBtn.textContent = strings.previewCopiedLabel;
-				window.setTimeout(() => {
-					copyBtn.textContent = strings.previewCopyLabel;
-				}, 1500);
-			});
-		});
-		const closeBtn = el('button', { className: 'button-primary', text: strings.previewCloseLabel });
-		closeBtn.type = 'button';
-		closeBtn.addEventListener('click', close);
-		footer.appendChild(copyBtn);
-		footer.appendChild(closeBtn);
-		dialog.appendChild(footer);
 	}
 
 	/**
@@ -3079,11 +3023,7 @@
 				previewRunning = false;
 				refreshPreviewButton();
 				const rows = Array.isArray(message.rows) ? message.rows : [];
-				if (message.mode === 'document' && typeof message.text === 'string') {
-					showDocumentPreviewDialog(message.text, rows.length);
-				} else {
-					showPreviewDialog(Array.isArray(message.columns) ? message.columns : [], rows);
-				}
+				showPreviewDialog(Array.isArray(message.columns) ? message.columns : [], rows);
 				break;
 			}
 			case 'previewDone':

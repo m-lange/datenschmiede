@@ -13,5 +13,6 @@
 	"command.newFileGenerator.title": "New File Generator…",
 	"command.runGeneration.title": "Generate Test Data",
 	"command.generateTestData.title": "Generate Test Data (Select Project)…",
+	"command.previewFile.title": "Preview File",
 	"command.selectPythonInterpreter.title": "Select Python Interpreter…"
 }
