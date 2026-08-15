@@ -39,6 +39,29 @@ function fileIcon(context: vscode.ExtensionContext, name: string): { light: vsco
 	};
 }
 
+/**
+ * Hover text of an entry: the description from the file rendered as Markdown,
+ * with the path below it. A MarkdownString rather than a plain string, so the
+ * description reads in the tooltip exactly as it does in the editors —
+ * headings, lists, `code` and emphasis included.
+ *
+ * Deliberately not trusted (`isTrusted` stays off) and without `supportHtml`:
+ * the text comes from a workspace file, so it may render but must not act.
+ */
+function tooltipFor(path: string, description?: string): string | vscode.MarkdownString {
+	const text = description?.trim();
+	if (!text) {
+		return path;
+	}
+	const tooltip = new vscode.MarkdownString();
+	tooltip.appendMarkdown(text);
+	// Horizontal rule between the description and the path, so the two do not
+	// read as one text.
+	tooltip.appendMarkdown('\n\n---\n\n');
+	tooltip.appendMarkdown(`\`${path}\``);
+	return tooltip;
+}
+
 /** The warning icon of an unreadable file — the same look in every view. */
 function invalidIcon(): vscode.ThemeIcon {
 	return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
@@ -55,6 +78,8 @@ interface FileNode {
 	valid: boolean;
 	/** Overrides the view's icon — the generator list mixes two kinds of file. */
 	icon?: string;
+	/** Markdown description from the file, shown rendered in the tooltip. */
+	description?: string;
 }
 
 /**
@@ -174,7 +199,7 @@ class FlatFileView extends IndexView<FileNode> {
 	public getTreeItem(element: FileNode): vscode.TreeItem {
 		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
 		item.resourceUri = element.uri;
-		item.tooltip = element.path;
+		item.tooltip = tooltipFor(element.path, element.description);
 		item.command = openCommand(element.uri);
 		item.contextValue = this.config.contextValue;
 		item.iconPath = element.valid ? fileIcon(this.context, element.icon ?? this.config.icon) : invalidIcon();
@@ -407,6 +432,7 @@ export function registerSidebar(context: vscode.ExtensionContext, index: Workspa
 				path: entry.relativePath,
 				valid: !!entry.file,
 				icon: 'tdgen',
+				description: entry.generator?.description ?? entry.file?.description,
 			})),
 			...snapshot.fileGenerators.map((entry) => ({
 				uri: entry.uri,
@@ -414,6 +440,7 @@ export function registerSidebar(context: vscode.ExtensionContext, index: Workspa
 				path: entry.relativePath,
 				valid: !!entry.file,
 				icon: 'filegen',
+				description: entry.file?.description,
 			})),
 		],
 	});

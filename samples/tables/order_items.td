@@ -44,7 +44,7 @@ generator = "custom:sequential_id"
 [columns.generator_params]
 prefix = "ITM-"
 start = "1"
-digits = "8"
+digits = "4"
 
 [[columns]]
 name = "order_id"
@@ -72,11 +72,10 @@ type = "integer"
 pk = false
 fk = false
 description = "Bestellmenge — **Random Int** `1 … 5`"
-generator = "random-float"
+generator = "random-int"
 [columns.generator_params]
-min = "0"
-max = "1000"
-decimals = "0"
+min = "1"
+max = "200"
 
 [[columns]]
 name = "line_note"

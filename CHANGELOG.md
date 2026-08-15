@@ -2,6 +2,10 @@
 
 ## 0.10.0
 
+- In der Seitenleiste zeigt der **Tooltip eines Generators seine Beschreibung
+  als gerendertes Markdown** — Hervorhebungen, Listen und `Code` lesen sich
+  dort wie in den Editoren, statt als Rohtext mit Sternchen. Der Pfad steht
+  darunter, abgetrennt durch eine Linie.
 - **Doppelte Tabellen werden gemeldet**: Definieren zwei `.td`-Dateien
   dasselbe `schema.name`, steht in **beiden** ein Fehler, der jeweils die
   andere Datei nennt. Verweise — Fremdschlüssel, `ctx.table(...)`, die Auswahl
