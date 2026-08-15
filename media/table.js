@@ -85,7 +85,7 @@
 	 */
 	/** @typedef {{includeHeader:boolean,truncate:boolean,lineEnding:string,dateFormat:string,datetimeFormat:string,decimal:string,encoding:string,fields:FixedField[]}} FixedOptions */
 	/** @typedef {{fileName:string,format:string,csv:CsvOptions,xlsx:XlsxOptions,json:JsonOptions,xml:XmlOptions,fixed:FixedOptions}} OutputConfig */
-	/** @typedef {{schema:string,name:string,description:string,columns:Column[],output:OutputConfig}} Table */
+	/** @typedef {{schema:string,name:string,description:string,drivingLookup:string,columns:Column[],output:OutputConfig}} Table */
 	/** @typedef {{label:string,columns:string[]}} TableOption */
 	/** @typedef {{name:string,type:string,description:string,choices?:string[],required?:boolean,placeholder?:string}} GeneratorParameter */
 	/** @typedef {{id:string,label:string,description:string,parameters:GeneratorParameter[],displayTemplate?:string,custom:boolean,fkOnly:boolean}} GeneratorOption */
@@ -95,7 +95,7 @@
 	/** @type {WebviewStrings | null} strings kommen einmalig per 'init'-Message vom Extension-Host */
 	let strings = null;
 	/** @type {Table} */
-	let state = { schema: '', name: '', description: '', columns: [], output: defaultOutput() };
+	let state = { schema: '', name: '', description: '', drivingLookup: '', columns: [], output: defaultOutput() };
 	/** @type {string | null} */
 	let parseError = null;
 	/** @type {'overview' | 'columns' | 'structure' | 'fixed'} the last two only exist for their file type */
@@ -288,6 +288,9 @@
 		if (!Array.isArray(state.columns)) {
 			state.columns = [];
 		}
+		if (typeof state.drivingLookup !== 'string') {
+			state.drivingLookup = '';
+		}
 	}
 
 	/**
@@ -460,11 +463,45 @@
 				postEdit,
 			),
 		);
+		section.appendChild(renderDrivingLookupField());
 		stack.appendChild(section);
 
 		stack.appendChild(renderOutputCard());
 
 		return stack;
+	}
+
+	/**
+	 * "Leading lookup list": the table then gets exactly one record per row of
+	 * the list — each row used once, in list order — instead of a count from the
+	 * project. Every lookup column of the table reads that same row, so a
+	 * predefined list of IDs becomes one record each with matching attributes.
+	 */
+	function renderDrivingLookupField() {
+		const field = el('div', { className: 'field' });
+		field.appendChild(el('label', { text: strings.fieldDrivingLookupLabel }));
+		const select = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input' }));
+		const names = lookupOptions.map((l) => l.name);
+		populateSelectOptions(
+			select,
+			names,
+			(state.drivingLookup || '').trim(),
+			strings.fieldDrivingLookupEmptyOption,
+			strings.mappingColumnNotFoundSuffix,
+		);
+		const refreshError = () => {
+			const value = select.value.trim();
+			updateFieldError(select, strings.fieldDrivingLookupNotFoundError, !!value && !names.includes(value));
+		};
+		select.addEventListener('change', () => {
+			state.drivingLookup = select.value;
+			postEdit();
+			refreshError();
+		});
+		refreshError();
+		field.appendChild(wrapSelectWithChevron(select));
+		field.appendChild(el('p', { className: 'hint', text: strings.fieldDrivingLookupHint }));
+		return field;
 	}
 
 	/** Thin wrapper around the shared text field (common.js), using this editor's commit functions. */

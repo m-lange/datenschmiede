@@ -433,13 +433,22 @@ export interface Table {
 	schema: string;
 	name: string;
 	description: string;
+	/**
+	 * Name of a lookup list (`.lkp`) that LEADS this table: it then gets
+	 * exactly one record per list row, each row used exactly once and in list
+	 * order — instead of a fixed count from the project. Every lookup generator
+	 * on this table reads that same row, so a predefined list of business
+	 * partner IDs becomes one record each, with all its other columns matching.
+	 * Empty -> the record count comes from the project as usual.
+	 */
+	drivingLookup: string;
 	columns: Column[];
 	output: OutputConfig;
 }
 
 /** Creates a blank table, used when a new `.td` file is created. */
 export function createEmptyTable(name = ''): Table {
-	return { schema: '', name, description: '', columns: [], output: createDefaultOutput() };
+	return { schema: '', name, description: '', drivingLookup: '', columns: [], output: createDefaultOutput() };
 }
 
 /**

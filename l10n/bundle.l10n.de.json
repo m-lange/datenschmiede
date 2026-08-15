@@ -100,5 +100,7 @@
 	"This table is written by file generator \"{0}\", which was not found. Its .filegen file may have been deleted, or the generator was renamed.": "Diese Tabelle wird vom Dateigenerator „{0}“ geschrieben, der nicht gefunden wurde. Seine .filegen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.",
 	"Fixed-length field \"{0}\" has no width — every field needs at least one character.": "Feld „{0}“ mit fester Länge hat keine Breite — jedes Feld braucht mindestens ein Zeichen.",
 	"Fixed-length field \"{0}\" has no column selected.": "Feld „{0}“ mit fester Länge hat keine Spalte ausgewählt.",
-	"Fixed-length field \"{0}\" uses column \"{1}\", which does not exist in this table. It may have been renamed or removed.": "Feld „{0}“ mit fester Länge verwendet die Spalte „{1}“, die es in dieser Tabelle nicht gibt. Sie wurde möglicherweise umbenannt oder entfernt."
+	"Fixed-length field \"{0}\" uses column \"{1}\", which does not exist in this table. It may have been renamed or removed.": "Feld „{0}“ mit fester Länge verwendet die Spalte „{1}“, die es in dieser Tabelle nicht gibt. Sie wurde möglicherweise umbenannt oder entfernt.",
+	"Table \"{0}\": leading lookup list \"{1}\" was not found.": "Tabelle „{0}“: führende Nachschlageliste „{1}“ wurde nicht gefunden.",
+	"This table is led by lookup list \"{0}\", which was not found. It may have been deleted or renamed.": "Diese Tabelle wird von der Nachschlageliste „{0}“ geführt, die nicht gefunden wurde. Sie wurde möglicherweise gelöscht oder umbenannt."
 }

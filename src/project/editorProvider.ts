@@ -69,6 +69,8 @@ interface ProjectTableRow {
 	label: string;
 	found: boolean;
 	secondary: boolean;
+	/** `true` when a lookup list leads the table — its record count follows from the list. */
+	lookupDriven?: boolean;
 	records?: string;
 }
 
@@ -764,14 +766,31 @@ export function buildTableRows(project: Project, entries: TableEntry[]): Project
 	return project.tables.map((table): ProjectTableRow => {
 		const entry = byPath.get(table.path);
 		if (!entry || !entry.table) {
-			return { path: table.path, label: table.path, found: false, secondary: false, records: table.records };
+			return {
+				path: table.path,
+				label: table.path,
+				found: false,
+				secondary: false,
+				lookupDriven: false,
+				records: table.records,
+			};
 		}
 
 		const label = tableLabel(entry.table, entry.relativePath);
 		const outgoing = entry.table.columns.find(
 			(column) => column.fk && column.fkTable.trim() !== '' && column.fkTable.trim() !== label,
 		);
-		return { path: table.path, label, found: true, secondary: !!outgoing, records: table.records };
+		const lookupDriven = entry.table.drivingLookup.trim() !== '';
+		// A table led by a lookup list has neither a fixed count nor a
+		// cardinality — the list length decides (see Table.drivingLookup).
+		return {
+			path: table.path,
+			label,
+			found: true,
+			secondary: !lookupDriven && !!outgoing,
+			lookupDriven,
+			records: table.records,
+		};
 	});
 }
 

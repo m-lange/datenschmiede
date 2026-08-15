@@ -29,7 +29,7 @@ import { encodeGeneratorConfigLines, parseGeneratorConfig } from '../generator/c
 /** Parses the TOML text of a .td file into our table model. */
 export function parseTableText(text: string): Table {
 	if (!text.trim()) {
-		return { schema: '', name: '', description: '', columns: [], output: createDefaultOutput() };
+		return { schema: '', name: '', description: '', drivingLookup: '', columns: [], output: createDefaultOutput() };
 	}
 
 	let data: Record<string, unknown>;
@@ -49,6 +49,7 @@ export function parseTableText(text: string): Table {
 		schema: toStr(data.schema),
 		name: toStr(data.name),
 		description: toStr(data.description),
+		drivingLookup: toStr(data.driving_lookup),
 		columns,
 		output: toOutput(data.output),
 	};
@@ -270,6 +271,11 @@ export function serializeTable(table: Table): string {
 	lines.push(`schema = ${tomlString(table.schema)}`);
 	lines.push(`name = ${tomlString(table.name)}`);
 	lines.push(`description = ${tomlString(table.description)}`);
+	if (table.drivingLookup.trim()) {
+		// Only written when set — the table then takes its record count from the
+		// list instead of the project (see Table.drivingLookup).
+		lines.push(`driving_lookup = ${tomlString(table.drivingLookup.trim())}`);
+	}
 
 	// The [output] block must precede the [[columns]] tables — after them TOML
 	// would read it as another key of the last column.

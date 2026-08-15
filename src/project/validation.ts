@@ -38,6 +38,11 @@ export interface ProjectRecordsRow {
 	label: string;
 	found: boolean;
 	secondary: boolean;
+	/**
+	 * `true` when a lookup list leads the table: its record count follows from
+	 * the list (one per row) and is neither entered nor checked here.
+	 */
+	lookupDriven?: boolean;
 	records?: string;
 }
 
@@ -53,6 +58,11 @@ export function validateProjectRecords(rows: ProjectRecordsRow[]): ProjectIssue[
 			// File deleted, renamed or moved — a run could no longer generate
 			// this table.
 			issues.push({ path: row.path, label: row.label, kind: 'table-missing', warning: true });
+			continue;
+		}
+		if (row.lookupDriven) {
+			// One record per row of the leading lookup list — there is nothing
+			// to enter, so nothing to validate.
 			continue;
 		}
 		const raw = row.records?.trim() ?? '';

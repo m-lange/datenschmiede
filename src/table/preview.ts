@@ -97,6 +97,9 @@ export async function runTablePreview(
 			records: PREVIEW_LIMIT,
 			driving_fk: null,
 			driving_fk_column: null,
+			// A leading lookup list also governs the preview — the record count
+			// then comes from the list, not from PREVIEW_LIMIT.
+			driving_lookup: table.drivingLookup.trim() || null,
 			columns: buildPlanColumns(table, label, generators, errors, usedCustomGenerators),
 			output: toPlanOutput(table),
 		});

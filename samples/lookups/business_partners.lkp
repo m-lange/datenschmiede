@@ -1,0 +1,16 @@
+# Datenschmiede Nachschlageliste
+# name: business_partners
+# description: **Vorgegebene Geschäftspartner** — die Liste, die `shop.master.business_partners` als **führende Nachschlageliste** verwendet: die Tabelle bekommt genau *einen* Datensatz je Zeile, jede Zeile genau einmal und in Listenreihenfolge.\n\nDrei Wertespalten (`partner_id`, `partner_name`, `segment`), die im selben Datensatz zusammenpassen — wer die ID `BP-1001` zieht, bekommt auch „Nordwind Handels GmbH“ und „Handel“.\n\nDie **Gewichte** spielen hier keine Rolle: bei einer führenden Liste wird nicht gezogen, sondern jede Zeile einmal verwendet. Sie stehen trotzdem (mit gleichem Wert), weil das Dateiformat sie verlangt und die Liste so auch als gewöhnliche gewichtete Liste nutzbar bleibt.
+"partner_id";"partner_name";"segment";"weight"
+"BP-1001";"Nordwind Handels GmbH";"Handel";"1"
+"BP-1002";"Südstern Logistik AG";"Logistik";"1"
+"BP-1003";"Ostsee Werften KG";"Industrie";"1"
+"BP-1004";"Westfalen Energie SE";"Energie";"1"
+"BP-1005";"Alpenland Lebensmittel GmbH";"Handel";"1"
+"BP-1006";"Rheintal Chemie AG";"Industrie";"1"
+"BP-1007";"Hansa Speditions GmbH";"Logistik";"1"
+"BP-1008";"Schwarzwald Maschinenbau KG";"Industrie";"1"
+"BP-1009";"Elbufer Pharma AG";"Pharma";"1"
+"BP-1010";"Bodensee Textil GmbH";"Handel";"1"
+"BP-1011";"Harz Metallwerke AG";"Industrie";"1"
+"BP-1012";"Spreewald Agrar eG";"Landwirtschaft";"1"

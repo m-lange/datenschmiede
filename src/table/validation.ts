@@ -42,7 +42,8 @@ export type OutputIssueKind =
 	| 'output-field-width'
 	| 'output-field-column-missing'
 	| 'output-field-column-not-found'
-	| 'output-filegen-not-found';
+	| 'output-filegen-not-found'
+	| 'driving-lookup-not-found';
 
 /** `Issue.columnIndex` of a problem that concerns the output configuration, not a column. */
 export const OUTPUT_ISSUE_INDEX = -1;
@@ -251,6 +252,18 @@ export function validateTable(
 			});
 		}
 	});
+
+	const drivingLookup = table.drivingLookup.trim();
+	if (drivingLookup && lookups.length > 0 && !lookups.some((l) => l.name === drivingLookup)) {
+		// The leading list decides this table's record count — a stale reference
+		// would make the whole run fail, so it is reported like a broken FK.
+		issues.push({
+			columnIndex: OUTPUT_ISSUE_INDEX,
+			columnName: '',
+			kind: 'driving-lookup-not-found',
+			detail: drivingLookup,
+		});
+	}
 
 	issues.push(...validateOutputStructure(table, knownFileGenerators));
 

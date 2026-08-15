@@ -363,6 +363,11 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				return vscode.l10n.t('Fixed-length field "{0}" has no width — every field needs at least one character.', path);
 			case 'output-field-column-missing':
 				return vscode.l10n.t('Fixed-length field "{0}" has no column selected.', path);
+			case 'driving-lookup-not-found':
+				return vscode.l10n.t(
+					'This table is led by lookup list "{0}", which was not found. It may have been deleted or renamed.',
+					issue.detail ?? '',
+				);
 			case 'output-filegen-not-found':
 				return vscode.l10n.t(
 					'This table is written by file generator "{0}", which was not found. Its .filegen file may have been deleted, or the generator was renamed.',

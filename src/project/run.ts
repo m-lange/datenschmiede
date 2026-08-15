@@ -225,6 +225,12 @@ export interface PlanTable {
 	records: number | { min: number; max: number };
 	driving_fk: { table: string; column: string } | null;
 	driving_fk_column: string | null;
+	/**
+	 * Name of the lookup list leading this table: it then gets exactly one
+	 * record per list row (each row used once, in list order) and `records` is
+	 * ignored — see Table.drivingLookup and run_table in python/generate.py.
+	 */
+	driving_lookup: string | null;
 	columns: PlanColumn[];
 	output: PlanOutput;
 }
@@ -440,9 +446,22 @@ function buildPlan(
 				selectedLabels.has(column.fkTable.trim()),
 		);
 
+		// A leading lookup list determines the record count entirely (one per
+		// list row), so neither a fixed count nor a cardinality is read.
+		const drivingLookup = table.drivingLookup.trim();
+		if (drivingLookup && !lookupEntries.some((entry) => entry.name === drivingLookup)) {
+			errors.push(
+				vscode.l10n.t('Table "{0}": leading lookup list "{1}" was not found.', label, drivingLookup),
+			);
+			continue;
+		}
+
 		const rawRecords = (projectTable.records ?? '').trim();
 		let records: number | { min: number; max: number };
-		if (driving) {
+		if (drivingLookup) {
+			// Ignored by the runner; kept as a number so the plan type stays simple.
+			records = 0;
+		} else if (driving) {
 			const cardinality = parseCardinality(rawRecords);
 			if (!cardinality) {
 				errors.push(vscode.l10n.t('Table "{0}": invalid number of related records (use e.g. "5" or "1..3").', label));
@@ -465,8 +484,9 @@ function buildPlan(
 			name: table.name.trim() || entry.relativePath,
 			label,
 			records,
-			driving_fk: driving ? { table: driving.fkTable.trim(), column: driving.fkColumn.trim() } : null,
-			driving_fk_column: driving ? driving.name : null,
+			driving_fk: driving && !drivingLookup ? { table: driving.fkTable.trim(), column: driving.fkColumn.trim() } : null,
+			driving_fk_column: driving && !drivingLookup ? driving.name : null,
+			driving_lookup: drivingLookup || null,
 			columns,
 			output: toPlanOutput(table),
 		});

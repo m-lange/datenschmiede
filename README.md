@@ -53,6 +53,10 @@ ohne Fremdschlüssel, also direkt über die **Vorschau** ausprobierbar:
 - [`samples/tables/payment_records.td`](samples/tables/payment_records.td)
   — **feste Satzlänge** im Stil einer Zahlungsdatei (121 Zeichen je Satz,
   null- und leerzeichengefüllte Felder, CRLF)
+- [`samples/tables/business_partners.td`](samples/tables/business_partners.td)
+  — eine **führende Nachschlageliste**: ein Datensatz je Zeile von
+  [`business_partners.lkp`](samples/lookups/business_partners.lkp), jede
+  Zeile genau einmal
 - [`samples/tables/partner_export.td`](samples/tables/partner_export.td) mit
   [`samples/filegen/csv_with_header_block.filegen`](samples/filegen/csv_with_header_block.filegen)
   — ein **eigener Dateigenerator**: CSV mit fünf Informationszeilen davor,
@@ -118,7 +122,28 @@ Dialog. Die Vorschau braucht kein Projekt: sie nutzt die in VS Code aktive
 Python-Umgebung (3.10+), geschrieben wird nichts.
 
 Die Anzahl zu erzeugender Datensätze gehört bewusst **nicht** zur
-Tabellendefinition, sondern wird je Testdatenprojekt festgelegt.
+Tabellendefinition, sondern wird je Testdatenprojekt festgelegt — außer bei
+einer führenden Nachschlageliste (siehe unten).
+
+### Führende Nachschlageliste
+
+Im Übersicht-Tab lässt sich eine **führende Nachschlageliste** auswählen.
+Dann gilt für die Tabelle:
+
+- sie bekommt **genau einen Datensatz je Zeile** der Liste — jede Zeile
+  **genau einmal** und in Listenreihenfolge, nicht gezogen und nicht
+  wiederholt
+- die **Datensatzanzahl kommt aus der Liste**, nicht aus dem Projekt; im
+  Projekt-Editor braucht die Tabelle deshalb kein Anzahl-Feld
+- alle Nachschlage-Spalten dieser Tabelle lesen **dieselbe Listenzeile**,
+  passen also innerhalb eines Datensatzes zusammen
+
+Das ist der Weg, wenn eine **vorgegebene Liste von Schlüsseln** die
+Grundlage bilden soll — Geschäftspartner-IDs, Mandanten, Filialen: die Liste
+einmal pflegen, und alle abhängigen Tabellen hängen sich per Fremdschlüssel
+daran. Da jede Zeile genau einmal vorkommt, bleibt die Schlüsselspalte ein
+echter Primärschlüssel. Beispiel:
+[`samples/tables/business_partners.td`](samples/tables/business_partners.td).
 
 ### Zielstruktur (JSON / XML)
 
@@ -411,7 +436,9 @@ Ablauf des Laufs:
    (abhängige Spalten nach ihren Quellen, Custom-Code zuletzt)
 2. **Daten erzeugen**: vektorisiert über pandas/numpy; referenzierte
    Tabellen entstehen über die Kardinalität je Datensatz der
-   referenzierten Tabelle, die treibende FK-Spalte gleich mit
+   referenzierten Tabelle, die treibende FK-Spalte gleich mit — bei einer
+   führenden Nachschlageliste ergibt sich die Anzahl stattdessen aus der
+   Liste (ein Datensatz je Zeile)
 3. **Schreiben**: eine Datei je Tabelle im konfigurierten Dateityp (CSV,
    Excel, JSON, XML, feste Satzlänge oder ein eigener Dateigenerator) in den
    aufgelösten Ausgabeordner des Projekts — temporäre Tabellen werden

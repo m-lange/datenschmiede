@@ -21,6 +21,17 @@
 - **Neuer Dateityp „Temporäre Tabelle“**: die Datensätze entstehen wie
   gewohnt — andere Tabellen können sie über Fremdschlüssel referenzieren
   und Generatoren sie lesen —, es wird aber keine Datei geschrieben.
+- **Führende Nachschlageliste**: im Übersicht-Tab einer Tabelle lässt sich
+  eine `.lkp`-Liste als führend auswählen. Die Tabelle bekommt dann genau
+  einen Datensatz je Zeile der Liste — jede Zeile genau einmal und in
+  Listenreihenfolge —, die Datensatzanzahl kommt aus der Liste statt aus dem
+  Projekt, und alle Nachschlage-Spalten der Tabelle lesen dieselbe
+  Listenzeile. Damit lässt sich eine vorgegebene Schlüsselliste
+  (Geschäftspartner, Mandanten, Filialen) zur Grundlage machen, an die sich
+  alle abhängigen Tabellen per Fremdschlüssel hängen; die Schlüsselspalte
+  bleibt dabei ein echter Primärschlüssel. Beispiel:
+  `samples/tables/business_partners.td` mit
+  `samples/lookups/business_partners.lkp`.
 
 ## 0.8.0
 

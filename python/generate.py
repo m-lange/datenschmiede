@@ -858,8 +858,22 @@ class Runner:
         label = table["label"]
         self.data[label] = {}
 
-        driving = table.get("driving_fk")
-        if driving:
+        driving_lookup = table.get("driving_lookup")
+        if driving_lookup:
+            # A leading lookup list: exactly one record per list row, each row
+            # used once and in list order. Seeding the drawn row indices with
+            # arange means every lookup generator on this table (and on tables
+            # related to it by FK) reads that same row — so a predefined list of
+            # IDs becomes one record each, with all its other columns matching.
+            lookup = self.lookups.get(driving_lookup)
+            if lookup is None:
+                raise RuntimeError(
+                    f'Table {label}: leading lookup list "{driving_lookup}" was not found'
+                )
+            n = len(lookup["rows"])
+            self.lookup_row_indices[(label, driving_lookup)] = np.arange(n, dtype=np.int64)
+        elif table.get("driving_fk"):
+            driving = table["driving_fk"]
             parent_label, parent_column = driving["table"], driving["column"]
             parent_values = self.data.get(parent_label, {}).get(parent_column)
             if parent_values is None:
