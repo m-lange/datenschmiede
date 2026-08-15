@@ -579,7 +579,10 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			void vscode.window.showErrorMessage(vscode.l10n.t('"{0}" was not found.', relativePath));
 			return;
 		}
-		await vscode.commands.executeCommand('vscode.open', entry.uri);
+		// preview: false opens a tab of its own. Without it the table would land
+		// in the group's preview slot and replace the project editor it was
+		// opened from - which is exactly the editor one wants to go back to.
+		await vscode.commands.executeCommand('vscode.open', entry.uri, { preview: false });
 	}
 
 	/**

@@ -36,7 +36,7 @@
 	const PAD = 28;
 	const GAP_X = 110;
 	const GAP_Y = 32;
-	const MIN_BOX_W = 200;
+	const MIN_BOX_W = 240;
 	const MAX_BOX_W = 320;
 	const PILL_H = 20;
 	/** X position of the column names — leaves room on the left for the PK/FK icon. */

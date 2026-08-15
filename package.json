@@ -1,321 +1,354 @@
 {
-  "name": "datenschmiede-td",
-  "displayName": "%extension.displayName%",
-  "description": "%extension.description%",
-  "version": "0.10.0",
-  "l10n": "./l10n",
-  "publisher": "datenschmiede",
-  "private": true,
-  "engines": {
-    "vscode": "^1.125.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "keywords": [
-    "toml",
-    "testdaten",
-    "synthetic data",
-    "table editor",
-    "test data project",
-    "python"
-  ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "extensionDependencies": [
-    "ms-python.python"
-  ],
-  "contributes": {
-    "configurationDefaults": {
-      "[td]": {
-        "files.encoding": "utf8",
-        "files.autoGuessEncoding": false
-      },
-      "[tdproject]": {
-        "files.encoding": "utf8",
-        "files.autoGuessEncoding": false
-      },
-      "[lkp]": {
-        "files.encoding": "utf8",
-        "files.autoGuessEncoding": false
-      },
-      "[tdgen]": {
-        "files.encoding": "utf8",
-        "files.autoGuessEncoding": false
-      },
-      "[filegen]": {
-        "files.encoding": "utf8",
-        "files.autoGuessEncoding": false
-      }
-    },
-    "languages": [
-      {
-        "id": "td",
-        "aliases": [
-          "%language.td.alias%",
-          "td"
-        ],
-        "extensions": [
-          ".td"
-        ],
-        "icon": {
-          "light": "./icons/td-light.svg",
-          "dark": "./icons/td-dark.svg"
-        }
-      },
-      {
-        "id": "tdproject",
-        "aliases": [
-          "%language.tdproject.alias%",
-          "tdproject"
-        ],
-        "extensions": [
-          ".tdproject"
-        ],
-        "icon": {
-          "light": "./icons/tdproject-light.svg",
-          "dark": "./icons/tdproject-dark.svg"
-        }
-      },
-      {
-        "id": "lkp",
-        "aliases": [
-          "%language.lkp.alias%",
-          "lkp"
-        ],
-        "extensions": [
-          ".lkp"
-        ],
-        "icon": {
-          "light": "./icons/lookup-light.svg",
-          "dark": "./icons/lookup-dark.svg"
-        }
-      },
-      {
-        "id": "tdgen",
-        "aliases": [
-          "%language.tdgen.alias%",
-          "tdgen"
-        ],
-        "extensions": [
-          ".tdgen"
-        ],
-        "icon": {
-          "light": "./icons/tdgen-light.svg",
-          "dark": "./icons/tdgen-dark.svg"
-        }
-      },
-      {
-        "id": "filegen",
-        "aliases": [
-          "%language.filegen.alias%",
-          "filegen"
-        ],
-        "extensions": [
-          ".filegen"
-        ],
-        "icon": {
-          "light": "./icons/filegen-light.svg",
-          "dark": "./icons/filegen-dark.svg"
-        }
-      }
-    ],
-    "customEditors": [
-      {
-        "viewType": "datenschmiede.tableEditor",
-        "displayName": "Table Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.td"
-          }
-        ],
-        "priority": "default"
-      },
-      {
-        "viewType": "datenschmiede.projectEditor",
-        "displayName": "Test Data Project Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.tdproject"
-          }
-        ],
-        "priority": "default"
-      },
-      {
-        "viewType": "datenschmiede.lookupEditor",
-        "displayName": "Lookup List Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.lkp"
-          }
-        ],
-        "priority": "default"
-      }
-    ],
-    "notebooks": [
-      {
-        "type": "datenschmiede-generator",
-        "displayName": "Datenschmiede Generator",
-        "selector": [
-          {
-            "filenamePattern": "*.tdgen"
-          }
-        ]
-      },
-      {
-        "type": "datenschmiede-filegen",
-        "displayName": "Datenschmiede File Generator",
-        "selector": [
-          {
-            "filenamePattern": "*.filegen"
-          }
-        ]
-      }
-    ],
-    "commands": [
-      {
-        "command": "datenschmiede.newTable",
-        "title": "%command.newTable.title%",
-        "category": "Datenschmiede"
-      },
-      {
-        "command": "datenschmiede.newProject",
-        "title": "%command.newProject.title%",
-        "category": "Datenschmiede"
-      },
-      {
-        "command": "datenschmiede.newLookup",
-        "title": "%command.newLookup.title%",
-        "category": "Datenschmiede"
-      },
-      {
-        "command": "datenschmiede.selectPythonInterpreter",
-        "title": "%command.selectPythonInterpreter.title%",
-        "category": "Datenschmiede"
-      },
-      {
-        "command": "datenschmiede.newGenerator",
-        "title": "%command.newGenerator.title%",
-        "category": "Datenschmiede"
-      },
-      {
-        "command": "datenschmiede.newFileGenerator",
-        "title": "%command.newFileGenerator.title%",
-        "category": "Datenschmiede"
-      },
-      {
-        "command": "datenschmiede.runGeneration",
-        "title": "%command.runGeneration.title%",
-        "category": "Datenschmiede",
-        "icon": "$(play)"
-      },
-      {
-        "command": "datenschmiede.generateTestData",
-        "title": "%command.generateTestData.title%",
-        "category": "Datenschmiede",
-        "icon": "$(play)"
-      },
-      {
-        "command": "datenschmiede.previewFile",
-        "title": "%command.previewFile.title%",
-        "category": "Datenschmiede",
-        "icon": "$(play)"
-      }
-    ],
-    "keybindings": [
-      {
-        "command": "datenschmiede.runGeneration",
-        "key": "ctrl+f5",
-        "when": "activeCustomEditorId == datenschmiede.projectEditor"
-      },
-      {
-        "command": "datenschmiede.previewFile",
-        "key": "ctrl+f5",
-        "when": "activeCustomEditorId == datenschmiede.tableEditor"
-      }
-    ],
-    "menus": {
-      "explorer/context": [
-        {
-          "command": "datenschmiede.newTable",
-          "group": "navigation"
-        },
-        {
-          "command": "datenschmiede.newProject",
-          "group": "navigation"
-        },
-        {
-          "command": "datenschmiede.newLookup",
-          "group": "navigation"
-        },
-        {
-          "command": "datenschmiede.newGenerator",
-          "group": "navigation"
-        },
-        {
-          "command": "datenschmiede.newFileGenerator",
-          "group": "navigation"
-        }
-      ],
-      "editor/title/run": [
-        {
-          "command": "datenschmiede.runGeneration",
-          "when": "activeCustomEditorId == datenschmiede.projectEditor",
-          "group": "navigation"
-        },
-        {
-          "command": "datenschmiede.previewFile",
-          "when": "activeCustomEditorId == datenschmiede.tableEditor",
-          "group": "navigation"
-        }
-      ],
-      "commandPalette": [
-        {
-          "command": "datenschmiede.newTable"
-        },
-        {
-          "command": "datenschmiede.newProject"
-        },
-        {
-          "command": "datenschmiede.newLookup"
-        },
-        {
-          "command": "datenschmiede.newGenerator"
-        },
-        {
-          "command": "datenschmiede.newFileGenerator"
-        },
-        {
-          "command": "datenschmiede.selectPythonInterpreter"
-        },
-        {
-          "command": "datenschmiede.runGeneration"
-        },
-        {
-          "command": "datenschmiede.generateTestData"
-        },
-        {
-          "command": "datenschmiede.previewFile"
-        }
-      ]
-    }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run check-types && node esbuild.js --production",
-    "compile": "node esbuild.js",
-    "watch": "node esbuild.js --watch",
-    "package": "node esbuild.js --production",
-    "check-types": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/node": "^26.2.0",
-    "@types/vscode": "^1.125.0",
-    "@vscode/codicons": "^0.0.46-24",
-    "esbuild": "^0.28.2",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "@vscode/python-extension": "^1.0.6",
-    "smol-toml": "^1.8.0"
-  }
+	"name": "datenschmiede-td",
+	"displayName": "%extension.displayName%",
+	"description": "%extension.description%",
+	"version": "0.10.0",
+	"l10n": "./l10n",
+	"publisher": "datenschmiede",
+	"private": true,
+	"engines": {
+		"vscode": "^1.125.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"keywords": [
+		"toml",
+		"testdaten",
+		"synthetic data",
+		"table editor",
+		"test data project",
+		"python"
+	],
+	"activationEvents": [],
+	"main": "./dist/extension.js",
+	"extensionDependencies": [
+		"ms-python.python"
+	],
+	"contributes": {
+		"configurationDefaults": {
+			"[td]": {
+				"files.encoding": "utf8",
+				"files.autoGuessEncoding": false
+			},
+			"[tdproject]": {
+				"files.encoding": "utf8",
+				"files.autoGuessEncoding": false
+			},
+			"[lkp]": {
+				"files.encoding": "utf8",
+				"files.autoGuessEncoding": false
+			},
+			"[tdgen]": {
+				"files.encoding": "utf8",
+				"files.autoGuessEncoding": false
+			},
+			"[filegen]": {
+				"files.encoding": "utf8",
+				"files.autoGuessEncoding": false
+			}
+		},
+		"languages": [
+			{
+				"id": "td",
+				"aliases": [
+					"%language.td.alias%",
+					"td"
+				],
+				"extensions": [
+					".td"
+				],
+				"icon": {
+					"light": "./icons/td-light.svg",
+					"dark": "./icons/td-dark.svg"
+				}
+			},
+			{
+				"id": "tdproject",
+				"aliases": [
+					"%language.tdproject.alias%",
+					"tdproject"
+				],
+				"extensions": [
+					".tdproject"
+				],
+				"icon": {
+					"light": "./icons/tdproject-light.svg",
+					"dark": "./icons/tdproject-dark.svg"
+				}
+			},
+			{
+				"id": "lkp",
+				"aliases": [
+					"%language.lkp.alias%",
+					"lkp"
+				],
+				"extensions": [
+					".lkp"
+				],
+				"icon": {
+					"light": "./icons/lookup-light.svg",
+					"dark": "./icons/lookup-dark.svg"
+				}
+			},
+			{
+				"id": "tdgen",
+				"aliases": [
+					"%language.tdgen.alias%",
+					"tdgen"
+				],
+				"extensions": [
+					".tdgen"
+				],
+				"icon": {
+					"light": "./icons/tdgen-light.svg",
+					"dark": "./icons/tdgen-dark.svg"
+				}
+			},
+			{
+				"id": "filegen",
+				"aliases": [
+					"%language.filegen.alias%",
+					"filegen"
+				],
+				"extensions": [
+					".filegen"
+				],
+				"icon": {
+					"light": "./icons/filegen-light.svg",
+					"dark": "./icons/filegen-dark.svg"
+				}
+			}
+		],
+		"customEditors": [
+			{
+				"viewType": "datenschmiede.tableEditor",
+				"displayName": "Table Editor",
+				"selector": [
+					{
+						"filenamePattern": "*.td"
+					}
+				],
+				"priority": "default"
+			},
+			{
+				"viewType": "datenschmiede.projectEditor",
+				"displayName": "Test Data Project Editor",
+				"selector": [
+					{
+						"filenamePattern": "*.tdproject"
+					}
+				],
+				"priority": "default"
+			},
+			{
+				"viewType": "datenschmiede.lookupEditor",
+				"displayName": "Lookup List Editor",
+				"selector": [
+					{
+						"filenamePattern": "*.lkp"
+					}
+				],
+				"priority": "default"
+			}
+		],
+		"notebooks": [
+			{
+				"type": "datenschmiede-generator",
+				"displayName": "Datenschmiede Generator",
+				"selector": [
+					{
+						"filenamePattern": "*.tdgen"
+					}
+				]
+			},
+			{
+				"type": "datenschmiede-filegen",
+				"displayName": "Datenschmiede File Generator",
+				"selector": [
+					{
+						"filenamePattern": "*.filegen"
+					}
+				]
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "datenschmiede",
+					"title": "%viewsContainer.datenschmiede.title%",
+					"icon": "./icons/datenschmiede-activitybar.svg"
+				}
+			]
+		},
+		"views": {
+			"datenschmiede": [
+				{
+					"id": "datenschmiede.projectsView",
+					"name": "%view.projects.name%",
+					"icon": "./icons/tdproject-dark.svg"
+				},
+				{
+					"id": "datenschmiede.lookupsView",
+					"name": "%view.lookups.name%",
+					"icon": "./icons/lookup-dark.svg"
+				},
+				{
+					"id": "datenschmiede.generatorsView",
+					"name": "%view.generators.name%",
+					"icon": "./icons/tdgen-dark.svg"
+				},
+				{
+					"id": "datenschmiede.schemaView",
+					"name": "%view.schema.name%",
+					"icon": "./icons/schema-dark.svg"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "datenschmiede.newTable",
+				"title": "%command.newTable.title%",
+				"category": "Datenschmiede"
+			},
+			{
+				"command": "datenschmiede.newProject",
+				"title": "%command.newProject.title%",
+				"category": "Datenschmiede"
+			},
+			{
+				"command": "datenschmiede.newLookup",
+				"title": "%command.newLookup.title%",
+				"category": "Datenschmiede"
+			},
+			{
+				"command": "datenschmiede.selectPythonInterpreter",
+				"title": "%command.selectPythonInterpreter.title%",
+				"category": "Datenschmiede"
+			},
+			{
+				"command": "datenschmiede.newGenerator",
+				"title": "%command.newGenerator.title%",
+				"category": "Datenschmiede"
+			},
+			{
+				"command": "datenschmiede.newFileGenerator",
+				"title": "%command.newFileGenerator.title%",
+				"category": "Datenschmiede"
+			},
+			{
+				"command": "datenschmiede.runGeneration",
+				"title": "%command.runGeneration.title%",
+				"category": "Datenschmiede",
+				"icon": "$(play)"
+			},
+			{
+				"command": "datenschmiede.generateTestData",
+				"title": "%command.generateTestData.title%",
+				"category": "Datenschmiede",
+				"icon": "$(play)"
+			},
+			{
+				"command": "datenschmiede.previewFile",
+				"title": "%command.previewFile.title%",
+				"category": "Datenschmiede",
+				"icon": "$(play)"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "datenschmiede.runGeneration",
+				"key": "ctrl+f5",
+				"when": "activeCustomEditorId == datenschmiede.projectEditor"
+			},
+			{
+				"command": "datenschmiede.previewFile",
+				"key": "ctrl+f5",
+				"when": "activeCustomEditorId == datenschmiede.tableEditor"
+			}
+		],
+		"menus": {
+			"explorer/context": [
+				{
+					"command": "datenschmiede.newTable",
+					"group": "navigation"
+				},
+				{
+					"command": "datenschmiede.newProject",
+					"group": "navigation"
+				},
+				{
+					"command": "datenschmiede.newLookup",
+					"group": "navigation"
+				},
+				{
+					"command": "datenschmiede.newGenerator",
+					"group": "navigation"
+				},
+				{
+					"command": "datenschmiede.newFileGenerator",
+					"group": "navigation"
+				}
+			],
+			"editor/title/run": [
+				{
+					"command": "datenschmiede.runGeneration",
+					"when": "activeCustomEditorId == datenschmiede.projectEditor",
+					"group": "navigation"
+				},
+				{
+					"command": "datenschmiede.previewFile",
+					"when": "activeCustomEditorId == datenschmiede.tableEditor",
+					"group": "navigation"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "datenschmiede.newTable"
+				},
+				{
+					"command": "datenschmiede.newProject"
+				},
+				{
+					"command": "datenschmiede.newLookup"
+				},
+				{
+					"command": "datenschmiede.newGenerator"
+				},
+				{
+					"command": "datenschmiede.newFileGenerator"
+				},
+				{
+					"command": "datenschmiede.selectPythonInterpreter"
+				},
+				{
+					"command": "datenschmiede.runGeneration"
+				},
+				{
+					"command": "datenschmiede.generateTestData"
+				},
+				{
+					"command": "datenschmiede.previewFile"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run check-types && node esbuild.js --production",
+		"compile": "node esbuild.js",
+		"watch": "node esbuild.js --watch",
+		"package": "node esbuild.js --production",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^26.2.0",
+		"@types/vscode": "^1.125.0",
+		"@vscode/codicons": "^0.0.46-24",
+		"esbuild": "^0.28.2",
+		"typescript": "^7.0.2"
+	},
+	"dependencies": {
+		"@vscode/python-extension": "^1.0.6",
+		"smol-toml": "^1.8.0"
+	}
 }

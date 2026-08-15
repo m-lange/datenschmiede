@@ -17,6 +17,7 @@ import { runGenerationCommand } from './project/run';
 import { checkPython310Available } from './project/python';
 import { disposeOutputChannel } from './outputChannel';
 import { WorkspaceIndex } from './workspaceIndex';
+import { registerSidebar } from './sidebar/views';
 
 /**
  * Extension entry point: wires up the three custom editors (.td, .tdproject,
@@ -35,6 +36,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(LookupEditorProvider.register(context));
 	context.subscriptions.push(GeneratorNotebook.register(context));
 	context.subscriptions.push(FileGeneratorNotebook.register(context));
+	// The sidebar's four views (projects, lookup lists, generators, schema) -
+	// read-only views of the same index.
+	registerSidebar(context, index);
 	// Background validation of every file in the workspace, opened or not.
 	context.subscriptions.push(WorkspaceDiagnostics.register(context, index));
 	// The shared "Datenschmiede" output channel (run logs, Python tracebacks).

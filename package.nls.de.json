@@ -14,5 +14,10 @@
 	"command.runGeneration.title": "Testdaten generieren",
 	"command.generateTestData.title": "Testdaten generieren (Projekt auswählen)…",
 	"command.previewFile.title": "Datei-Vorschau",
-	"command.selectPythonInterpreter.title": "Python-Interpreter auswählen…"
+	"command.selectPythonInterpreter.title": "Python-Interpreter auswählen…",
+	"viewsContainer.datenschmiede.title": "Datenschmiede",
+	"view.projects.name": "Projekte",
+	"view.lookups.name": "Nachschlagelisten",
+	"view.generators.name": "Generatoren",
+	"view.schema.name": "Schema"
 }
