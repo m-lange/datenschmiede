@@ -357,11 +357,26 @@ def xml_render_node(node, row, depth, step, newline, index=0):
     if kind == "object":
         return xml_element(name, node.get("children") or [], row, depth, step, newline)
     if kind == "array":
-        # An array writes its children as repeated sibling elements at the same
-        # level — the array's own name does not appear as an element.
+        # A repeating element: every child produces ONE element named after the
+        # ARRAY node, not after the child. The child names are irrelevant here —
+        # exactly as in JSON, where array entries are unnamed:
+        #
+        #   Tags [array]        ->  <Tags>gross</Tags>
+        #     … [value]             <Tags>webshop</Tags>
+        #     … [value]
         parts = []
-        for child_index, child in enumerate(node.get("children") or []):
-            parts.extend(xml_render_node(child, row, depth, step, newline, child_index))
+        for child in node.get("children") or []:
+            child_kind = child.get("kind")
+            if child_kind == "object":
+                # An object entry contributes its own children inside the
+                # repeated element.
+                parts.extend(xml_element(name, child.get("children") or [], row, depth, step, newline))
+            elif child_kind == "array":
+                # A nested list keeps its own name (that is what it is for).
+                parts.extend(xml_render_node(child, row, depth, step, newline))
+            else:
+                text = xml_escape(xml_text(node_source_value(child, row)))
+                parts.append(f"{step * depth}<{name}>{text}</{name}>{newline}")
         return parts
     text = xml_escape(xml_text(node_source_value(node, row)))
     return [f"{step * depth}<{name}>{text}</{name}>{newline}"]

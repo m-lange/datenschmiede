@@ -110,8 +110,21 @@ Jeder Knoten hat einen Namen und eine Art:
 
 - **Objekt** — verschachtelt seine Kindknoten (JSON: `{ … }`, XML: ein
   Element mit Kindelementen)
-- **Array** — schreibt seine Kindknoten als Liste (JSON) bzw. als
-  wiederholte Geschwister-Elemente (XML)
+- **Array** — schreibt **einen Eintrag je Kindknoten**. Ein Array-Eintrag
+  hat keinen eigenen Namen, die Namen der Kinder werden also nicht
+  verwendet: bei JSON entsteht `[ … ]`, bei XML ein **wiederholtes
+  Element**, das den Namen des *Arrays* trägt:
+
+  ```xml
+  <!-- Array "Reference" mit zwei Kindern -->
+  <Reference>ORD-000001/NL</Reference>
+  <Reference>Andrzej Rosenow</Reference>
+  ```
+
+  Ist ein Kind selbst ein **Objekt**, wird daraus je Eintrag ein Element
+  mit dem Array-Namen, gefüllt mit den Kindern des Objekts. Die Anzahl der
+  Einträge ergibt sich aus der Anzahl der Kindknoten und ist damit für alle
+  Datensätze gleich
 - **Wert** — ein Blatt, das im Zuordnungs-Tab gefüllt wird; bei JSON
   zusätzlich mit **Werttyp** (automatisch, Text, Zahl, Ganzzahl,
   Wahrheitswert), bei XML entfällt der Typ, da XML nur Text kennt
@@ -366,7 +379,8 @@ Die Einstellungen eines Dateityps stehen in einem eigenen Block
 `[output.csv]` wird immer geschrieben; die übrigen nur, wenn der Dateityp
 ausgewählt ist oder vom Standard abweicht — eine reine CSV-Tabelle bleibt
 also so schlank wie bisher. Die JSON-/XML-Zielstruktur liegt als **flache**
-Liste in Dokumentreihenfolge darunter, jeder Knoten mit vollem Pfad:
+Liste in Dokumentreihenfolge darunter; die Verschachtelung steckt in
+`depth` (an der Wurzel weggelassen):
 
 ```toml
 [output.xml]
@@ -376,23 +390,28 @@ indent = 2
 declaration = true
 
 [[output.xml.nodes]]
-path = ["OrderId"]
+name = "OrderId"
 kind = "attribute"
 value_type = "auto"
 source_kind = "column"
 source = "order_no"
 
 [[output.xml.nodes]]
-path = ["Customer"]
+name = "Customer"
 kind = "object"
 
 [[output.xml.nodes]]
-path = ["Customer", "Name"]
+name = "Name"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "customer_name"
 ```
+
+Die Tiefe steht dort bewusst statt eines Namenspfads: **mehrere
+Geschwister dürfen denselben Namen tragen** — ein Namenspfad könnte sie
+nicht auseinanderhalten.
 
 ## Entwicklung
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.7.1
+
+- **Arrays schreiben in XML jetzt ein wiederholtes Element**: jedes Kind
+  eines Array-Knotens erzeugt ein Element mit dem Namen des *Arrays* —
+  `<Reference>…</Reference><Reference>…</Reference>` — statt wie bisher die
+  Kindknoten unter ihren eigenen Namen auszugeben, wodurch der Array-Name
+  gar nicht in der Ausgabe auftauchte. Ist ein Kind ein Objekt, wird daraus
+  je Eintrag ein Element mit dem Array-Namen samt dessen Kindern. Das
+  entspricht der JSON-Seite, wo Array-Einträge ebenfalls namenlos sind.
+- **Gleichnamige Geschwister-Knoten gehen nicht mehr verloren**: die
+  Zielstruktur wurde in der `.td`-Datei über einen Namenspfad
+  (`path = ["a", "b"]`) abgelegt — zwei Knoten mit demselben Namen unter
+  demselben Elternknoten fielen dadurch beim erneuten Einlesen zu *einem*
+  zusammen. Die Verschachtelung steckt jetzt in `depth`, die Identität ist
+  die Position; Dateien im alten Format werden weiterhin gelesen und beim
+  nächsten Speichern umgestellt.
+- Im Zuordnungs-Tab bekommen mehrfach vorkommende Pfade eine laufende
+  Nummer (`Reference › eigene #1`), damit jede Zeile eindeutig bleibt.
+- **ER-Diagramm**: der hellere Balken am unteren Rand der Kasten-Kopfzeile
+  ist verschwunden — die Kopfzeile wird als *eine* Form gezeichnet statt
+  als zwei sich überlappende Rechtecke, deren durchscheinende Tönung sich
+  im Überlappungsbereich addierte.
+
 ## 0.7.0
 
 - **Drei neue Ausgabeformate neben CSV**: eine Tabelle lässt sich jetzt

@@ -326,9 +326,9 @@ const en: WebviewStrings = {
 
 	schemaSectionTitle: 'Target structure',
 	schemaHintJson:
-		'Describes ONE record. Objects and arrays nest, values are the leaves that get a column mapped to them in the "Mapping" tab.',
+		'Describes ONE record. Objects nest, values are the leaves that get a column mapped to them in the "Mapping" tab, and an array writes one entry per child node — an array entry has no name of its own, so the child names are not used.',
 	schemaHintXml:
-		'Describes ONE record element. Objects become nested elements, values become child elements and attributes become attributes of their parent — the "Mapping" tab fills them with column values.',
+		'Describes ONE record element. Objects become nested elements, values become child elements and attributes become attributes of their parent. An array becomes a repeating element: every child writes one element named after the ARRAY, so its own name is not used — the "Mapping" tab fills the leaves with column values.',
 	schemaAddNodeButton: 'Add node',
 	schemaAddChildLabel: 'Add child node',
 	schemaFromColumnsButton: 'Derive from columns',
@@ -508,9 +508,9 @@ const de: WebviewStrings = {
 
 	schemaSectionTitle: 'Zielstruktur',
 	schemaHintJson:
-		'Beschreibt EINEN Datensatz. Objekte und Arrays verschachteln, Werte sind die Blätter, denen im Tab „Zuordnung“ eine Spalte zugewiesen wird.',
+		'Beschreibt EINEN Datensatz. Objekte verschachteln, Werte sind die Blätter, denen im Tab „Zuordnung“ eine Spalte zugewiesen wird, und ein Array schreibt einen Eintrag je Kindknoten — ein Array-Eintrag hat keinen eigenen Namen, die Kindnamen werden also nicht verwendet.',
 	schemaHintXml:
-		'Beschreibt EIN Datensatz-Element. Objekte werden zu verschachtelten Elementen, Werte zu Kindelementen und Attribute zu Attributen ihres Elternelements — der Tab „Zuordnung“ füllt sie mit Spaltenwerten.',
+		'Beschreibt EIN Datensatz-Element. Objekte werden zu verschachtelten Elementen, Werte zu Kindelementen und Attribute zu Attributen ihres Elternelements. Ein Array wird zum wiederholten Element: jedes Kind schreibt ein Element mit dem Namen des ARRAYS, sein eigener Name wird also nicht verwendet — der Tab „Zuordnung“ füllt die Blätter mit Spaltenwerten.',
 	schemaAddNodeButton: 'Knoten hinzufügen',
 	schemaAddChildLabel: 'Unterknoten hinzufügen',
 	schemaFromColumnsButton: 'Aus Spalten erzeugen',

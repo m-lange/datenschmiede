@@ -146,25 +146,30 @@ function toXml(raw: Record<string, unknown>): XmlOptions {
 /**
  * Rebuilds the structure tree from the flat `[[output.*.nodes]]` list.
  *
- * On disk every node carries its full `path` (an array of names, so names
- * containing dots stay unambiguous) and the list is in document order — which
- * is also the child order. A node whose parent is missing (hand-edited file)
- * gets its missing levels created as objects rather than being dropped.
+ * Nesting is expressed by `depth` (omitted at the root) and the list is in
+ * document order, which is also the child order — so the tree is rebuilt with a
+ * simple parent stack. Identity is deliberately POSITIONAL rather than by name:
+ * several siblings may share one name, which is exactly how a repeating XML
+ * element (`<Tag>a</Tag><Tag>b</Tag>`) is built.
+ *
+ * Files written by the first release of this feature instead carry a `path`
+ * array of names; they are still read (their depth follows from the path
+ * length) and are rewritten in the current form on the next save.
  */
 function toStructureNodes(raw: unknown): StructureNode[] {
 	if (!Array.isArray(raw)) {
 		return [];
 	}
 	const roots: StructureNode[] = [];
-	/** Node path (see pathKey) -> node, so children can be attached to their parent. */
-	const byPath = new Map<string, StructureNode>();
+	/** The currently open parents, indexed by their depth. */
+	const parents: StructureNode[] = [];
 
 	for (const entry of raw) {
-		const node = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+		const node = subTable(entry);
 		const path = Array.isArray(node.path) ? node.path.filter((p): p is string => typeof p === 'string') : [];
-		if (path.length === 0) {
-			continue;
-		}
+		const name = typeof node.name === 'string' ? node.name : (path[path.length - 1] ?? '');
+		const depth = node.depth !== undefined ? toInt(node.depth, 0) : Math.max(0, path.length - 1);
+
 		const kind = STRUCTURE_NODE_KINDS.includes(toStr(node.kind) as StructureNodeKind)
 			? (toStr(node.kind) as StructureNodeKind)
 			: 'value';
@@ -175,56 +180,21 @@ function toStructureNodes(raw: unknown): StructureNode[] {
 			? toStr(node.value_type)
 			: 'auto';
 
-		const built: StructureNode = {
-			name: path[path.length - 1],
-			kind,
-			valueType,
-			sourceKind,
-			source: toStr(node.source),
-			children: [],
-		};
-		attachNode(built, path, roots, byPath);
+		const built: StructureNode = { name, kind, valueType, sourceKind, source: toStr(node.source), children: [] };
+
+		// A depth that skips a level (only possible in a hand-edited file) is
+		// clamped to the next open one instead of dropping the node.
+		const level = Math.min(depth, parents.length);
+		if (level === 0) {
+			roots.push(built);
+		} else {
+			parents[level - 1].children.push(built);
+		}
+		parents.length = level;
+		parents.push(built);
 	}
 
 	return roots;
-}
-
-/** Map key of a node path — JSON-encoded, so it stays unambiguous for names containing any character. */
-function pathKey(path: string[]): string {
-	return JSON.stringify(path);
-}
-
-/** Hangs one parsed node into the tree at its path, creating missing intermediate levels as objects. */
-function attachNode(
-	node: StructureNode,
-	path: string[],
-	roots: StructureNode[],
-	byPath: Map<string, StructureNode>,
-): void {
-	const key = pathKey(path);
-	let siblings = roots;
-	for (let i = 1; i < path.length; i++) {
-		const parentKey = pathKey(path.slice(0, i));
-		let parent = byPath.get(parentKey);
-		if (!parent) {
-			parent = { name: path[i - 1], kind: 'object', valueType: 'auto', sourceKind: 'column', source: '', children: [] };
-			byPath.set(parentKey, parent);
-			siblings.push(parent);
-		}
-		siblings = parent.children;
-	}
-	const existing = byPath.get(key);
-	if (existing) {
-		// The node was created implicitly as a parent before its own entry was
-		// read — fill in its real configuration, keeping the children collected.
-		existing.kind = node.kind;
-		existing.valueType = node.valueType;
-		existing.sourceKind = node.sourceKind;
-		existing.source = node.source;
-		return;
-	}
-	byPath.set(key, node);
-	siblings.push(node);
 }
 
 /** Coerces an unknown TOML value to a string, treating anything else as empty. */
@@ -395,19 +365,25 @@ function serializeXml(xml: XmlOptions): string[] {
 }
 
 /**
- * Writes the structure tree as a FLAT list of array-of-tables entries, each
- * carrying its full `path`. A nested TOML representation would need one table
- * header per level and could not preserve the child order — the flat list is
- * both readable and unambiguous (see toStructureNodes for the counterpart).
+ * Writes the structure tree as a FLAT list of array-of-tables entries in
+ * document order, each carrying its nesting `depth` (omitted at the root). A
+ * nested TOML representation would need one table header per level and could
+ * not preserve the child order.
+ *
+ * The depth is written rather than a path of names on purpose: several siblings
+ * may share one name — that is how a repeating XML element is built — and a
+ * name path could not tell them apart (see toStructureNodes).
  */
-function serializeStructureNodes(header: string, nodes: StructureNode[], parentPath: string[] = []): string[] {
+function serializeStructureNodes(header: string, nodes: StructureNode[], depth = 0): string[] {
 	const lines: string[] = [];
 	for (const node of nodes) {
-		const path = [...parentPath, node.name];
 		lines.push('');
 		lines.push(`[[${header}]]`);
-		lines.push(`path = [${path.map((part) => tomlString(part)).join(', ')}]`);
+		lines.push(`name = ${tomlString(node.name)}`);
 		lines.push(`kind = ${tomlString(node.kind)}`);
+		if (depth > 0) {
+			lines.push(`depth = ${depth}`);
+		}
 		if (node.kind === 'value' || node.kind === 'attribute') {
 			// Only leaves carry a value type and a mapping — objects and arrays
 			// are pure structure.
@@ -415,7 +391,7 @@ function serializeStructureNodes(header: string, nodes: StructureNode[], parentP
 			lines.push(`source_kind = ${tomlString(node.sourceKind || 'column')}`);
 			lines.push(`source = ${tomlString(node.source)}`);
 		}
-		lines.push(...serializeStructureNodes(header, node.children, path));
+		lines.push(...serializeStructureNodes(header, node.children, depth + 1));
 	}
 	return lines;
 }

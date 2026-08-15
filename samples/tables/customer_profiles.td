@@ -49,115 +49,125 @@ datetime_format = "%Y-%m-%dT%H:%M:%S"
 encoding = "utf-8"
 
 [[output.json.nodes]]
-path = ["id"]
+name = "id"
 kind = "value"
 value_type = "integer"
 source_kind = "column"
 source = "customer_id"
 
 [[output.json.nodes]]
-path = ["uuid"]
+name = "uuid"
 kind = "value"
 value_type = "string"
 source_kind = "column"
 source = "customer_uuid"
 
 [[output.json.nodes]]
-path = ["name"]
+name = "name"
 kind = "value"
 value_type = "string"
 source_kind = "column"
 source = "full_name"
 
 [[output.json.nodes]]
-path = ["email"]
+name = "email"
 kind = "value"
 value_type = "string"
 source_kind = "column"
 source = "email"
 
 [[output.json.nodes]]
-path = ["address"]
+name = "address"
 kind = "object"
 
 [[output.json.nodes]]
-path = ["address", "street"]
+name = "street"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "column"
 source = "street"
 
 [[output.json.nodes]]
-path = ["address", "city"]
+name = "city"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "column"
 source = "city"
 
 [[output.json.nodes]]
-path = ["address", "postal_code"]
+name = "postal_code"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "column"
 source = "postal_code"
 
 [[output.json.nodes]]
-path = ["address", "country"]
+name = "country"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "column"
 source = "country_code"
 
 [[output.json.nodes]]
-path = ["revenue"]
+name = "revenue"
 kind = "object"
 
 [[output.json.nodes]]
-path = ["revenue", "total"]
+name = "total"
 kind = "value"
+depth = 1
 value_type = "number"
 source_kind = "column"
 source = "revenue_total"
 
 [[output.json.nodes]]
-path = ["revenue", "currency"]
+name = "currency"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "constant"
 source = "EUR"
 
 [[output.json.nodes]]
-path = ["tags"]
+name = "tags"
 kind = "array"
 
 [[output.json.nodes]]
-path = ["tags", "segment"]
+name = "segment"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "column"
 source = "segment"
 
 [[output.json.nodes]]
-path = ["tags", "channel"]
+name = "channel"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "constant"
 source = "webshop"
 
 [[output.json.nodes]]
-path = ["meta"]
+name = "meta"
 kind = "object"
 
 [[output.json.nodes]]
-path = ["meta", "source"]
+name = "source"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "constant"
 source = "datenschmiede"
 
 [[output.json.nodes]]
-path = ["meta", "exported_at"]
+name = "exported_at"
 kind = "value"
+depth = 1
 value_type = "string"
 source_kind = "column"
 source = "exported_at"

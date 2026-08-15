@@ -3,13 +3,17 @@ schema = "shop.edi"
 name = "order_messages"
 description = """
 **XML-Beispiel** — eine Bestellnachricht im EDI-Stil. Die **Zielstruktur**
-(Tab „Schema“) unterscheidet hier drei Knotenarten:
+(Tab „Schema“) zeigt hier alle vier Knotenarten:
 
 - **Attribut** — `OrderId` und `Currency` hängen als Attribute am
   `<Order>`-Element, `type` am `<Customer>`
 - **Objekt** — `Customer` und `Amounts` werden zu verschachtelten Elementen
 - **Wert** — die Blätter, die im Tab **„Zuordnung“** eine Spalte (oder
   einen festen Text) bekommen
+- **Array** — `Reference` wird zum **wiederholten Element**: jedes Kind
+  schreibt ein eigenes `<Reference>`, hier zweimal mit unterschiedlicher
+  Quelle. Der Name des Arrays ist der Tag-Name; die Namen der Kinder
+  tauchen in der Ausgabe **nicht** auf
 
 Geschrieben wird `<Orders><Order …>…</Order>…</Orders>` mit
 `<?xml …?>`-Deklaration und zwei Leerzeichen Einrückung. Anders als bei JSON
@@ -44,99 +48,119 @@ datetime_format = "%Y-%m-%dT%H:%M:%S"
 encoding = "utf-8"
 
 [[output.xml.nodes]]
-path = ["OrderId"]
+name = "OrderId"
 kind = "attribute"
 value_type = "auto"
 source_kind = "column"
 source = "order_no"
 
 [[output.xml.nodes]]
-path = ["Currency"]
+name = "Currency"
 kind = "attribute"
 value_type = "auto"
 source_kind = "column"
 source = "currency"
 
 [[output.xml.nodes]]
-path = ["OrderDate"]
+name = "OrderDate"
 kind = "value"
 value_type = "auto"
 source_kind = "column"
 source = "order_date"
 
 [[output.xml.nodes]]
-path = ["Status"]
+name = "Status"
 kind = "value"
 value_type = "auto"
 source_kind = "column"
 source = "status"
 
 [[output.xml.nodes]]
-path = ["Customer"]
+name = "Customer"
 kind = "object"
 
 [[output.xml.nodes]]
-path = ["Customer", "type"]
+name = "type"
 kind = "attribute"
+depth = 1
 value_type = "auto"
 source_kind = "constant"
 source = "B2C"
 
 [[output.xml.nodes]]
-path = ["Customer", "Name"]
+name = "Name"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "customer_name"
 
 [[output.xml.nodes]]
-path = ["Customer", "Country"]
+name = "Country"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "country_code"
 
 [[output.xml.nodes]]
-path = ["Customer", "Iban"]
+name = "Iban"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "iban"
 
 [[output.xml.nodes]]
-path = ["Amounts"]
+name = "Amounts"
 kind = "object"
 
 [[output.xml.nodes]]
-path = ["Amounts", "Net"]
+name = "Net"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "net_amount"
 
 [[output.xml.nodes]]
-path = ["Amounts", "Tax"]
+name = "Tax"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "tax_amount"
 
 [[output.xml.nodes]]
-path = ["Amounts", "Gross"]
+name = "Gross"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "gross_amount"
 
 [[output.xml.nodes]]
-path = ["Reference"]
+name = "Reference"
+kind = "array"
+
+[[output.xml.nodes]]
+name = "eigene"
 kind = "value"
+depth = 1
 value_type = "auto"
 source_kind = "column"
 source = "reference"
 
 [[output.xml.nodes]]
-path = ["MessageType"]
+name = "kunde"
+kind = "value"
+depth = 1
+value_type = "auto"
+source_kind = "column"
+source = "customer_name"
+
+[[output.xml.nodes]]
+name = "MessageType"
 kind = "value"
 value_type = "auto"
 source_kind = "constant"

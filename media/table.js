@@ -1188,9 +1188,28 @@
 		thead.appendChild(headRow);
 		table.appendChild(thead);
 
+		// Several leaves may legitimately share a path — an array's children are
+		// often all named alike (their names are not used in the output anyway).
+		// Those rows get a running number appended, so each one stays
+		// identifiable.
+		/** @type {Record<string, number>} */
+		const pathCounts = {};
+		for (const entry of leaves) {
+			const text = mappingPathText(entry.path);
+			pathCounts[text] = (pathCounts[text] || 0) + 1;
+		}
+		/** @type {Record<string, number>} */
+		const pathSeen = {};
+
 		const tbody = el('tbody');
 		leaves.forEach((entry, position) => {
-			tbody.appendChild(renderMappingRow(entry, position));
+			const text = mappingPathText(entry.path);
+			let label = text;
+			if (pathCounts[text] > 1) {
+				pathSeen[text] = (pathSeen[text] || 0) + 1;
+				label = `${text} #${pathSeen[text]}`;
+			}
+			tbody.appendChild(renderMappingRow(entry, position, label));
 		});
 		table.appendChild(tbody);
 
@@ -1199,21 +1218,26 @@
 		return section;
 	}
 
+	/** Display text of a leaf's path in the structure. @param {string[]} path */
+	function mappingPathText(path) {
+		return path.map((part) => part.trim() || '?').join(' › ');
+	}
+
 	/**
 	 * One row of the mapping grid.
 	 * @param {{node:StructureNode,depth:number,path:string[]}} entry
 	 * @param {number} position
+	 * @param {string} pathLabel Path in the structure, numbered where it repeats.
 	 */
-	function renderMappingRow(entry, position) {
+	function renderMappingRow(entry, position, pathLabel) {
 		const node = entry.node;
 		const row = el('tr');
 		row.appendChild(el('td', { className: 'col-num', text: String(position + 1) }));
 
 		// Full path in the structure — read-only here; renaming happens in the
 		// schema tab, which is the single place the structure is edited.
-		const pathText = entry.path.map((part) => part.trim() || '?').join(' › ');
 		const pathTd = el('td');
-		pathTd.appendChild(el('span', { className: 'mapping-path', text: pathText }));
+		pathTd.appendChild(el('span', { className: 'mapping-path', text: pathLabel }));
 		row.appendChild(pathTd);
 
 		row.appendChild(el('td', { className: 'mapping-kind', text: structureKindLabel(node.kind) }));
