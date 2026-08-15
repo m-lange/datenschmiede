@@ -124,6 +124,19 @@
 	}
 
 	/**
+	 * Path data for a rectangle whose TOP corners are rounded and whose bottom
+	 * edge is straight — the table box header, which sits flush against the
+	 * column rows below it.
+	 * @param {number} width
+	 * @param {number} height
+	 * @param {number} radius
+	 */
+	function roundedTopPath(width, height, radius) {
+		const r = Math.min(radius, width / 2, height);
+		return `M0,${r} A${r},${r} 0 0 1 ${r},0 H${width - r} A${r},${r} 0 0 1 ${width},${r} V${height} H0 Z`;
+	}
+
+	/**
 	 * Appends a <title> child, which the browser shows as a native tooltip.
 	 * @param {SVGElement} parent
 	 * @param {string} text
@@ -600,11 +613,17 @@
 			appendTitle(group, `${table.label}\n${table.path}\n${strings.diagramOpenHint}`);
 
 			group.appendChild(svgEl('rect', { class: 'er-box', width: boxW, height: boxH, rx: 8 }));
-			group.appendChild(svgEl('rect', { class: 'er-head', width: boxW, height: HEAD_H, rx: 8 }));
+			// The header is ONE shape on purpose: its fill is a translucent tint
+			// (see .er-head in main.css), so two overlapping rectangles — the
+			// former way of squaring off the bottom corners — would compound
+			// their alpha and show up as a lighter bar across the header.
 			if (table.columns.length > 0) {
-				// Square off the bottom corners of the header rectangle again —
-				// only the box itself has rounded corners at the bottom.
-				group.appendChild(svgEl('rect', { class: 'er-head', y: HEAD_H - 10, width: boxW, height: 10 }));
+				// Only the top corners are rounded; the column rows follow
+				// directly below the straight bottom edge.
+				group.appendChild(svgEl('path', { class: 'er-head', d: roundedTopPath(boxW, HEAD_H, 8) }));
+			} else {
+				// Without columns the header IS the whole box — same rounding.
+				group.appendChild(svgEl('rect', { class: 'er-head', width: boxW, height: HEAD_H, rx: 8 }));
 			}
 			group.appendChild(svgEl('rect', { class: `er-stripe er-accent-${accent}`, y: HEAD_H - 2, width: boxW, height: 2 }));
 
