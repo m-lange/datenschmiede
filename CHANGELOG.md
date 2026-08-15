@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0
+
+- **Deutlich weniger Speicherbedarf bei großen Läufen.** Bisher hielt der
+  Lauf *jede* erzeugte Tabelle bis zum Ende im Arbeitsspeicher — der
+  Spitzenbedarf war damit die Summe aller Tabellen, nicht die größte
+  einzelne. Jetzt wandert eine Tabelle sofort nach dem Schreiben in einen
+  **Zwischenspeicher** und wird nur noch spaltenweise zurückgelesen, wenn
+  eine spätere Tabelle sie braucht (Fremdschlüssel-Ziehung, `ctx.table`,
+  `ctx.related`, zeilentreue Nachschlage-Ziehungen über FK-Grenzen). Ist das
+  Python-Paket **`duckdb`** installiert, liegt der Zwischenspeicher in einer
+  temporären DuckDB-Datenbank mit gedeckeltem Puffer (nach dem Lauf
+  gelöscht), sonst im Arbeitsspeicher — dort werden zusätzlich alle Tabellen
+  freigegeben, die keine noch folgende Tabelle mehr lesen kann. Der Lauf
+  arbeitet außerdem **kettenweise in die Tiefe**: eine FK-Kette wird
+  fertiggestellt, bevor die nächste beginnt.
+  Gemessen an 50 Tabellen mit 10 Mio. Datensätzen: **3.040 MB → 633 MB**
+  Spitzenbedarf bei praktisch gleicher Laufzeit.
+
 ## 0.9.0
 
 - **Datei-Vorschau als echter Editor**: die bisherigen

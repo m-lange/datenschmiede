@@ -93,6 +93,131 @@ def get_faker(locale):
     return _faker_instances[key]
 
 
+class TableStore:
+    """
+    Where a table's values live once it is finished.
+
+    The runner keeps only the table it is currently generating in memory;
+    everything already written goes into the store and is read back column by
+    column when a later table needs it — a foreign key draw, ctx.table(...),
+    ctx.related(...) or a row-consistent lookup across an FK. That turns peak
+    memory from "the sum of all tables" into "roughly the largest single one",
+    which is what makes projects with dozens of tables practical.
+
+    Subclasses implement the two backends; use open_store() to pick one.
+    """
+
+    def put(self, label, df):
+        raise NotImplementedError
+
+    def column(self, label, name):
+        """One column as a pandas Series, or None if it is not stored."""
+        raise NotImplementedError
+
+    def release(self, keep):
+        """Drops every stored table whose label is not in `keep` (memory backend only)."""
+
+    def close(self):
+        pass
+
+
+class MemoryStore(TableStore):
+    """Keeps finished tables as pandas Series in a dict — the behaviour before DuckDB."""
+
+    name = "memory"
+
+    def __init__(self):
+        self._tables = {}
+
+    def put(self, label, df):
+        self._tables[label] = {name: df[name] for name in df.columns}
+
+    def column(self, label, name):
+        return self._tables.get(label, {}).get(name)
+
+    def release(self, keep):
+        for label in [l for l in self._tables if l not in keep]:
+            del self._tables[label]
+
+
+class DuckStore(TableStore):
+    """
+    Keeps finished tables in a DuckDB database in a temporary directory.
+
+    Only the column actually asked for is materialized, and only for as long as
+    the caller holds it — the rest stays on disk, so the number of tables in a
+    project stops driving memory at all. The database is deleted when the run
+    ends.
+    """
+
+    name = "duckdb"
+
+    def __init__(self, duckdb_module, tempdir):
+        import os
+
+        self._duckdb = duckdb_module
+        self._dir = tempdir
+        self._con = duckdb_module.connect(os.path.join(tempdir.name, "run.duckdb"))
+        # Cap the buffer pool. Without a limit DuckDB keeps growing it as tables
+        # are added — which would give back exactly the memory this store exists
+        # to save. Anything above the cap spills to the temporary database file;
+        # the generation itself (pandas) works outside this budget.
+        self._con.execute("SET memory_limit = '256MB'")
+        self._con.execute(f"SET temp_directory = '{tempdir.name.replace(chr(92), '/')}'")
+        # Generated identifiers rather than the labels themselves: a label like
+        # "shop.core.customers" would otherwise have to be quoted everywhere and
+        # still risks colliding with DuckDB's schema.table syntax.
+        self._names = {}
+
+    def put(self, label, df):
+        name = self._names.get(label)
+        if name is None:
+            name = f"t_{len(self._names)}"
+            self._names[label] = name
+        # The frame is handed over by reference; DuckDB copies it into its own
+        # storage, after which the runner drops its reference.
+        self._con.register("incoming", df)
+        self._con.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM incoming")
+        self._con.unregister("incoming")
+
+    def column(self, label, name):
+        table = self._names.get(label)
+        if table is None:
+            return None
+        quoted = '"' + str(name).replace('"', '""') + '"'
+        try:
+            result = self._con.execute(f"SELECT {quoted} FROM {table}").fetch_df()
+        except Exception:
+            # Unknown column — the caller reports it with a proper message.
+            return None
+        return result[result.columns[0]]
+
+    def close(self):
+        try:
+            self._con.close()
+        finally:
+            self._dir.cleanup()
+
+
+def open_store():
+    """
+    The DuckDB-backed store when the package is available, otherwise the
+    in-memory one. DuckDB is deliberately optional: it lowers peak memory a lot
+    on big projects, but a run without it still works exactly as before.
+    """
+    import tempfile
+
+    try:
+        import duckdb
+    except ImportError:
+        return MemoryStore()
+    try:
+        return DuckStore(duckdb, tempfile.TemporaryDirectory(prefix="datenschmiede-"))
+    except Exception as err:  # noqa: BLE001 — a broken DuckDB must not fail the run
+        emit("log", table="", message=f"DuckDB could not be opened ({err}) — keeping data in memory.")
+        return MemoryStore()
+
+
 class Context:
     """The `ctx` object handed to custom generators (see the .tdgen editor)."""
 
@@ -127,10 +252,10 @@ class Context:
 
     def table(self, label, column):
         """Already generated values of a column of another table in the plan."""
-        data = self._runner.data.get(label)
-        if data is None or column not in data:
+        values = self._runner.values(label, column)
+        if values is None:
             raise RuntimeError(f'ctx.table("{label}", "{column}"): values are not available (yet)')
-        return data[column]
+        return values
 
     def related(self, fk_path, column):
         """
@@ -159,16 +284,16 @@ class Context:
                 raise RuntimeError(
                     f'ctx.related("{fk_path}", ...): "{part}" is not a foreign key column of {table_def["label"]}'
                 )
-            data = self._runner.data.get(table_def["label"], {})
-            if part not in data:
+            hop_values = self._runner.values(table_def["label"], part)
+            if hop_values is None:
                 raise RuntimeError(f'ctx.related("{fk_path}", ...): column {table_def["label"]}.{part} is not generated yet')
             if keys is None:
                 # First hop: our own FK values identify the records of the next table.
-                keys = pd.Series(data[part])
+                keys = pd.Series(hop_values)
             else:
                 # Further hop: translate the keys collected so far into the FK
                 # values of the table just reached.
-                mapping = pd.Series(data[part].values, index=data[parent_key].values)
+                mapping = pd.Series(hop_values.values, index=self._runner.values(table_def["label"], parent_key).values)
                 mapping = mapping[~mapping.index.duplicated(keep="first")]
                 keys = keys.map(mapping)
             parent_label, parent_key = col_def["fk_table"], col_def["fk_column"]
@@ -177,12 +302,13 @@ class Context:
                 raise RuntimeError(f'ctx.related("{fk_path}", ...): table {parent_label} is not part of this run')
             table_def = next_table
 
-        final = self._runner.data.get(table_def["label"])
-        if final is None or parent_key not in final or column not in final:
+        final_column = self._runner.values(table_def["label"], column)
+        final_keys = self._runner.values(table_def["label"], parent_key)
+        if final_column is None or final_keys is None:
             raise RuntimeError(
                 f'ctx.related("{fk_path}", "{column}"): values of {table_def["label"]}.{column} are not available (yet)'
             )
-        mapping = pd.Series(final[column].values, index=final[parent_key].values)
+        mapping = pd.Series(final_column.values, index=final_keys.values)
         mapping = mapping[~mapping.index.duplicated(keep="first")]
         return pd.Series(keys).map(mapping)
 
@@ -531,8 +657,11 @@ class Runner:
         self.file_generators = {}
         for defn in plan.get("file_generators", []):
             self.file_generators[defn["name"]] = defn
-        # label -> {column name -> pd.Series} of the values generated so far
+        # Values of the table CURRENTLY being generated: {label -> {column ->
+        # pd.Series}}. Finished tables move into the store (see values()), so
+        # this never holds more than one table at a time.
         self.data = {}
+        self.store = open_store()
         # label -> row count
         self.row_counts = {}
         # (table_label, list_name) -> the lookup list row indices drawn per
@@ -547,6 +676,18 @@ class Runner:
     # ------------------------------------------------------------------
     # Ordering
     # ------------------------------------------------------------------
+
+    def values(self, label, column):
+        """
+        Values of one column of any table of the run: from the table currently
+        being generated if it is that one, otherwise from the store. `None` when
+        the table or column is not available (yet) — callers turn that into a
+        message naming the reference.
+        """
+        current = self.data.get(label)
+        if current is not None and column in current:
+            return current[column]
+        return self.store.column(label, column)
 
     def table_dependencies(self, table):
         """Labels of the tables (in the plan) this table depends on."""
@@ -569,10 +710,45 @@ class Runner:
             ready = [t for t in remaining.values() if not (self.table_dependencies(t) & set(remaining))]
             if not ready:
                 fail("Circular dependency between tables: " + ", ".join(sorted(remaining)))
-            for table in sorted(ready, key=lambda t: t["label"]):
-                ordered.append(table)
-                del remaining[table["label"]]
+            # Depth first: of the tables that are ready, prefer one that depends
+            # on what was just generated, so a whole FK chain is finished before
+            # the next is started. A parent can then be released early instead of
+            # being held while every other chain is worked on in parallel.
+            recent = ordered[-1]["label"] if ordered else None
+            ready.sort(key=lambda t: (0 if recent in self.table_dependencies(t) else 1, t["label"]))
+            table = ready[0]
+            ordered.append(table)
+            del remaining[table["label"]]
         return ordered
+
+    def reachable_tables(self, table):
+        """
+        Every table this one can still read: its direct dependencies plus — since
+        ctx.related walks FK chains — everything reachable from those.
+        """
+        seen = set()
+        stack = list(self.table_dependencies(table))
+        while stack:
+            label = stack.pop()
+            if label in seen:
+                continue
+            seen.add(label)
+            following = self.tables.get(label)
+            if following is not None:
+                stack.extend(self.table_dependencies(following))
+        return seen
+
+    def release_unneeded(self, ordered, index):
+        """
+        Frees the values of every table that no table still to come can read.
+        Only the in-memory store holds anything worth freeing; the DuckDB store
+        keeps its tables on disk anyway.
+        """
+        keep = set()
+        for later in ordered[index + 1:]:
+            keep.add(later["label"])
+            keep |= self.reachable_tables(later)
+        self.store.release(keep)
 
     def sorted_columns(self, table):
         """
@@ -665,11 +841,11 @@ class Runner:
             if not column.get("fk") or not column.get("fk_table"):
                 continue
             parent_indices = self.lookup_row_indices.get((column["fk_table"], name))
-            own_fk = self.data.get(table["label"], {}).get(column["name"])
-            parent = self.data.get(column["fk_table"])
-            if parent_indices is None or own_fk is None or parent is None:
+            own_fk = self.values(table["label"], column["name"])
+            parent_keys = self.values(column["fk_table"], column["fk_column"])
+            if parent_indices is None or own_fk is None or parent_keys is None:
                 continue
-            mapping = pd.Series(np.asarray(parent_indices), index=parent[column["fk_column"]].values)
+            mapping = pd.Series(np.asarray(parent_indices), index=parent_keys.values)
             mapping = mapping[~mapping.index.duplicated(keep="first")]
             mapped = pd.Series(own_fk).map(mapping)
             if mapped.isna().any():
@@ -712,7 +888,7 @@ class Runner:
 
         if gen_id == "foreign-key" or (column.get("fk") and not gen_id):
             ref_table, ref_column = column.get("fk_table"), column.get("fk_column")
-            ref_values = self.data.get(ref_table, {}).get(ref_column)
+            ref_values = self.values(ref_table, ref_column)
             if ref_values is None:
                 raise RuntimeError(
                     f'Column {table["label"]}.{column["name"]}: referenced values '
@@ -875,7 +1051,7 @@ class Runner:
         elif table.get("driving_fk"):
             driving = table["driving_fk"]
             parent_label, parent_column = driving["table"], driving["column"]
-            parent_values = self.data.get(parent_label, {}).get(parent_column)
+            parent_values = self.values(parent_label, parent_column)
             if parent_values is None:
                 raise RuntimeError(
                     f'Table {label}: referenced values {parent_label}.{parent_column} are not available'
@@ -1354,6 +1530,7 @@ class Runner:
         preview = self.plan.get("preview")
         self.out_dir = self.resolve_output_dir()
         emit("start", tables=len(ordered))
+        emit("log", table="", message=f"Storing generated tables via {self.store.name}.")
         files = []
         for index, table in enumerate(ordered):
             emit("table_start", table=table["label"], index=index, total=len(ordered))
@@ -1377,6 +1554,12 @@ class Runner:
                     )
                 continue
             path = self.write_output(table, df, n)
+            # The table is finished: hand it to the store and drop the working
+            # copy, so only the table being generated is ever held in memory.
+            self.store.put(table["label"], df)
+            del df
+            self.data.pop(table["label"], None)
+            self.release_unneeded(ordered, index)
             if path is not None:
                 files.append({"table": table["label"], "file": path, "records": n})
             # table_done is reported either way, so the progress indicator and
@@ -1395,8 +1578,9 @@ def main():
             plan = json.load(handle)
     except (OSError, json.JSONDecodeError) as err:
         fail(f"Unable to read plan file: {err}")
+    runner = Runner(plan)
     try:
-        Runner(plan).run()
+        runner.run()
     except RuntimeError as err:
         # Include the traceback even for "expected" errors — for failures in
         # custom generator code it points at the offending line
@@ -1404,6 +1588,9 @@ def main():
         fail(err, traceback=traceback.format_exc())
     except Exception as err:  # noqa: BLE001 — report every unexpected exception cleanly as an event
         fail(f"{type(err).__name__}: {err}", traceback=traceback.format_exc())
+    finally:
+        # Removes the temporary DuckDB database (a no-op for the memory store).
+        runner.store.close()
 
 
 if __name__ == "__main__":
