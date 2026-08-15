@@ -1791,6 +1791,22 @@
 		});
 	}
 
+	/**
+	 * Parameter types that take free text and may therefore reference other
+	 * columns of this table as `{column}` — the reference types pick an existing
+	 * name from a list, `boolean` only knows true/false (counterpart to
+	 * isTemplatableParameterType in src/generator/types.ts).
+	 * @param {string} type
+	 */
+	function isTemplatableParamType(type) {
+		return !['table', 'lookup', 'column', 'own_column', 'boolean'].includes(type);
+	}
+
+	/** `true` if a parameter value references a column instead of being one fixed value. @param {string} value */
+	function hasParamTemplate(value) {
+		return /\{[^{}]+\}/.test(value);
+	}
+
 	/** @param {string} id */
 	function findGeneratorOption(id) {
 		return generatorOptions.find((o) => o.id === id) || null;
@@ -2468,6 +2484,8 @@
 
 		if (option.parameters.length === 0) {
 			dialog.appendChild(el('p', { className: 'hint', text: strings.generatorDialogNoParams }));
+		} else if (option.parameters.some((parameter) => isTemplatableParamType(parameter.type))) {
+			dialog.appendChild(el('p', { className: 'hint param-dialog-desc', text: strings.generatorTemplateHint }));
 		}
 
 		for (const parameter of option.parameters) {
@@ -2484,10 +2502,57 @@
 		}
 
 		/**
-		 * Zum Datentyp passendes Eingabefeld eines Parameters.
+		 * Input control of a parameter — plus, for parameters whose control is a
+		 * picker (fixed choices, date/time), the toggle that switches it to free
+		 * text: only there can a value reference other columns as `{column}`
+		 * (see isTemplatableParamType).
 		 * @param {GeneratorParameter} parameter
 		 */
 		function renderParamControl(parameter) {
+			if (!isTemplatableParamType(parameter.type)) {
+				return buildParamControl(parameter, false);
+			}
+			const usesPicker =
+				(parameter.choices && parameter.choices.length > 0) || ['date', 'datetime', 'time'].includes(parameter.type);
+			if (!usesPicker) {
+				// A plain text field accepts "{country}" as it is.
+				return buildParamControl(parameter, false);
+			}
+
+			const holder = el('div', { className: 'param-control' });
+			// A picker cannot display "{country}", so a value that already is a
+			// template opens as free text.
+			let asText = hasParamTemplate(params[parameter.name] || '');
+			const toggle = el('button', { className: 'icon-button param-template-toggle' });
+			toggle.type = 'button';
+			toggle.title = strings.generatorTemplateToggleLabel;
+			toggle.setAttribute('aria-label', strings.generatorTemplateToggleLabel);
+			toggle.appendChild(el('i', { className: 'codicon codicon-symbol-variable' }));
+			const build = () => {
+				holder.textContent = '';
+				toggle.classList.toggle('is-active', asText);
+				toggle.setAttribute('aria-pressed', asText ? 'true' : 'false');
+				holder.appendChild(buildParamControl(parameter, asText));
+				holder.appendChild(toggle);
+			};
+			toggle.addEventListener('click', () => {
+				asText = !asText;
+				build();
+				const input = holder.querySelector('input');
+				if (input) {
+					input.focus();
+				}
+			});
+			build();
+			return holder;
+		}
+
+		/**
+		 * Zum Datentyp passendes Eingabefeld eines Parameters.
+		 * @param {GeneratorParameter} parameter
+		 * @param {boolean} asText Freies Textfeld erzwingen (Vorlage mit `{spalte}`) statt Auswahl/Datumsfeld.
+		 */
+		function buildParamControl(parameter, asText) {
 			const commit = (value, immediate) => {
 				if (value.trim() === '') {
 					delete params[parameter.name];
@@ -2572,11 +2637,14 @@
 					return wrapSelectWithChevron(select);
 				}
 				default: {
-					if (parameter.choices && parameter.choices.length > 0) {
+					if (!asText && parameter.choices && parameter.choices.length > 0) {
 						return buildSelect(parameter.choices, false);
 					}
 					const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input' }));
-					if (parameter.type === 'date') {
+					if (asText) {
+						// Template mode: a date/time field would reject "{start}".
+						input.type = 'text';
+					} else if (parameter.type === 'date') {
 						input.type = 'date';
 					} else if (parameter.type === 'datetime') {
 						input.type = 'datetime-local';
@@ -2590,7 +2658,7 @@
 							input.inputMode = 'decimal';
 						}
 					}
-					input.placeholder = parameter.placeholder || '';
+					input.placeholder = asText ? strings.generatorTemplatePlaceholder : parameter.placeholder || '';
 					input.value = params[parameter.name] || '';
 					input.addEventListener('input', () => commit(input.value, false));
 					input.addEventListener('blur', () => commit(input.value, true));

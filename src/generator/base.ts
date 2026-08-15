@@ -22,6 +22,9 @@ import {
 	RequiredRefs,
 	emptyRequiredRefs,
 	fillDisplayTemplate,
+	hasParamTemplate,
+	isTemplatableParameterType,
+	paramTemplateColumns,
 } from './types';
 
 /** Declarative description of a generator, from which the base class derives everything else. */
@@ -137,6 +140,16 @@ export class GeneratorBase {
 		config: GeneratorConfig,
 		ctx: GeneratorContext,
 	): GeneratorIssue[] {
+		// A value with `{column}` placeholders is not one fixed value but one
+		// per record (see paramTemplateColumns). Only the referenced columns can
+		// be checked here — the data type applies to the resolved value, which
+		// exists first during the run, so e.g. `{limit}` in an integer parameter
+		// must not be reported as "not a number".
+		if (isTemplatableParameterType(parameter.type) && hasParamTemplate(value)) {
+			return paramTemplateColumns(value)
+				.filter((column) => column === ctx.ownColumnName || !ctx.ownColumns.includes(column))
+				.map((column) => ({ kind: 'gen-own-column-not-found', paramName: parameter.name, detail: column }));
+		}
 		switch (parameter.type) {
 			case 'integer':
 				if (!/^-?\d+$/.test(value)) {
@@ -201,12 +214,19 @@ export class GeneratorBase {
 	/**
 	 * References required by the current configuration. Default: every set
 	 * `table` parameter requires its table, every `table`+`column` pair the
-	 * specific column, every `lookup` parameter its lookup list, and every
-	 * `own_column` parameter the column of the own table (which is thereby
-	 * guaranteed to be generated *before* this one).
+	 * specific column, every `lookup` parameter its lookup list, every
+	 * `own_column` parameter the column of the own table, and every `{column}`
+	 * placeholder in a free-text parameter the column it names — all of which
+	 * are thereby guaranteed to be generated *before* this one.
 	 */
 	public requiredRefs(config: GeneratorConfig, ctx: GeneratorContext): RequiredRefs {
 		const refs = emptyRequiredRefs();
+		/** Own columns are collected from several parameters — each one only once. */
+		const requireOwnColumn = (column: string) => {
+			if (column !== ctx.ownColumnName && ctx.ownColumns.includes(column) && !refs.ownColumns.includes(column)) {
+				refs.ownColumns.push(column);
+			}
+		};
 		for (const parameter of this.parameters) {
 			const value = (config.params[parameter.name] ?? '').trim();
 			if (value === '') {
@@ -222,8 +242,10 @@ export class GeneratorBase {
 					refs.columns.push({ table: target.value, column: value });
 				}
 			} else if (parameter.type === 'own_column') {
-				if (value !== ctx.ownColumnName && ctx.ownColumns.includes(value)) {
-					refs.ownColumns.push(value);
+				requireOwnColumn(value);
+			} else if (isTemplatableParameterType(parameter.type)) {
+				for (const column of paramTemplateColumns(value)) {
+					requireOwnColumn(column);
 				}
 			}
 		}

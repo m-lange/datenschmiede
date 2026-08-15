@@ -142,3 +142,50 @@ export function fillDisplayTemplate(template: string, params: Record<string, str
 		return value === '' ? '?' : value;
 	});
 }
+
+/**
+ * Parameter types that do NOT take free text: the reference types pick an
+ * existing name from a list (table, lookup list, column), and `boolean` only
+ * knows true/false. Everything else is typed into a field and may therefore
+ * carry `{column}` placeholders (see paramTemplateColumns).
+ */
+const NON_TEMPLATABLE_PARAMETER_TYPES = new Set(['table', 'lookup', 'column', 'own_column', 'boolean']);
+
+/** `true` if a parameter of this type may contain `{column}` placeholders. */
+export function isTemplatableParameterType(type: string): boolean {
+	return !NON_TEMPLATABLE_PARAMETER_TYPES.has(type);
+}
+
+/** Placeholder `{column_name}` inside a parameter value. */
+const PARAM_TEMPLATE_PATTERN = /\{([^{}]+)\}/g;
+
+/**
+ * `true` if a parameter value is a per-record template rather than one fixed
+ * value — i.e. it contains at least one `{column}` placeholder.
+ */
+export function hasParamTemplate(value: string): boolean {
+	return /\{[^{}]+\}/.test(value);
+}
+
+/**
+ * Names of the columns a parameter value references through `{column}`
+ * placeholders, in order of first appearance and without duplicates.
+ *
+ * A parameter value may name other columns of the SAME table instead of a
+ * fixed value (e.g. locale `de_{country}`, or max `{limit}`): during the run
+ * the placeholders are replaced per record by that column's value, so the
+ * parameter effectively differs from record to record (see
+ * Runner.generate_column in python/generate.py). The referenced columns
+ * therefore have to be generated before this one — which is what listing them
+ * in RequiredRefs.ownColumns achieves.
+ */
+export function paramTemplateColumns(value: string): string[] {
+	const names: string[] = [];
+	for (const match of value.matchAll(PARAM_TEMPLATE_PATTERN)) {
+		const name = match[1].trim();
+		if (name && !names.includes(name)) {
+			names.push(name);
+		}
+	}
+	return names;
+}

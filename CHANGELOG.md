@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0
+
+Generator-Parameter dürfen jetzt statt eines festen Werts andere Spalten
+derselben Tabelle als `{spalte}` referenzieren und unterscheiden sich damit von
+Datensatz zu Datensatz — etwa eine Faker-Locale `de_{land}` oder eine Obergrenze
+`{kreditrahmen}`; bei Auswahl- und Datumsfeldern schaltet ein Knopf im
+Parameter-Dialog auf freie Texteingabe um.
+
 ## 0.10.0
 
 Eigene Seitenleiste mit fünf Ansichten, gerenderte Markdown-Tooltips in allen

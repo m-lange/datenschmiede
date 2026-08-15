@@ -349,6 +349,34 @@ UUID4, Zufallsdatum, …). Der **Stift** neben der Auswahl öffnet einen
 Parameter-Dialog mit je Parametertyp passendem Eingabefeld; die Zelle zeigt
 danach den Anzeige-Text der Konfiguration (z. B. `Random Int: 1 … 100`).
 
+### Parameter aus anderen Spalten (`{spalte}`)
+
+Ein Parameterwert muss kein fester Wert sein: Er darf **andere Spalten
+derselben Tabelle** als `{spalte}` referenzieren und unterscheidet sich damit
+**von Datensatz zu Datensatz**. Beim Lauf wird der Platzhalter je Datensatz
+durch den Wert dieser Spalte ersetzt:
+
+- Faker-Locale `de_{land}` — deutsche, österreichische und Schweizer Namen,
+  passend zum Land des jeweiligen Datensatzes
+- Random-Int-Obergrenze `{kreditrahmen}` — jede Zeile würfelt in ihrem eigenen
+  Rahmen
+- ein eigener Generator mit Parameter `{waehrung}`, der je Datensatz anders
+  rechnet
+
+Das funktioniert in **jedem freien Textparameter jedes Generators**, eingebaut
+wie eigen — der Generator selbst muss nichts davon wissen: Der Lauf gruppiert
+die Datensätze nach den aufgelösten Parameterwerten und ruft den Generator
+einmal je Kombination mit ganz normalen Einzelwerten auf. Referenzierte Spalten
+werden dadurch automatisch **vorher** erzeugt; zeigt ein Platzhalter auf eine
+Spalte, die es nicht (mehr) gibt, meldet das die Problems-Ansicht.
+
+Ausgenommen sind die Parameter, die keinen freien Text aufnehmen: die
+Referenztypen (Tabelle, Nachschlageliste, Spalte) und Wahrheitswerte. Bei
+Auswahllisten und Datumsfeldern schaltet der Knopf neben dem Feld auf freie
+Texteingabe um. Je mehr **verschiedene** Werte die referenzierte Spalte hat,
+desto mehr Generator-Aufrufe entstehen — bei sehr vielen weist das Protokoll
+darauf hin.
+
 ## Nachschlagelisten (`.lkp`)
 
 Eine Nachschlageliste ist eine gewichtete Wertetabelle (z. B. Länder mit

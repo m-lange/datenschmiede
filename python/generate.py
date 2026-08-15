@@ -76,6 +76,18 @@ import csv as csv_module
 RNG = np.random.default_rng()
 RUN_DT = datetime.now()
 
+# Placeholder `{column}` in a generator parameter value: the parameter then
+# carries not one fixed value but one per record, taken from another column of
+# the same table (see Runner.resolve_param_template). Splitting on the capturing
+# group keeps the literal parts, so one pass yields text and placeholders in
+# order.
+PARAM_TEMPLATE_RE = re.compile(r"(\{[^{}]+\})")
+
+# Above this many distinct parameter combinations, generating GROUP BY the
+# resolved values costs more than it buys (one generator call per group) — the
+# run says so in the log rather than just becoming slow.
+PARAM_GROUP_WARN = 1000
+
 _faker_instances = {}
 
 
@@ -221,12 +233,31 @@ def open_store():
 class Context:
     """The `ctx` object handed to custom generators (see the .tdgen editor)."""
 
-    def __init__(self, runner, table):
+    def __init__(self, runner, table, rows=None):
         self.rng = RNG
         self.np = np
         self.pd = pd
         self._runner = runner
         self._table = table
+        # Positional indices of the records this call produces, or None for all
+        # of them (the normal case) — see _slice.
+        self._rows = rows
+
+    def _slice(self, values):
+        """
+        Restricts a per-record value to the records this call actually
+        produces.
+
+        Set only when the column is generated GROUP BY the resolved values of
+        templated parameters (see Runner.generate_column): the generator then
+        runs once per distinct parameter combination and sees only that group's
+        records. Without this slice ctx.column(...) would hand out all `n`
+        values while the generator is expected to return just the group's —
+        the values would no longer line up row for row.
+        """
+        if self._rows is None:
+            return values
+        return pd.Series(values).reset_index(drop=True).iloc[self._rows].reset_index(drop=True)
 
     def faker(self, locale="en_US"):
         return get_faker(locale)
@@ -248,7 +279,7 @@ class Context:
                 f'ctx.column("{name}"): column is not generated yet (or does not exist) '
                 f'in table {self._table["label"]}'
             )
-        return data[name]
+        return self._slice(data[name])
 
     def table(self, label, column):
         """Already generated values of a column of another table in the plan."""
@@ -310,7 +341,7 @@ class Context:
             )
         mapping = pd.Series(final_column.values, index=final_keys.values)
         mapping = mapping[~mapping.index.duplicated(keep="first")]
-        return pd.Series(keys).map(mapping)
+        return self._slice(pd.Series(keys).map(mapping))
 
     def lookup(self, name, column):
         """All (raw) values of a column of a lookup list (.lkp) — no drawing, no weighting."""
@@ -334,10 +365,10 @@ class Context:
             raise RuntimeError('ctx.lookup_value(...): row count of this table is not known yet')
         values, _weights = self._runner.lookup_column(name, column)
         if not values:
-            return pd.Series([""] * n, dtype=object)
+            return self._slice(pd.Series([""] * n, dtype=object))
         indices = self._runner.lookup_indices(self._table, name, n)
         arr = np.array(values, dtype=object)
-        return pd.Series(arr[np.clip(indices, 0, len(arr) - 1)])
+        return self._slice(pd.Series(arr[np.clip(indices, 0, len(arr) - 1)]))
 
 
 def indent_body(body):
@@ -875,11 +906,106 @@ class Runner:
     # Generators
     # ------------------------------------------------------------------
 
+    def resolve_param_template(self, table, column, template, n):
+        """
+        Resolves the `{column}` placeholders of one parameter value into one
+        string per record, from the already generated columns of this table
+        (the referenced columns are generated first — see requiredRefs in
+        src/generator/base.ts and sorted_columns).
+
+        This is also exactly what the built-in combine generator does: its
+        whole output is a resolved template.
+        """
+        data = self.data[table["label"]]
+        pieces = []
+        for part in PARAM_TEMPLATE_RE.split(template):
+            if not part:
+                continue
+            if part.startswith("{") and part.endswith("}"):
+                ref = part[1:-1].strip()
+                if ref not in data:
+                    raise RuntimeError(
+                        f'Column {table["label"]}.{column["name"]}: "{{{ref}}}" references '
+                        f'"{ref}", which is not a column of this table (or is not generated yet)'
+                    )
+                pieces.append(pd.Series(data[ref]).astype(str).reset_index(drop=True))
+            else:
+                pieces.append(pd.Series([part] * n, dtype=object))
+        if not pieces:
+            return pd.Series([""] * n, dtype=object)
+        if len(pieces) == 1:
+            return pieces[0]
+        # Concatenate all parts in ONE pass, instead of repeatedly creating
+        # intermediate series pairwise.
+        return pieces[0].str.cat(pieces[1:])
+
     def generate_column(self, table, column, n):
-        """Produces the `n` values of one column using its configured generator."""
-        generator = column.get("generator")
-        gen_id = (generator or {}).get("id", "")
-        params = (generator or {}).get("params", {})
+        """
+        Produces the `n` values of one column using its configured generator.
+
+        A parameter value may contain `{column}` placeholders naming other
+        columns of the same table (e.g. locale `de_{country}`, or max
+        `{credit_limit}`) — the parameter then holds one value per record
+        rather than one fixed value. Such a column is generated GROUP BY the
+        resolved parameter values: the generator is called once per distinct
+        combination, each time with ordinary scalar parameters, and the results
+        are scattered back to their rows. That way EVERY generator — built-in
+        and custom alike — supports per-record parameters without knowing
+        anything about them.
+        """
+        generator = column.get("generator") or {}
+        params = generator.get("params", {})
+        # The combine generator resolves its template itself, vectorized over
+        # all records at once; grouping it would be pure overhead.
+        templated = (
+            {}
+            if generator.get("id", "") == "combine"
+            else {
+                name: value
+                for name, value in params.items()
+                if isinstance(value, str) and PARAM_TEMPLATE_RE.search(value)
+            }
+        )
+        if not templated or n == 0:
+            return self.generate_column_values(table, column, n, params)
+
+        resolved = pd.DataFrame(
+            {name: self.resolve_param_template(table, column, value, n) for name, value in templated.items()}
+        )
+        # .indices maps each distinct combination to the POSITIONS of its rows —
+        # exactly what is needed to scatter the results back.
+        groups = resolved.groupby(list(resolved.columns), sort=False).indices
+        if len(groups) > PARAM_GROUP_WARN:
+            emit(
+                "log",
+                table=table["label"],
+                message=(
+                    f'Column {column["name"]}: {len(groups)} distinct values of '
+                    f'{", ".join(sorted(templated))} — the generator runs once per combination. '
+                    "Reference a column with fewer distinct values to speed this up."
+                ),
+            )
+        pieces = []
+        for key, positions in groups.items():
+            # With a single grouping column pandas hands out the bare value.
+            values = key if isinstance(key, tuple) else (key,)
+            group_params = dict(params)
+            group_params.update(zip(resolved.columns, values))
+            part = pd.Series(
+                self.generate_column_values(table, column, len(positions), group_params, rows=positions)
+            ).reset_index(drop=True)
+            pieces.append(pd.Series(part.to_numpy(), index=positions))
+        return pd.concat(pieces).sort_index().reset_index(drop=True)
+
+    def generate_column_values(self, table, column, n, params, rows=None):
+        """
+        One generator call: the values for `n` records with the given (scalar)
+        parameters. `rows` holds the positions of those records within the
+        table when the caller is generating one group of a templated parameter
+        (see generate_column) — custom generator code then sees exactly these
+        records through `ctx` (see Context._slice).
+        """
+        gen_id = (column.get("generator") or {}).get("id", "")
 
         if gen_id == "default":
             # The explicitly chosen per-data-type default — identical to a
@@ -930,30 +1056,7 @@ class Runner:
             return pd.Series(arr[np.clip(indices, 0, len(arr) - 1)])
 
         if gen_id == "combine":
-            template = params.get("template", "")
-            table_data = self.data[table["label"]]
-            parts = re.split(r"(\{[^{}]+\})", template)
-            pieces = []
-            for part in parts:
-                if not part:
-                    continue
-                if part.startswith("{") and part.endswith("}"):
-                    ref = part[1:-1].strip()
-                    if ref not in table_data:
-                        raise RuntimeError(
-                            f'Column {table["label"]}.{column["name"]}: combine template references '
-                            f'"{ref}", which is not generated yet'
-                        )
-                    pieces.append(table_data[ref].astype(str).reset_index(drop=True))
-                else:
-                    pieces.append(pd.Series([part] * n, dtype=object))
-            if not pieces:
-                return pd.Series([""] * n, dtype=object)
-            if len(pieces) == 1:
-                return pieces[0]
-            # Concatenate all parts in ONE pass, instead of repeatedly creating
-            # intermediate series pairwise.
-            return pieces[0].str.cat(pieces[1:])
+            return self.resolve_param_template(table, column, params.get("template", ""), n)
 
         if gen_id.startswith("custom:"):
             name = gen_id[len("custom:"):]
@@ -965,7 +1068,7 @@ class Runner:
             if "functions" not in defn:
                 defn["functions"] = build_custom_functions(defn)
             generate, parse_params = defn["functions"]
-            ctx = Context(self, table)
+            ctx = Context(self, table, rows)
             parsed = parse_params(dict(params))
             series = generate(parsed, n, ctx)
             series = pd.Series(series).reset_index(drop=True)

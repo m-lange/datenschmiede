@@ -1573,6 +1573,27 @@ body.vscode-high-contrast-light .chart-bar {
 	font-size: 0.85em;
 }
 
+/* Auswahlfeld plus Umschalter auf freie Texteingabe: nur dort lässt sich ein
+   Wert als Vorlage mit {spalte} schreiben. Das Eingabefeld nimmt den ganzen
+   Platz, der Knopf bleibt daneben stehen. */
+.param-control {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.param-control > :first-child {
+	flex: 1;
+	min-width: 0;
+}
+
+/* Im Vorlagen-Modus bleibt der Knopf hervorgehoben, damit erkennbar ist,
+   warum statt der Auswahlliste ein Textfeld dasteht. */
+.param-template-toggle.is-active {
+	color: var(--vscode-textLink-foreground);
+	background: var(--vscode-toolbar-activeBackground);
+}
+
 /* Fußzeile des Parameter-Dialogs: Abbrechen (sekundär) + Fertig (primär). */
 .param-dialog-footer {
 	display: flex;

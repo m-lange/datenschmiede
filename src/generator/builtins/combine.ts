@@ -1,27 +1,19 @@
 import { GeneratorBase } from '../base';
-import { GeneratorConfig, GeneratorContext, GeneratorIssue, RequiredRefs, emptyRequiredRefs } from '../types';
-
-/** Placeholder `{column_name}` in the combine template. */
-const PLACEHOLDER_PATTERN = /\{([^{}]+)\}/g;
-
-/** Extracts the referenced column names from a combine template. */
-export function combineTemplateColumns(template: string): string[] {
-	const names: string[] = [];
-	for (const match of template.matchAll(PLACEHOLDER_PATTERN)) {
-		const name = match[1].trim();
-		if (name && !names.includes(name)) {
-			names.push(name);
-		}
-	}
-	return names;
-}
+import { GeneratorConfig, GeneratorContext } from '../types';
 
 /**
  * Built-in generator: combines the values of other columns of the same table
  * (as produced by their own generators) into a string — `{column_name}`
  * placeholders in the template are replaced per record by that column's value
- * (e.g. `"{first_name}.{last_name}@example.com"`). The referenced columns must
- * therefore be generated before this one (see requiredRefs → generation order).
+ * (e.g. `"{first_name}.{last_name}@example.com"`).
+ *
+ * The placeholders need no special handling here: `{column}` works in EVERY
+ * free-text parameter of every generator (see paramTemplateColumns), so the
+ * base class already validates the referenced columns and requires them to be
+ * generated first. What is special about this generator is only that it does
+ * nothing else — its whole output is the resolved template — and that the
+ * runner resolves it vectorized in one pass instead of grouping by the
+ * resolved value (see Runner.generate_column in python/generate.py).
  */
 class CombineGenerator extends GeneratorBase {
 	constructor() {
@@ -45,31 +37,6 @@ class CombineGenerator extends GeneratorBase {
 	public override displayString(config: GeneratorConfig, _ctx: GeneratorContext): string {
 		const template = (config.params.template ?? '').trim();
 		return template ? `${this.name}: ${template}` : this.name;
-	}
-
-	public override validate(config: GeneratorConfig, ctx: GeneratorContext): GeneratorIssue[] {
-		const issues = super.validate(config, ctx);
-		const template = (config.params.template ?? '').trim();
-		if (template === '') {
-			return issues;
-		}
-		for (const column of combineTemplateColumns(template)) {
-			// A column cannot combine itself; columns that no longer exist (e.g.
-			// after a rename) are reported.
-			if (column === ctx.ownColumnName || !ctx.ownColumns.includes(column)) {
-				issues.push({ kind: 'gen-own-column-not-found', paramName: 'template', detail: column });
-			}
-		}
-		return issues;
-	}
-
-	public override requiredRefs(config: GeneratorConfig, ctx: GeneratorContext): RequiredRefs {
-		const refs = emptyRequiredRefs();
-		const template = (config.params.template ?? '').trim();
-		refs.ownColumns = combineTemplateColumns(template).filter(
-			(column) => column !== ctx.ownColumnName && ctx.ownColumns.includes(column),
-		);
-		return refs;
 	}
 }
 

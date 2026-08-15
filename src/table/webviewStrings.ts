@@ -90,6 +90,11 @@ export interface WebviewStrings {
 	generatorRequiredSuffix: string;
 	generatorTrueLabel: string;
 	generatorFalseLabel: string;
+	/** Note in the parameter dialog that values may reference other columns. */
+	generatorTemplateHint: string;
+	/** Tooltip of the button switching a picker field to free text (and back). */
+	generatorTemplateToggleLabel: string;
+	generatorTemplatePlaceholder: string;
 	/** Warning texts — short forms of the messages in table/editorProvider.ts, used for the cell tooltip. */
 	genWarnNoGenerator: string;
 	genWarnNotFound: string;
@@ -324,6 +329,10 @@ const en: WebviewStrings = {
 	generatorRequiredSuffix: ' *',
 	generatorTrueLabel: 'true',
 	generatorFalseLabel: 'false',
+	generatorTemplateHint:
+		'Values may reference other columns of this table as {column} — the parameter then differs from record to record.',
+	generatorTemplateToggleLabel: 'Enter a value with {column} references',
+	generatorTemplatePlaceholder: 'e.g. {country}',
 	genWarnNoGenerator: 'No generator selected — select and configure one for this column.',
 	genWarnNotFound: 'This generator was not found. Its .tdgen file may have been deleted, or the generator was renamed.',
 	genWarnFkOnly: 'The Foreign Key generator can only be used on foreign key columns.',
@@ -549,6 +558,10 @@ const de: WebviewStrings = {
 	generatorRequiredSuffix: ' *',
 	generatorTrueLabel: 'wahr',
 	generatorFalseLabel: 'falsch',
+	generatorTemplateHint:
+		'Werte dürfen andere Spalten dieser Tabelle als {spalte} referenzieren — der Parameter unterscheidet sich dann von Datensatz zu Datensatz.',
+	generatorTemplateToggleLabel: 'Wert mit {spalte}-Referenzen eingeben',
+	generatorTemplatePlaceholder: 'z. B. {land}',
 	genWarnNoGenerator: 'Kein Generator ausgewählt — für diese Spalte einen Generator auswählen und konfigurieren.',
 	genWarnNotFound:
 		'Dieser Generator wurde nicht gefunden. Seine .tdgen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.',
