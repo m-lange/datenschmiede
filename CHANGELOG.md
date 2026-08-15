@@ -21,6 +21,11 @@
   Interpreter offline dagegen geprüft; fehlt etwas, bricht der Lauf ab und
   bietet die Installation in einem sichtbaren Terminal an — installiert wird
   nichts von allein.
+- **Neuer Befehl „Datenschmiede: Datei-Vorschau (Tabelle auswählen)…“**:
+  erzeugt die Vorschau aus der Befehlspalette heraus ohne offenen Table
+  Editor — er fragt zuerst, welche `.td` des Workspace gemeint ist (bei genau
+  einer Tabelle entfällt die Frage) und zeigt je Eintrag den konfigurierten
+  Dateityp. Das Gegenstück zu „Testdaten generieren (Projekt auswählen)…“.
 - **Tastenkürzel <kbd>Strg</kbd>+<kbd>F5</kbd>** für die Play-Aktion: im
   Projekt-Editor startet es den Lauf, im Table Editor die Datei-Vorschau —
   dasselbe Kürzel startet also immer das, worum es im offenen Editor geht.

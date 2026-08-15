@@ -220,6 +220,12 @@
         "title": "%command.previewFile.title%",
         "category": "Datenschmiede",
         "icon": "$(play)"
+      },
+      {
+        "command": "datenschmiede.previewFileSelect",
+        "title": "%command.previewFileSelect.title%",
+        "category": "Datenschmiede",
+        "icon": "$(play)"
       }
     ],
     "keybindings": [
@@ -296,6 +302,9 @@
         },
         {
           "command": "datenschmiede.previewFile"
+        },
+        {
+          "command": "datenschmiede.previewFileSelect"
         }
       ]
     }

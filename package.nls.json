@@ -14,5 +14,6 @@
 	"command.runGeneration.title": "Generate Test Data",
 	"command.generateTestData.title": "Generate Test Data (Select Project)…",
 	"command.previewFile.title": "Preview File",
+	"command.previewFileSelect.title": "Preview File (Select Table)…",
 	"command.selectPythonInterpreter.title": "Select Python Interpreter…"
 }

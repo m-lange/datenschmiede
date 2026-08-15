@@ -108,5 +108,10 @@
 	"\"{0}\" writes a binary file, which cannot be previewed as text.": "„{0}“ schreibt eine Binärdatei, die sich nicht als Text anzeigen lässt.",
 	"Select Requirements File": "Requirements-Datei auswählen",
 	"The requirements file \"{0}\" was not found.": "Die Requirements-Datei „{0}“ wurde nicht gefunden.",
-	"Python packages from the project requirements are missing: {0}": "Aus den Requirements des Projekts fehlen Python-Pakete: {0}"
+	"Python packages from the project requirements are missing: {0}": "Aus den Requirements des Projekts fehlen Python-Pakete: {0}",
+	"No table definition (.td) was found in this workspace.": "In diesem Workspace wurde keine Tabellendefinition (.td) gefunden.",
+	"This .td file contains invalid TOML.": "Diese .td-Datei enthält kein gültiges TOML.",
+	"File type: {0}": "Dateityp: {0}",
+	"Preview File": "Datei-Vorschau",
+	"Select the table to preview": "Tabelle für die Vorschau auswählen"
 }

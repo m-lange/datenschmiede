@@ -7,6 +7,7 @@ import { FileGeneratorNotebook } from './filegen/notebook';
 import { WorkspaceDiagnostics } from './diagnostics';
 import { newTableCommand } from './table/commands/newTable';
 import { previewFileCommand } from './table/commands/previewFile';
+import { previewFilePickCommand } from './table/commands/previewFilePick';
 import { newProjectCommand } from './project/commands/newProject';
 import { newLookupCommand } from './lookup/commands/newLookup';
 import { newGeneratorCommand } from './generator/commands/newGenerator';
@@ -60,6 +61,13 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('datenschmiede.previewFile', (resource?: vscode.Uri) =>
 			previewFileCommand(context, resource),
+		),
+	);
+	// Command Palette variant: works without an open table editor by asking
+	// which .td to preview first.
+	context.subscriptions.push(
+		vscode.commands.registerCommand('datenschmiede.previewFileSelect', () =>
+			previewFilePickCommand(context, index),
 		),
 	);
 	// Command Palette variant: works without an open project editor by asking
