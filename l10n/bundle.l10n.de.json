@@ -121,5 +121,6 @@
 	"No table matches the filter.": "Keine Tabelle passt zum Filter.",
 	"Filter Schema": "Schema filtern",
 	"Show only schemas and tables containing this text.": "Nur Schemas und Tabellen anzeigen, die diesen Text enthalten.",
-	"e.g. customer": "z. B. kunde"
+	"e.g. customer": "z. B. kunde",
+	"\"{0}\" is also defined in {1}. Schema and name together identify a table — references cannot tell duplicates apart.": "„{0}“ ist auch in {1} definiert. Schema und Name zusammen bezeichnen eine Tabelle — Verweise können zwei gleiche nicht unterscheiden."
 }

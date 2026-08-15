@@ -2,6 +2,19 @@
 
 ## 0.10.0
 
+- **Doppelte Tabellen werden gemeldet**: Definieren zwei `.td`-Dateien
+  dasselbe `schema.name`, steht in **beiden** ein Fehler, der jeweils die
+  andere Datei nennt. Verweise — Fremdschlüssel, `ctx.table(...)`, die Auswahl
+  im Projekt — lösen über diesen logischen Namen auf und können zwei gleiche
+  nicht unterscheiden.
+- **Abbrechen nimmt den Generator-Wechsel zurück**: Öffnet sich der
+  Parameter-Dialog, weil ein Generator *gewechselt* wurde, stellt **Abbrechen**
+  wieder den vorherigen Generator samt seinen Parametern her — bisher blieb der
+  neu gewählte stehen und nur die Parameter waren zurückgesetzt.
+- Die **Seitenleiste lädt ihre Einträge vor**, auch für zugeklappte Ansichten,
+  und die Erweiterung startet in einem Workspace mit Datenschmiede-Dateien
+  schon beim Öffnen. Aufklappen zeigt den Inhalt dadurch sofort, statt ihn
+  erst zu holen.
 - **Eigene Seitenleiste** (Symbol in der Aktivitätsleiste) mit fünf
   Ansichten: **Projekte**, **Schema**, **Nachschlagelisten**, **Generatoren**
   und **Dateigeneratoren**. Beschriftet wird durchgehend mit dem Namen *aus

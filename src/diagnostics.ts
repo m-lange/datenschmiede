@@ -3,9 +3,10 @@ import { spawn } from 'child_process';
 import { ParseError } from './tomlUtil';
 import { createStreamDecoder, pythonEnv } from './encoding';
 import { resolveAnyInterpreter } from './project/python';
-import { ColumnLineInfo, findColumnLineInfo, findOutputLine } from './table/toml';
+import { ColumnLineInfo, findColumnLineInfo, findOutputLine, findTableNameLine } from './table/toml';
 import { validateTable, findTableCycle, findColumnCycle, Issue, OUTPUT_ISSUE_INDEX } from './table/validation';
 import { TableEntry, buildTableRefEdges, toTableOptions } from './table/repository';
+import { logicalTableName } from './table/model';
 import { findTableLineInfo } from './project/toml';
 import { buildTableRows } from './project/editorProvider';
 import { ProjectIssue, validateProjectRecords } from './project/validation';
@@ -101,6 +102,8 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			for (const check of tableChecks) {
 				this.checkTable(check, { tableOptions, generators, lookups, edges, fileGeneratorNames });
 			}
+			// Only possible across files, so not part of checkTable.
+			this.checkDuplicateTables(tableChecks);
 
 			const generatorChecks: GeneratorCheck[] = snapshot.generators.map((entry) => ({
 				entry,
@@ -139,6 +142,56 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			if (this.refreshQueued) {
 				this.refreshQueued = false;
 				void this.refreshAll();
+			}
+		}
+	}
+
+	/**
+	 * Two `.td` files defining the same `schema.name`: every reference to that
+	 * table — foreign keys, `ctx.table(...)` in a generator, the selection in a
+	 * project — resolves by this logical name and cannot tell the two apart, so
+	 * which of the files applies is a matter of chance. Reported in EVERY file
+	 * involved, each naming the others.
+	 */
+	private checkDuplicateTables(checks: TableCheck[]): void {
+		const byLabel = new Map<string, TableCheck[]>();
+		for (const check of checks) {
+			const table = check.entry.table;
+			if (!table || table.name.trim() === '') {
+				// Without a name there is no logical identity to collide - the
+				// missing name is reported on its own (see validateTable).
+				continue;
+			}
+			const label = logicalTableName(table);
+			const group = byLabel.get(label);
+			if (group) {
+				group.push(check);
+			} else {
+				byLabel.set(label, [check]);
+			}
+		}
+
+		for (const [label, group] of byLabel) {
+			if (group.length < 2) {
+				continue;
+			}
+			for (const check of group) {
+				const others = group
+					.filter((other) => other !== check)
+					.map((other) => other.entry.relativePath)
+					.join(', ');
+				check.diagnostics.push(
+					this.diagnostic(
+						this.lineRange(check.lines, findTableNameLine(check.lines)),
+						vscode.l10n.t(
+							'"{0}" is also defined in {1}. Schema and name together identify a table — references cannot tell duplicates apart.',
+							label,
+							others,
+						),
+						'duplicate-table',
+						false,
+					),
+				);
 			}
 		}
 	}

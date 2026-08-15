@@ -473,6 +473,23 @@ export function findOutputLine(text: string): number {
 	return index >= 0 ? index : 0;
 }
 
+/**
+ * 0-based line of the table's own `name` entry — the one before the first TOML
+ * section, so a column's `name` inside `[[columns]]` cannot be mistaken for it.
+ * Falls back to the first line when there is none.
+ */
+export function findTableNameLine(lines: string[]): number {
+	for (let index = 0; index < lines.length; index++) {
+		if (/^\s*\[/.test(lines[index])) {
+			break;
+		}
+		if (/^\s*name\s*=/.test(lines[index])) {
+			return index;
+		}
+	}
+	return 0;
+}
+
 /** Line position of a `[[columns]]` table in the raw text, used for diagnostics. */
 export interface ColumnLineInfo {
 	/** 0-based line of the `[[columns]]` marker itself. */
