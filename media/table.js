@@ -91,7 +91,7 @@
 	let state = { schema: '', name: '', description: '', columns: [], output: defaultOutput() };
 	/** @type {string | null} */
 	let parseError = null;
-	/** @type {'overview' | 'columns' | 'schema' | 'mapping'} 'schema'/'mapping' only exist for the JSON/XML file types */
+	/** @type {'overview' | 'columns' | 'structure'} 'structure' only exists for the JSON/XML file types */
 	let activeTab = 'columns';
 	/** @type {TableOption[]} Tables in the workspace (label + column names), for FK and generator references */
 	let tableOptions = [];
@@ -298,33 +298,33 @@
 		bar.appendChild(renderTabButton('overview', strings.tabOverview));
 		bar.appendChild(renderTabButton('columns', `${strings.tabColumns} (${state.columns.length})`));
 		if (isStructuredFormat()) {
-			// The target structure and its value mapping only exist for the
-			// record-shaped file types (JSON/XML) — CSV and Excel write the
-			// columns as they are.
-			bar.appendChild(renderTabButton('schema', strings.tabSchema));
-			bar.appendChild(renderTabButton('mapping', strings.tabMapping));
+			// The target structure only exists for the record-shaped file types
+			// (JSON/XML) — CSV and Excel write the columns as they are. The tab
+			// is named after the file type, since the two keep separate
+			// structures and only the selected one is shown.
+			bar.appendChild(
+				renderTabButton('structure', strings.tabStructure.replace('{0}', currentFormat().toUpperCase())),
+			);
 		}
 		return bar;
 	}
 
 	/** Content of the currently selected tab (falls back to the columns tab when the tab no longer exists). */
 	function renderActiveTab() {
-		if ((activeTab === 'schema' || activeTab === 'mapping') && !isStructuredFormat()) {
+		if (activeTab === 'structure' && !isStructuredFormat()) {
 			activeTab = 'columns';
 		}
 		switch (activeTab) {
 			case 'overview':
 				return renderOverviewTab();
-			case 'schema':
-				return renderSchemaTab();
-			case 'mapping':
-				return renderMappingTab();
+			case 'structure':
+				return renderStructureTab();
 			default:
 				return renderColumnsTab();
 		}
 	}
 
-	/** @param {'overview'|'columns'|'schema'|'mapping'} tab */
+	/** @param {'overview'|'columns'|'structure'} tab */
 	function renderTabButton(tab, label) {
 		const btn = el('button', { className: 'tab' + (activeTab === tab ? ' active' : ''), text: label });
 		btn.type = 'button';
@@ -815,12 +815,31 @@
 
 
 	// ---------------------------------------------------------------------
-	// "Schema" tab: the JSON/XML target structure as an indented tree grid.
-	// It describes ONE record; the writer repeats it per generated row (see
-	// python/generate.py). Structure and mapping are deliberately split across
-	// two tabs but share the same nodes — the mapping belongs to the leaf it
-	// fills, so renaming or moving a node keeps it attached.
+	// "Structure" tab: the JSON/XML target structure AND the value mapping of
+	// its leaves in ONE indented tree grid — shape and mapping belong to the
+	// same node, so keeping them in separate tabs only meant switching back and
+	// forth to see which column fills which element. The tree describes ONE
+	// record; the writer repeats it for every generated row (see
+	// python/generate.py).
 	// ---------------------------------------------------------------------
+
+	/** Indentation per nesting level (px) in the grid's name column. */
+	const STRUCTURE_INDENT = 24;
+
+	/**
+	 * Fixed column widths (px) of the structure grid. The name column carries
+	 * the indented tree and gets the room; the rest hold short selects and only
+	 * need to fit their longest option (see buildColGroup in common.js — the
+	 * width-less filler column at the end absorbs whatever is left).
+	 */
+	const STRUCTURE_COLUMN_WIDTHS = {
+		name: 300,
+		kind: 120,
+		valueType: 130,
+		sourceKind: 130,
+		source: 190,
+		actions: 118,
+	};
 
 	/**
 	 * Flattens the structure tree into grid rows in document order, each with
@@ -828,18 +847,15 @@
 	 * operate on).
 	 * @param {StructureNode[]} nodes
 	 * @param {number} [depth]
-	 * @param {string[]} [parentPath]
-	 * @returns {{node:StructureNode,depth:number,siblings:StructureNode[],index:number,path:string[]}[]}
+	 * @returns {{node:StructureNode,depth:number,siblings:StructureNode[],index:number}[]}
 	 */
-	function flattenStructure(nodes, depth, parentPath) {
+	function flattenStructure(nodes, depth) {
 		const level = depth || 0;
-		const base = parentPath || [];
 		const rows = [];
 		nodes.forEach((node, index) => {
-			const path = base.concat([node.name || '']);
-			rows.push({ node, depth: level, siblings: nodes, index, path });
+			rows.push({ node, depth: level, siblings: nodes, index });
 			if (node.kind === 'object' || node.kind === 'array') {
-				rows.push(...flattenStructure(node.children || [], level + 1, path));
+				rows.push(...flattenStructure(node.children || [], level + 1));
 			}
 		});
 		return rows;
@@ -868,21 +884,7 @@
 		return kind === 'value' || kind === 'attribute';
 	}
 
-	/** Localized label of a node kind, for the mapping grid's read-only kind column. */
-	function structureKindLabel(kind) {
-		switch (kind) {
-			case 'object':
-				return strings.schemaKindObject;
-			case 'array':
-				return strings.schemaKindArray;
-			case 'attribute':
-				return strings.schemaKindAttribute;
-			default:
-				return strings.schemaKindValue;
-		}
-	}
-
-	function renderSchemaTab() {
+	function renderStructureTab() {
 		const section = el('section', { className: 'tab-panel columns-section' });
 		const options = structureOptions();
 
@@ -910,6 +912,7 @@
 					render();
 				}),
 			);
+			toolbar.appendChild(renderDocumentPreviewButton());
 		}
 		section.appendChild(toolbar);
 		section.appendChild(
@@ -929,18 +932,29 @@
 
 		const showValueType = currentFormat() === 'json';
 		const wrap = el('div', { className: 'columns-table-wrap' });
-		const table = el('table', { className: 'columns-table' });
+		const table = el('table', { className: 'columns-table structure-table' });
+
+		// Fixed widths rather than the columns grid's measure-then-freeze dance:
+		// every cell here holds a short select or a name, so there is nothing to
+		// measure — the width-less filler column at the end takes the rest
+		// instead of stretching the selects across the whole panel.
+		const order = showValueType
+			? ['num', 'name', 'kind', 'valueType', 'sourceKind', 'source', 'actions']
+			: ['num', 'name', 'kind', 'sourceKind', 'source', 'actions'];
+		table.appendChild(buildColGroup(order, STRUCTURE_COLUMN_WIDTHS).colgroup);
 
 		const thead = el('thead');
 		const headRow = el('tr');
 		headRow.appendChild(el('th', { className: 'col-num' }));
-		headRow.appendChild(el('th', { className: 'col-name', text: strings.schemaColHeaderName }));
-		headRow.appendChild(el('th', { className: 'col-type', text: strings.schemaColHeaderKind }));
+		headRow.appendChild(el('th', { className: 'col-node-name', text: strings.schemaColHeaderName }));
+		headRow.appendChild(el('th', { className: 'col-kind', text: strings.schemaColHeaderKind }));
 		if (showValueType) {
 			// XML writes every leaf as text — a value type would have no effect
 			// there, so the column only exists for JSON.
-			headRow.appendChild(el('th', { className: 'col-type', text: strings.schemaColHeaderType }));
+			headRow.appendChild(el('th', { className: 'col-kind', text: strings.schemaColHeaderType }));
 		}
+		headRow.appendChild(el('th', { className: 'col-source-kind', text: strings.mappingColHeaderSourceKind }));
+		headRow.appendChild(el('th', { className: 'col-source', text: strings.mappingColHeaderSource }));
 		headRow.appendChild(el('th', { className: 'col-actions col-actions-wide' }));
 		headRow.appendChild(el('th', { className: 'col-spacer' }));
 		thead.appendChild(headRow);
@@ -948,7 +962,7 @@
 
 		const tbody = el('tbody');
 		flattenStructure(options.nodes).forEach((row, position) => {
-			tbody.appendChild(renderSchemaRow(row, position, showValueType));
+			tbody.appendChild(renderStructureRow(row, position, showValueType));
 		});
 		table.appendChild(tbody);
 
@@ -958,12 +972,14 @@
 	}
 
 	/**
-	 * One row of the schema grid.
-	 * @param {{node:StructureNode,depth:number,siblings:StructureNode[],index:number,path:string[]}} entry
+	 * One row of the structure grid: name, kind and (for JSON) value type
+	 * describe the shape; "filled from" and the value below it are the mapping
+	 * and only apply to the leaves.
+	 * @param {{node:StructureNode,depth:number,siblings:StructureNode[],index:number}} entry
 	 * @param {number} position Running number across the whole (flattened) tree.
 	 * @param {boolean} showValueType
 	 */
-	function renderSchemaRow(entry, position, showValueType) {
+	function renderStructureRow(entry, position, showValueType) {
 		const { node, depth, siblings, index } = entry;
 		const row = el('tr');
 		row.appendChild(el('td', { className: 'col-num', text: String(position + 1) }));
@@ -971,9 +987,8 @@
 		// --- Name (indented by nesting depth) ---
 		const nameTd = el('td');
 		const nameWrap = el('div', { className: 'structure-name' });
-		nameWrap.style.paddingLeft = `${depth * 18}px`;
-		const icon = el('i', { className: `codicon codicon-${structureIcon(node.kind)} structure-icon` });
-		nameWrap.appendChild(icon);
+		nameWrap.style.paddingLeft = `${depth * STRUCTURE_INDENT}px`;
+		nameWrap.appendChild(el('i', { className: `codicon codicon-${structureIcon(node.kind)} structure-icon` }));
 		const nameInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input cell-input' }));
 		nameInput.type = 'text';
 		nameInput.placeholder = strings.schemaNamePlaceholder;
@@ -995,9 +1010,16 @@
 		row.appendChild(nameTd);
 
 		// --- Kind ---
-		const kindTd = el('td');
+		const kindTd = el('td', { className: 'col-kind' });
 		const kindSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
-		for (const kind of structureKindOptions()) {
+		const kinds = structureKindOptions();
+		if (!kinds.some((k) => k.value === node.kind)) {
+			// A kind that this file type does not offer (only reachable from
+			// hand-edited TOML) still has to be displayed rather than silently
+			// showing the first option instead.
+			kinds.unshift({ value: node.kind, label: node.kind + strings.generatorNotFoundSuffix });
+		}
+		for (const kind of kinds) {
 			const option = /** @type {HTMLOptionElement} */ (el('option', { text: kind.label }));
 			option.value = kind.value;
 			kindSelect.appendChild(option);
@@ -1018,7 +1040,7 @@
 
 		// --- Value type (JSON only, leaves only) ---
 		if (showValueType) {
-			const typeTd = el('td');
+			const typeTd = el('td', { className: 'col-kind' });
 			if (isLeafKind(node.kind)) {
 				const typeSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
 				for (const type of [
@@ -1041,6 +1063,40 @@
 			}
 			row.appendChild(typeTd);
 		}
+
+		// --- Mapping: where the value comes from, and the value itself ---
+		const sourceKindTd = el('td', { className: 'col-source-kind' });
+		const sourceTd = el('td', { className: 'col-source' });
+		if (isLeafKind(node.kind)) {
+			const sourceKindSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+			for (const kind of [
+				{ value: 'column', label: strings.mappingSourceKindColumn },
+				{ value: 'constant', label: strings.mappingSourceKindConstant },
+			]) {
+				const option = /** @type {HTMLOptionElement} */ (el('option', { text: kind.label }));
+				option.value = kind.value;
+				sourceKindSelect.appendChild(option);
+			}
+			sourceKindSelect.value = node.sourceKind === 'constant' ? 'constant' : 'column';
+			sourceKindTd.appendChild(wrapSelectWithChevron(sourceKindSelect));
+
+			const rebuildSource = () => {
+				sourceTd.innerHTML = '';
+				sourceTd.appendChild(node.sourceKind === 'constant' ? buildConstantInput(node) : buildColumnSelect(node));
+			};
+			sourceKindSelect.addEventListener('change', () => {
+				node.sourceKind = /** @type {StructureNode['sourceKind']} */ (sourceKindSelect.value);
+				// The two source kinds mean completely different things —
+				// keeping the old text as a column name (or vice versa) would
+				// only produce a confusing "not found".
+				node.source = '';
+				postEdit();
+				rebuildSource();
+			});
+			rebuildSource();
+		}
+		row.appendChild(sourceKindTd);
+		row.appendChild(sourceTd);
 
 		// --- Actions ---
 		const actionsTd = el('td', { className: 'col-actions col-actions-wide' });
@@ -1108,12 +1164,11 @@
 
 	/** Flat structure with one mapped leaf per written column (see structureFromColumns in src/table/model.ts). */
 	function structureFromColumns() {
-		const leafKind = 'value';
 		return state.columns
 			.filter((column) => !column.hidden && (column.name || '').trim() !== '')
 			.map((column) => ({
 				name: column.name.trim(),
-				kind: /** @type {StructureNode['kind']} */ (leafKind),
+				kind: /** @type {StructureNode['kind']} */ ('value'),
 				valueType: 'auto',
 				sourceKind: /** @type {StructureNode['sourceKind']} */ ('column'),
 				source: column.name.trim(),
@@ -1130,7 +1185,7 @@
 		}
 	}
 
-	/** Toolbar button with a codicon (schema/mapping toolbars). */
+	/** Toolbar button with a codicon (structure toolbar). */
 	function renderToolbarButton(icon, label, onClick) {
 		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
@@ -1140,7 +1195,7 @@
 		return btn;
 	}
 
-	/** Empty state of the schema/mapping tabs (same layout as the columns tab's). */
+	/** Empty state of the structure tab (same layout as the columns tab's). */
 	function renderStructureEmptyState(icon, text, actionLabel, onAction) {
 		const empty = el('div', { className: 'empty-state' });
 		empty.appendChild(el('i', { className: `codicon codicon-${icon}` }));
@@ -1152,138 +1207,8 @@
 		return empty;
 	}
 
-	// ---------------------------------------------------------------------
-	// "Mapping" tab: one row per leaf of the target structure — which column
-	// (or which fixed text) fills it. The preview button here renders the
-	// records as the real JSON/XML document instead of a value grid.
-	// ---------------------------------------------------------------------
-
-	function renderMappingTab() {
-		const section = el('section', { className: 'tab-panel columns-section' });
-		const options = structureOptions();
-		const leaves = flattenStructure(options.nodes).filter((entry) => isLeafKind(entry.node.kind));
-
-		const toolbar = el('div', { className: 'toolbar' });
-		toolbar.appendChild(renderDocumentPreviewButton());
-		section.appendChild(toolbar);
-		section.appendChild(el('p', { className: 'hint', text: strings.mappingHint }));
-
-		if (leaves.length === 0) {
-			section.appendChild(
-				renderStructureEmptyState('symbol-structure', strings.mappingEmptyText, strings.mappingEmptyAction, () => {
-					activeTab = 'schema';
-					render();
-				}),
-			);
-			return section;
-		}
-
-		const wrap = el('div', { className: 'columns-table-wrap' });
-		const table = el('table', { className: 'columns-table' });
-
-		const thead = el('thead');
-		const headRow = el('tr');
-		headRow.appendChild(el('th', { className: 'col-num' }));
-		headRow.appendChild(el('th', { className: 'col-name', text: strings.mappingColHeaderPath }));
-		headRow.appendChild(el('th', { className: 'col-type', text: strings.mappingColHeaderKind }));
-		headRow.appendChild(el('th', { className: 'col-type', text: strings.mappingColHeaderSourceKind }));
-		headRow.appendChild(el('th', { className: 'col-ref-table', text: strings.mappingColHeaderSource }));
-		headRow.appendChild(el('th', { className: 'col-spacer' }));
-		thead.appendChild(headRow);
-		table.appendChild(thead);
-
-		// Several leaves may legitimately share a path — an array's children are
-		// often all named alike (their names are not used in the output anyway).
-		// Those rows get a running number appended, so each one stays
-		// identifiable.
-		/** @type {Record<string, number>} */
-		const pathCounts = {};
-		for (const entry of leaves) {
-			const text = mappingPathText(entry.path);
-			pathCounts[text] = (pathCounts[text] || 0) + 1;
-		}
-		/** @type {Record<string, number>} */
-		const pathSeen = {};
-
-		const tbody = el('tbody');
-		leaves.forEach((entry, position) => {
-			const text = mappingPathText(entry.path);
-			let label = text;
-			if (pathCounts[text] > 1) {
-				pathSeen[text] = (pathSeen[text] || 0) + 1;
-				label = `${text} #${pathSeen[text]}`;
-			}
-			tbody.appendChild(renderMappingRow(entry, position, label));
-		});
-		table.appendChild(tbody);
-
-		wrap.appendChild(table);
-		section.appendChild(wrap);
-		return section;
-	}
-
-	/** Display text of a leaf's path in the structure. @param {string[]} path */
-	function mappingPathText(path) {
-		return path.map((part) => part.trim() || '?').join(' › ');
-	}
-
 	/**
-	 * One row of the mapping grid.
-	 * @param {{node:StructureNode,depth:number,path:string[]}} entry
-	 * @param {number} position
-	 * @param {string} pathLabel Path in the structure, numbered where it repeats.
-	 */
-	function renderMappingRow(entry, position, pathLabel) {
-		const node = entry.node;
-		const row = el('tr');
-		row.appendChild(el('td', { className: 'col-num', text: String(position + 1) }));
-
-		// Full path in the structure — read-only here; renaming happens in the
-		// schema tab, which is the single place the structure is edited.
-		const pathTd = el('td');
-		pathTd.appendChild(el('span', { className: 'mapping-path', text: pathLabel }));
-		row.appendChild(pathTd);
-
-		row.appendChild(el('td', { className: 'mapping-kind', text: structureKindLabel(node.kind) }));
-
-		// --- Source kind: a column of this table, or a fixed text ---
-		const sourceKindTd = el('td');
-		const sourceKindSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
-		for (const kind of [
-			{ value: 'column', label: strings.mappingSourceKindColumn },
-			{ value: 'constant', label: strings.mappingSourceKindConstant },
-		]) {
-			const option = /** @type {HTMLOptionElement} */ (el('option', { text: kind.label }));
-			option.value = kind.value;
-			sourceKindSelect.appendChild(option);
-		}
-		sourceKindSelect.value = node.sourceKind === 'constant' ? 'constant' : 'column';
-		sourceKindTd.appendChild(wrapSelectWithChevron(sourceKindSelect));
-		row.appendChild(sourceKindTd);
-
-		// --- The value itself: a column picker or a free text field ---
-		const sourceTd = el('td', { className: 'col-ref-table' });
-		const rebuildSource = () => {
-			sourceTd.innerHTML = '';
-			sourceTd.appendChild(node.sourceKind === 'constant' ? buildConstantInput(node) : buildColumnSelect(node));
-		};
-		sourceKindSelect.addEventListener('change', () => {
-			node.sourceKind = /** @type {StructureNode['sourceKind']} */ (sourceKindSelect.value);
-			// The two source kinds mean completely different things — keeping
-			// the old text as a column name (or vice versa) would only produce
-			// a confusing "not found".
-			node.source = '';
-			postEdit();
-			rebuildSource();
-		});
-		rebuildSource();
-		row.appendChild(sourceTd);
-		row.appendChild(el('td', { className: 'col-spacer' }));
-		return row;
-	}
-
-	/**
-	 * Column picker of a mapping row. Deliberately offers hidden columns too:
+	 * Column picker of a leaf. Deliberately offers hidden columns too:
 	 * `hidden` keeps a column out of the *default* structure, but an explicitly
 	 * mapped one is written — the mapping is the deliberate choice.
 	 * @param {StructureNode} node
@@ -1316,7 +1241,7 @@
 		return wrapSelectWithChevron(select);
 	}
 
-	/** Fixed-text input of a mapping row. @param {StructureNode} node */
+	/** Fixed-text input of a leaf. @param {StructureNode} node */
 	function buildConstantInput(node) {
 		const input = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input cell-input' }));
 		input.type = 'text';

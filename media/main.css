@@ -565,10 +565,13 @@ body.col-resizing .col-resize-handle {
 	gap: 2px;
 }
 
-/* ---------- Table Editor: Zielstruktur (Tabs „Schema“/„Zuordnung“) ---------- */
+/* ---------- Table Editor: Zielstruktur (Tab „JSON-/XML-Struktur“) ---------- */
 
-/* Namenszelle des Struktur-Grids: Einrückung nach Verschachtelungstiefe
-   (per Inline-padding-left aus table.js) plus ein Symbol für die Knotenart,
+/* Ein Grid für Aufbau UND Zuordnung: links Name/Art/Werttyp, rechts die
+   Herkunft des Werts (nur bei Blättern gefüllt). */
+
+/* Namenszelle: Einrückung nach Verschachtelungstiefe (per Inline-padding-left
+   aus table.js, siehe STRUCTURE_INDENT) plus ein Symbol für die Knotenart,
    damit der Baum auf einen Blick lesbar bleibt. */
 .structure-name {
 	display: flex;
@@ -583,17 +586,12 @@ body.col-resizing .col-resize-handle {
 	color: var(--vscode-descriptionForeground);
 }
 
-/* Pfad und Art im Zuordnungs-Grid sind reine Anzeige — bearbeitet wird die
-   Struktur ausschließlich im Schema-Tab. */
-.mapping-path {
-	font-family: var(--vscode-editor-font-family);
-	font-size: 0.92em;
-	white-space: nowrap;
-}
-
-.columns-table td.mapping-kind {
-	color: var(--vscode-descriptionForeground);
-	white-space: nowrap;
+/* Feste Spaltenbreiten (siehe STRUCTURE_COLUMN_WIDTHS in table.js): die
+   Zellen enthalten nur kurze Auswahlfelder, es gibt also nichts zu messen.
+   table-layout: fixed sorgt dafür, dass die breitenlose Füllspalte am Ende
+   den Rest aufnimmt, statt die Felder über das ganze Panel zu dehnen. */
+.columns-table.structure-table {
+	table-layout: fixed;
 }
 
 /* „Ausgeblendete“ Spalte (Auge-Umschalter, rein visueller Merkzustand ohne

@@ -102,10 +102,15 @@ Tabellendefinition, sondern wird je Testdatenprojekt festgelegt.
 
 CSV und Excel schreiben die Spalten so, wie sie sind. JSON und XML sind
 dagegen **datensatzförmig** — die flach erzeugten Spalten müssen in eine
-verschachtelte Form gebracht werden. Dafür erscheinen bei diesen beiden
-Dateitypen zwei zusätzliche Tabs:
+verschachtelte Form gebracht werden. Dafür erscheint bei diesen beiden
+Dateitypen ein zusätzlicher Tab, benannt nach dem Dateityp:
+**„JSON-Struktur“** bzw. **„XML-Struktur“**.
 
-**Schema**: die Zielstruktur **eines** Datensatzes als eingerückter Baum.
+Er zeigt die Zielstruktur **eines** Datensatzes als eingerückten Baum —
+Aufbau *und* Wertzuordnung in einem Grid, denn beides gehört zum selben
+Knoten. Je Zeile: links Name, Art und (bei JSON) Werttyp, rechts — nur bei
+Blättern — woraus der Wert kommt.
+
 Jeder Knoten hat einen Namen und eine Art:
 
 - **Objekt** — verschachtelt seine Kindknoten (JSON: `{ … }`, XML: ein
@@ -125,22 +130,23 @@ Jeder Knoten hat einen Namen und eine Art:
   mit dem Array-Namen, gefüllt mit den Kindern des Objekts. Die Anzahl der
   Einträge ergibt sich aus der Anzahl der Kindknoten und ist damit für alle
   Datensätze gleich
-- **Wert** — ein Blatt, das im Zuordnungs-Tab gefüllt wird; bei JSON
-  zusätzlich mit **Werttyp** (automatisch, Text, Zahl, Ganzzahl,
-  Wahrheitswert), bei XML entfällt der Typ, da XML nur Text kennt
+- **Wert** — ein Blatt, das einen Wert bekommt; bei JSON zusätzlich mit
+  **Werttyp** (automatisch, Text, Zahl, Ganzzahl, Wahrheitswert), bei XML
+  entfällt der Typ, da XML nur Text kennt
 - **Attribut** (nur XML) — hängt als Attribut am übergeordneten Element
+
+Die **Wertzuordnung** steht in denselben Zeilen: jedes Blatt wird entweder
+aus einer **Spalte** der Tabelle gefüllt oder aus einem **festen Text**
+(z. B. eine Währung oder eine Systemkennung, die gar nicht generiert wird).
+Objekte und Arrays sind reiner Aufbau und lassen diese beiden Spalten leer.
 
 Die Knöpfe **„Aus Spalten erzeugen“** und **„Struktur leeren“** erzeugen
 bzw. verwerfen eine flache Struktur mit einem Blatt je Spalte. Ohne
 festgelegte Struktur wird genau diese flache Form geschrieben — ein
-Wechsel auf JSON/XML liefert also sofort brauchbare Ausgabe.
-
-**Zuordnung**: eine Zeile je Blatt der Struktur mit dessen Pfad und der
-Quelle — entweder eine **Spalte** der Tabelle oder ein **fester Text**
-(z. B. eine Währung oder eine Systemkennung, die gar nicht generiert wird).
-Der Knopf **„Dokument-Vorschau“** erzeugt 20 Datensätze und zeigt das
-fertige JSON- bzw. XML-Dokument genau so, wie der Lauf es schreiben würde
-— mitsamt Kopier-Knopf.
+Wechsel auf JSON/XML liefert also sofort brauchbare Ausgabe. Der Knopf
+**„Dokument-Vorschau“** erzeugt 20 Datensätze und zeigt das fertige JSON-
+bzw. XML-Dokument genau so, wie der Lauf es schreiben würde — mitsamt
+Kopier-Knopf.
 
 Der Dateityp entscheidet, welche Struktur gilt: JSON und XML halten ihre
 eigene, sodass ein Wechsel zwischen beiden nichts überschreibt.

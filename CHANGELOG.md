@@ -16,8 +16,13 @@
   zusammen. Die Verschachtelung steckt jetzt in `depth`, die Identität ist
   die Position; Dateien im alten Format werden weiterhin gelesen und beim
   nächsten Speichern umgestellt.
-- Im Zuordnungs-Tab bekommen mehrfach vorkommende Pfade eine laufende
-  Nummer (`Reference › eigene #1`), damit jede Zeile eindeutig bleibt.
+- **Aufbau und Zuordnung in einem Grid**: statt der beiden Tabs „Schema“
+  und „Zuordnung“ gibt es jetzt EINEN Tab, benannt nach dem Dateityp
+  („JSON-Struktur“ bzw. „XML-Struktur“). Je Zeile stehen links Name, Art
+  und (bei JSON) Werttyp, rechts die Herkunft des Werts — Spalte oder
+  fester Text; Objekte und Arrays lassen die beiden Zuordnungsspalten leer.
+  Beides gehört zum selben Knoten, das Hin- und Herwechseln entfällt damit.
+  Die Einrückung je Ebene ist etwas größer (24 statt 18 px).
 - **Neue Symbole im Schema-Tab**: jede Knotenart trägt jetzt die für sie
   übliche Schreibweise — `{}` für Objekt, `[]` für Array, `@` für Attribut
   (wie in XPath) und Anführungszeichen für Wert. Das bisherige

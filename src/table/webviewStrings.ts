@@ -10,9 +10,8 @@
 export interface WebviewStrings {
 	tabOverview: string;
 	tabColumns: string;
-	/** Only shown for the JSON/XML file types (see media/table.js). */
-	tabSchema: string;
-	tabMapping: string;
+	/** Only shown for the JSON/XML file types; `{0}` = the file type ("JSON"/"XML"). */
+	tabStructure: string;
 
 	fieldNameLabel: string;
 	fieldNamePlaceholder: string;
@@ -143,8 +142,10 @@ export interface WebviewStrings {
 	formatDatetimeFormatLabel: string;
 	formatEncodingLabel: string;
 
-	/** Schema tab (JSON/XML target structure). */
-	schemaSectionTitle: string;
+	/**
+	 * Structure tab (JSON/XML): the target structure and the value mapping of
+	 * its leaves in ONE grid — shape and mapping belong to the same node.
+	 */
 	schemaHintJson: string;
 	schemaHintXml: string;
 	schemaAddNodeButton: string;
@@ -171,11 +172,7 @@ export interface WebviewStrings {
 	schemaMoveNodeUpLabel: string;
 	schemaMoveNodeDownLabel: string;
 
-	/** Mapping tab (which value fills which structure node). */
-	mappingSectionTitle: string;
-	mappingHint: string;
-	mappingColHeaderPath: string;
-	mappingColHeaderKind: string;
+	/** Mapping columns of the structure grid (which value fills a leaf). */
 	mappingColHeaderSourceKind: string;
 	mappingColHeaderSource: string;
 	mappingSourceKindColumn: string;
@@ -185,8 +182,6 @@ export interface WebviewStrings {
 	mappingConstantPlaceholder: string;
 	mappingColumnRequiredError: string;
 	mappingColumnNotFoundError: string;
-	mappingEmptyText: string;
-	mappingEmptyAction: string;
 
 	emptyStateText: string;
 	emptyStateAction: string;
@@ -199,8 +194,7 @@ export interface WebviewStrings {
 const en: WebviewStrings = {
 	tabOverview: 'Overview',
 	tabColumns: 'Columns',
-	tabSchema: 'Schema',
-	tabMapping: 'Mapping',
+	tabStructure: '{0} structure',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'e.g. customers',
@@ -324,11 +318,10 @@ const en: WebviewStrings = {
 	formatDatetimeFormatLabel: 'Timestamp format',
 	formatEncodingLabel: 'Encoding',
 
-	schemaSectionTitle: 'Target structure',
 	schemaHintJson:
-		'Describes ONE record. Objects nest, values are the leaves that get a column mapped to them in the "Mapping" tab, and an array writes one entry per child node — an array entry has no name of its own, so the child names are not used.',
+		'Describes ONE record: objects nest, values are the leaves that a column (or a fixed text) fills, and an array writes one entry per child node — an array entry has no name of its own, so the child names are not used.',
 	schemaHintXml:
-		'Describes ONE record element. Objects become nested elements, values become child elements and attributes become attributes of their parent. An array becomes a repeating element: every child writes one element named after the ARRAY, so its own name is not used — the "Mapping" tab fills the leaves with column values.',
+		'Describes ONE record element: objects become nested elements, values become child elements, attributes become attributes of their parent, and an array becomes a repeating element — every child writes one element named after the ARRAY, so its own name is not used.',
 	schemaAddNodeButton: 'Add node',
 	schemaAddChildLabel: 'Add child node',
 	schemaFromColumnsButton: 'Derive from columns',
@@ -353,11 +346,7 @@ const en: WebviewStrings = {
 	schemaMoveNodeUpLabel: 'Move node up',
 	schemaMoveNodeDownLabel: 'Move node down',
 
-	mappingSectionTitle: 'Value mapping',
-	mappingHint: 'One row per leaf of the target structure — pick the column (or the fixed text) that fills it.',
-	mappingColHeaderPath: 'Path in the structure',
-	mappingColHeaderKind: 'Kind',
-	mappingColHeaderSourceKind: 'Source',
+	mappingColHeaderSourceKind: 'Filled from',
 	mappingColHeaderSource: 'Value',
 	mappingSourceKindColumn: 'Column',
 	mappingSourceKindConstant: 'Fixed text',
@@ -366,8 +355,6 @@ const en: WebviewStrings = {
 	mappingConstantPlaceholder: 'Fixed text',
 	mappingColumnRequiredError: 'Select a column.',
 	mappingColumnNotFoundError: 'This column was not found in the table. It may have been renamed or removed.',
-	mappingEmptyText: 'The target structure has no mapped leaves yet.',
-	mappingEmptyAction: 'Set up the structure',
 
 	emptyStateText: 'No columns yet.',
 	emptyStateAction: 'Add first column',
@@ -380,8 +367,7 @@ const en: WebviewStrings = {
 const de: WebviewStrings = {
 	tabOverview: 'Übersicht',
 	tabColumns: 'Spalten',
-	tabSchema: 'Schema',
-	tabMapping: 'Zuordnung',
+	tabStructure: '{0}-Struktur',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'z. B. customers',
@@ -506,11 +492,10 @@ const de: WebviewStrings = {
 	formatDatetimeFormatLabel: 'Zeitstempelformat',
 	formatEncodingLabel: 'Encoding',
 
-	schemaSectionTitle: 'Zielstruktur',
 	schemaHintJson:
-		'Beschreibt EINEN Datensatz. Objekte verschachteln, Werte sind die Blätter, denen im Tab „Zuordnung“ eine Spalte zugewiesen wird, und ein Array schreibt einen Eintrag je Kindknoten — ein Array-Eintrag hat keinen eigenen Namen, die Kindnamen werden also nicht verwendet.',
+		'Beschreibt EINEN Datensatz: Objekte verschachteln, Werte sind die Blätter, die eine Spalte (oder ein fester Text) füllt, und ein Array schreibt einen Eintrag je Kindknoten — ein Array-Eintrag hat keinen eigenen Namen, die Kindnamen werden also nicht verwendet.',
 	schemaHintXml:
-		'Beschreibt EIN Datensatz-Element. Objekte werden zu verschachtelten Elementen, Werte zu Kindelementen und Attribute zu Attributen ihres Elternelements. Ein Array wird zum wiederholten Element: jedes Kind schreibt ein Element mit dem Namen des ARRAYS, sein eigener Name wird also nicht verwendet — der Tab „Zuordnung“ füllt die Blätter mit Spaltenwerten.',
+		'Beschreibt EIN Datensatz-Element: Objekte werden zu verschachtelten Elementen, Werte zu Kindelementen, Attribute zu Attributen ihres Elternelements, und ein Array wird zum wiederholten Element — jedes Kind schreibt ein Element mit dem Namen des ARRAYS, sein eigener Name wird also nicht verwendet.',
 	schemaAddNodeButton: 'Knoten hinzufügen',
 	schemaAddChildLabel: 'Unterknoten hinzufügen',
 	schemaFromColumnsButton: 'Aus Spalten erzeugen',
@@ -535,12 +520,7 @@ const de: WebviewStrings = {
 	schemaMoveNodeUpLabel: 'Knoten nach oben verschieben',
 	schemaMoveNodeDownLabel: 'Knoten nach unten verschieben',
 
-	mappingSectionTitle: 'Wertzuordnung',
-	mappingHint:
-		'Eine Zeile je Blatt der Zielstruktur — die Spalte (oder den festen Text) auswählen, mit der es gefüllt wird.',
-	mappingColHeaderPath: 'Pfad in der Struktur',
-	mappingColHeaderKind: 'Art',
-	mappingColHeaderSourceKind: 'Quelle',
+	mappingColHeaderSourceKind: 'Gefüllt aus',
 	mappingColHeaderSource: 'Wert',
 	mappingSourceKindColumn: 'Spalte',
 	mappingSourceKindConstant: 'Fester Text',
@@ -550,8 +530,6 @@ const de: WebviewStrings = {
 	mappingColumnRequiredError: 'Spalte auswählen.',
 	mappingColumnNotFoundError:
 		'Diese Spalte wurde in der Tabelle nicht gefunden. Sie wurde möglicherweise umbenannt oder entfernt.',
-	mappingEmptyText: 'Die Zielstruktur hat noch keine zugeordneten Blätter.',
-	mappingEmptyAction: 'Struktur einrichten',
 
 	emptyStateText: 'Noch keine Spalten vorhanden.',
 	emptyStateAction: 'Erste Spalte hinzufügen',
