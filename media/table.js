@@ -1076,7 +1076,11 @@
 		return row;
 	}
 
-	/** Icon of a node kind, so the tree stays readable at a glance. */
+	/**
+	 * Icon of a node kind: the literal notation for each concept, so the tree
+	 * reads at a glance — braces for an object, brackets for an array, the `@`
+	 * that marks an attribute in XPath, and quotes for a text value.
+	 */
 	function structureIcon(kind) {
 		switch (kind) {
 			case 'object':
@@ -1084,9 +1088,9 @@
 			case 'array':
 				return 'symbol-array';
 			case 'attribute':
-				return 'symbol-property';
+				return 'mention';
 			default:
-				return 'symbol-field';
+				return 'symbol-string';
 		}
 	}
 

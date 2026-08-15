@@ -18,6 +18,11 @@
   nächsten Speichern umgestellt.
 - Im Zuordnungs-Tab bekommen mehrfach vorkommende Pfade eine laufende
   Nummer (`Reference › eigene #1`), damit jede Zeile eindeutig bleibt.
+- **Neue Symbole im Schema-Tab**: jede Knotenart trägt jetzt die für sie
+  übliche Schreibweise — `{}` für Objekt, `[]` für Array, `@` für Attribut
+  (wie in XPath) und Anführungszeichen für Wert. Das bisherige
+  Attribut-Symbol war derselbe Glyph wie `wrench` und las sich als
+  „Einstellungen“.
 - **ER-Diagramm**: der hellere Balken am unteren Rand der Kasten-Kopfzeile
   ist verschwunden — die Kopfzeile wird als *eine* Form gezeichnet statt
   als zwei sich überlappende Rechtecke, deren durchscheinende Tönung sich
