@@ -1870,14 +1870,61 @@ body.vscode-high-contrast-light .chart-bar {
 
 /* ---------- Projekt-Editor: Ausgabedateien-Übersicht (Übersicht-Tab) ---------- */
 
-/* Die beiden Zaehler-Spalten (zu erzeugende Datensaetze, letzter Lauf) sind so
-   breit wie ihr Inhalt und brechen nicht um - dadurch stehen sie direkt
-   nebeneinander und der uebrige Platz faellt an die Spacer-Spalte, statt die
-   Zahlen ueber die halbe Tabelle zu verteilen. */
+/* Spaltenbreiten dieser Tabelle: Jede Spalte ist so breit wie ihr Inhalt
+   (width:1px + nowrap ist unter table-layout:auto die uebliche Schrumpf-
+   Anweisung), die letzte Spalte bekommt den Rest. Dadurch fuellt die Tabelle
+   die volle Breite, ohne den Platz gleichmaessig auf alle Spalten zu verteilen.
+   Etwas mehr Innenabstand als in den Bearbeitungs-Grids, damit die Spalten
+   sichtbar voneinander abgesetzt sind - hier wird nur gelesen, nicht editiert. */
+.output-files-table th,
+.output-files-table td {
+	width: 1px;
+	white-space: nowrap;
+	padding-left: 10px;
+	padding-right: 10px;
+}
+
+/* Die Mindestbreiten der Grid-Spalten gelten hier nicht: In dieser Tabelle
+   wird nichts editiert, also braucht keine Spalte Platz fuer ein Eingabefeld. */
+.output-files-table .col-name,
+.output-files-table .col-desc,
 .output-files-table .col-records-wide {
 	min-width: 0;
-	width: 1%;
-	white-space: nowrap;
+}
+
+/* Zahlen des letzten Laufs rechtsbuendig mit gleich breiten Ziffern, damit
+   sie stellenweise untereinander stehen. */
+.output-files-table .col-last-run {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Balkenspalte: nimmt den restlichen Platz ein und bleibt leer, solange es
+   keinen Lauf gab - dann wirkt sie wie der Spacer der anderen Tabellen. */
+.output-files-table .col-bar {
+	width: auto;
+	min-width: 60px;
+}
+
+/* Inline-Balken wie im Verteilungsdiagramm einer Nachschlageliste: Laenge
+   relativ zum groessten Wert der Spalte, gleiche Farben und Rundungen. */
+.records-bar-track {
+	height: 10px;
+	background-color: color-mix(in srgb, var(--vscode-editor-foreground) 7%, transparent);
+	border-radius: 0 4px 4px 0;
+	overflow: hidden;
+}
+
+.records-bar {
+	height: 100%;
+	width: 0;
+	background-color: #23cc99;
+	border-radius: 0 4px 4px 0;
+}
+
+body.vscode-light .records-bar,
+body.vscode-high-contrast-light .records-bar {
+	background-color: #0e8a66;
 }
 
 .output-files-table .path-cell {

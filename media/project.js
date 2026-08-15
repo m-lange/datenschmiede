@@ -488,10 +488,17 @@
 		headRow.appendChild(el('th', { className: 'col-desc', text: strings.outputFilesColFile }));
 		headRow.appendChild(el('th', { className: 'col-desc', text: strings.outputFilesColFileName }));
 		headRow.appendChild(el('th', { className: 'col-records-wide', text: strings.outputFilesColRecords }));
-		headRow.appendChild(el('th', { className: 'col-records-wide', text: strings.outputFilesColLastRun }));
-		headRow.appendChild(el('th', { className: 'col-spacer' }));
+		headRow.appendChild(el('th', { className: 'col-records-wide col-last-run', text: strings.outputFilesColLastRun }));
+		// Takes the width the other columns leave over: empty without a run,
+		// otherwise the bar chart belonging to the column on its left.
+		headRow.appendChild(el('th', { className: 'col-bar' }));
 		thead.appendChild(headRow);
 		table.appendChild(thead);
+
+		// Scale of the bars: the largest count of the last run - as in the
+		// distribution chart of a lookup list, bar length is relative to the
+		// largest value, not to an absolute maximum.
+		const maxLastRun = Math.max(0, ...outputFiles.map((row) => row.lastRunRecords || 0));
 
 		const tbody = el('tbody');
 		for (const row of outputFiles) {
@@ -556,24 +563,37 @@
 			tr.appendChild(recordsTd);
 
 			// What the last run really wrote - next to the estimate, so a
-			// configuration changed since then is visible as a difference.
-			const lastRunTd = el('td', { className: 'col-records-wide' });
+			// configuration changed since then is visible as a difference. The
+			// number is right-aligned so the digits line up column-wise; the bar
+			// next to it makes the sizes comparable at a glance.
+			const title =
+				row.lastRunRecords !== undefined && formatDateTime(lastRunAt)
+					? strings.outputFilesLastRunTitle
+							.replace('{0}', formatRecordsNumber(row.lastRunRecords))
+							.replace('{1}', formatDateTime(lastRunAt))
+					: '';
+			const lastRunTd = el('td', { className: 'col-records-wide col-last-run' });
 			if (row.lastRunRecords !== undefined) {
-				const lastRunWrap = el('span', { className: 'records-cell-row' });
-				lastRunWrap.appendChild(el('i', { className: 'codicon codicon-history records-type-icon' }));
 				const value = el('span', { text: formatRecordsNumber(row.lastRunRecords) });
-				const time = formatDateTime(lastRunAt);
-				if (time) {
-					value.title = strings.outputFilesLastRunTitle
-						.replace('{0}', formatRecordsNumber(row.lastRunRecords))
-						.replace('{1}', time);
+				if (title) {
+					value.title = title;
 				}
-				lastRunWrap.appendChild(value);
-				lastRunTd.appendChild(lastRunWrap);
+				lastRunTd.appendChild(value);
 			}
 			tr.appendChild(lastRunTd);
 
-			tr.appendChild(el('td', { className: 'col-spacer' }));
+			const barTd = el('td', { className: 'col-bar' });
+			if (row.lastRunRecords !== undefined && maxLastRun > 0) {
+				const track = el('div', { className: 'records-bar-track' });
+				const bar = el('div', { className: 'records-bar' });
+				bar.style.width = `${(row.lastRunRecords / maxLastRun) * 100}%`;
+				track.appendChild(bar);
+				if (title) {
+					track.title = title;
+				}
+				barTd.appendChild(track);
+			}
+			tr.appendChild(barTd);
 			tbody.appendChild(tr);
 		}
 		table.appendChild(tbody);
