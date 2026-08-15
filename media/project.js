@@ -531,11 +531,6 @@
 			// so the estimate alone is reason enough to fill the cell.
 			if (row.records || row.estimatedMin !== undefined) {
 				const recordsWrap = el('span', { className: 'records-cell-row' });
-				recordsWrap.appendChild(
-					el('i', {
-						className: `codicon ${row.secondary ? 'codicon-references' : 'codicon-table'} records-type-icon`,
-					}),
-				);
 				// The count estimated from the configuration (for referenced
 				// tables the cardinality multiplied along the FK chain) rather
 				// than just the configured range; ranges use the same "min..max"

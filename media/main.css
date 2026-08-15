@@ -1874,14 +1874,21 @@ body.vscode-high-contrast-light .chart-bar {
    (width:1px + nowrap ist unter table-layout:auto die uebliche Schrumpf-
    Anweisung), die letzte Spalte bekommt den Rest. Dadurch fuellt die Tabelle
    die volle Breite, ohne den Platz gleichmaessig auf alle Spalten zu verteilen.
-   Etwas mehr Innenabstand als in den Bearbeitungs-Grids, damit die Spalten
-   sichtbar voneinander abgesetzt sind - hier wird nur gelesen, nicht editiert. */
+   20 px Abstand zwischen den Spalten (rechts angetragen, damit die erste
+   Spalte buendig am Kartenrand beginnt) - hier wird nur gelesen, nicht
+   editiert, also braucht es keinen Innenabstand fuer Eingabefelder. */
 .output-files-table th,
 .output-files-table td {
 	width: 1px;
 	white-space: nowrap;
-	padding-left: 10px;
-	padding-right: 10px;
+	padding-left: 0;
+	padding-right: 20px;
+}
+
+/* Die letzte Spalte traegt den Balken bis an den rechten Rand. */
+.output-files-table th.col-bar,
+.output-files-table td.col-bar {
+	padding-right: 0;
 }
 
 /* Die Mindestbreiten der Grid-Spalten gelten hier nicht: In dieser Tabelle
