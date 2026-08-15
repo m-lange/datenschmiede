@@ -966,8 +966,13 @@ class Runner:
                 if isinstance(value, str) and PARAM_TEMPLATE_RE.search(value)
             }
         )
-        if not templated or n == 0:
+        if not templated:
             return self.generate_column_values(table, column, n, params)
+        if n == 0:
+            # An empty table has nothing to group by — and the raw parameters
+            # still hold the placeholders, which no generator could parse
+            # ("{obergrenze}" is not a number).
+            return pd.Series([], dtype=object)
 
         resolved = pd.DataFrame(
             {name: self.resolve_param_template(table, column, value, n) for name, value in templated.items()}
