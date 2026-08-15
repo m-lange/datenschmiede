@@ -370,6 +370,13 @@ einmal je Kombination mit ganz normalen Einzelwerten auf. Referenzierte Spalten
 werden dadurch automatisch **vorher** erzeugt; zeigt ein Platzhalter auf eine
 Spalte, die es nicht (mehr) gibt, meldet das die Problems-Ansicht.
 
+**Beispiel** in [`samples/tables/core/kunden.td`](samples/tables/core/kunden.td):
+Die verborgene Spalte `locale_code` zieht den Sprachcode aus derselben Zeile
+der Liste [`laender`](samples/lookups/laender.lkp) wie `land`; die Spalte
+`ansprechpartner` setzt ihn als `{locale_code}` in die Faker-Locale ein. Damit
+heißen polnische Kunden polnisch und französische französisch — aus einer
+einzigen Listenzeile je Datensatz.
+
 Ausgenommen sind die Parameter, die keinen freien Text aufnehmen: die
 Referenztypen (Tabelle, Nachschlageliste, Spalte) und Wahrheitswerte. Bei
 Auswahllisten und Datumsfeldern schaltet der Knopf neben dem Feld auf freie

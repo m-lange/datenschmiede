@@ -25,6 +25,12 @@ daran.
   der `iban`, die der Generator
   [`iban_de`](../../generators/iban_de.tdgen) aus der Liste
   [`banken`](../../lookups/banken.lkp) zieht
+- `ansprechpartner` zeigt eine **Parameter-Vorlage**: Statt einer festen
+  Faker-Locale steht dort `{locale_code}` — der Wert der gleichnamigen
+  (verborgenen) Spalte, die den Sprachcode aus derselben Listenzeile wie
+  `land` zieht. Jeder Kunde bekommt dadurch einen Namen in der Sprache
+  seines Landes; `{spalte}` funktioniert in jedem freien Textparameter
+  jedes Generators
 - die CSV-Einstellungen zeigen die deutsche Schreibweise: Semikolon,
   Dezimalkomma, `TT.MM.JJJJ`
 """
@@ -149,6 +155,29 @@ generator = "lookup"
 [columns.generator_params]
 list = "laender"
 column = "waehrung"
+
+[[columns]]
+name = "locale_code"
+type = "string"
+pk = false
+fk = false
+hidden = true
+description = "Sprachcode aus **derselben Zeile** wie `land` — **verborgene** Spalte: wird erzeugt und von `ansprechpartner` gelesen, aber nicht in die Datei geschrieben"
+generator = "lookup"
+[columns.generator_params]
+list = "laender"
+column = "locale"
+
+[[columns]]
+name = "ansprechpartner"
+type = "string"
+pk = false
+fk = false
+description = "**Parameter-Vorlage**: Die Faker-Locale ist nicht fest, sondern `{locale_code}` — jeder Kunde bekommt einen Namen in der Sprache seines Landes, also `Kowalski` für Polen und `Dupont` für Frankreich"
+generator = "faker"
+[columns.generator_params]
+provider = "name"
+locale = "{locale_code}"
 
 [[columns]]
 name = "bank_name"
