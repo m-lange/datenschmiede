@@ -1,23 +1,24 @@
 import * as vscode from 'vscode';
 import { IndexedFileKind, WorkspaceIndex, WorkspaceSnapshot } from '../workspaceIndex';
-import { tableLabel } from '../table/repository';
 
 /**
- * The Datenschmiede sidebar (own container in the activity bar): four read-only
- * tree views over the workspace index — projects, lookup lists, generators and
- * the schema tree of all tables.
+ * The Datenschmiede sidebar (own container in the activity bar): five read-only
+ * tree views over the workspace index — projects, the schema tree of all
+ * tables, lookup lists, data generators and file generators.
  *
  * Everything here is a VIEW of the index, never a second source of truth: the
  * lists come from `index.snapshot()`, and every view refreshes on
  * `index.onDidChange` — but only for the file kinds it actually shows, so
  * typing in a `.td` file does not rebuild the project list.
  *
- * Items carry the file's name from ITS CONTENT (project name, list name,
- * generator name, `schema.table`) rather than the file name, with the
- * workspace-relative path as the greyed-out description. A file whose TOML is
- * broken is not silently dropped — it appears with a warning icon and its path
- * as the label, so it can be opened and repaired.
+ * Items are labelled with the name from INSIDE the file (project name, list
+ * name, generator name, table name); the file name appears nowhere but in the
+ * tooltip. A file whose TOML is broken has no name to show — it appears with a
+ * warning icon and its path, so it can be opened and repaired.
  */
+
+/** Context key: the schema view is filtered — controls the "clear filter" button in its title bar. */
+const SCHEMA_FILTERED_KEY = 'datenschmiede.schemaFiltered';
 
 /** Opens a file in its custom editor (the default for `.td`/`.tdproject`/`.lkp`, a notebook for the generators). */
 function openCommand(uri: vscode.Uri): vscode.Command {
@@ -32,15 +33,31 @@ function fileIcon(context: vscode.ExtensionContext, name: string): { light: vsco
 	};
 }
 
+/** The warning icon of an unreadable file — the same look in every view. */
+function invalidIcon(): vscode.ThemeIcon {
+	return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+}
+
+/** One file in a view. */
+interface FileNode {
+	uri: vscode.Uri;
+	/** Name from inside the file; the path only when there is no name (broken TOML). */
+	label: string;
+	/** Workspace-relative path — tooltip only, never shown in the tree. */
+	path: string;
+	/** `false` when the file could not be parsed. */
+	valid: boolean;
+}
+
 /**
- * Base class of the four views: holds the refresh wiring (index event filtered
- * by file kind) and the `message` shown while a view is empty, so each subclass
+ * Base class of the views: holds the refresh wiring (index event filtered by
+ * file kind) and the `message` shown while a view is empty, so each subclass
  * only has to say what its items are.
  */
 abstract class IndexView<T> implements vscode.TreeDataProvider<T> {
 	private readonly emitter = new vscode.EventEmitter<T | undefined>();
 	public readonly onDidChangeTreeData = this.emitter.event;
-	private view: vscode.TreeView<T> | undefined;
+	protected view: vscode.TreeView<T> | undefined;
 
 	constructor(
 		protected readonly context: vscode.ExtensionContext,
@@ -52,7 +69,7 @@ abstract class IndexView<T> implements vscode.TreeDataProvider<T> {
 	/** `true` for the views that actually nest — a "collapse all" button on a flat list would do nothing. */
 	protected nested = false;
 
-	/** Registers the view and keeps it in sync; returns the disposable to hand to the extension context. */
+	/** Registers the view and keeps it in sync; returns the disposables to hand to the extension context. */
 	public register(viewId: string): vscode.Disposable[] {
 		const view = vscode.window.createTreeView<T>(viewId, {
 			treeDataProvider: this,
@@ -62,11 +79,16 @@ abstract class IndexView<T> implements vscode.TreeDataProvider<T> {
 		void this.updateMessage();
 		const sub = this.index.onDidChange((changed) => {
 			if (this.kinds.some((kind) => changed.has(kind))) {
-				this.emitter.fire(undefined);
-				void this.updateMessage();
+				this.refresh();
 			}
 		});
 		return [view, sub, this.emitter];
+	}
+
+	/** Rebuilds the whole view. */
+	protected refresh(): void {
+		this.emitter.fire(undefined);
+		void this.updateMessage();
 	}
 
 	/**
@@ -91,42 +113,45 @@ abstract class IndexView<T> implements vscode.TreeDataProvider<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Projects: flat list, project name instead of file name
+// Flat views: projects, lookup lists, generators, file generators
 // ---------------------------------------------------------------------------
 
-interface FileNode {
-	uri: vscode.Uri;
-	label: string;
-	description: string;
-	/** Hover text; the description is used when unset. */
-	tooltip?: string;
-	/** `false` when the file could not be parsed — shown with a warning icon. */
-	valid: boolean;
-}
-
-class ProjectsView extends IndexView<FileNode> {
-	constructor(context: vscode.ExtensionContext, index: WorkspaceIndex) {
-		super(context, index, ['tdproject']);
+/**
+ * A flat list of files of one kind. The four flat views differ only in where
+ * their entries come from and what they are called, so everything else lives
+ * here once.
+ */
+class FlatFileView extends IndexView<FileNode> {
+	constructor(
+		context: vscode.ExtensionContext,
+		index: WorkspaceIndex,
+		kinds: IndexedFileKind[],
+		private readonly config: {
+			/** Base name of the icon pair in `icons/`. */
+			icon: string;
+			contextValue: string;
+			emptyText: string;
+			items: (snapshot: WorkspaceSnapshot) => FileNode[];
+		},
+	) {
+		super(context, index, kinds);
 	}
 
 	protected isEmpty(snapshot: WorkspaceSnapshot): boolean {
-		return snapshot.projects.length === 0;
+		return this.config.items(snapshot).length === 0;
 	}
 
 	protected emptyMessage(): string {
-		return vscode.l10n.t('No test data projects in this workspace.');
+		return this.config.emptyText;
 	}
 
 	public getTreeItem(element: FileNode): vscode.TreeItem {
 		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-		item.description = element.description;
 		item.resourceUri = element.uri;
-		item.tooltip = element.description;
+		item.tooltip = element.path;
 		item.command = openCommand(element.uri);
-		item.contextValue = 'datenschmiede.project';
-		item.iconPath = element.valid
-			? fileIcon(this.context, 'tdproject')
-			: new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+		item.contextValue = this.config.contextValue;
+		item.iconPath = element.valid ? fileIcon(this.context, this.config.icon) : invalidIcon();
 		return item;
 	}
 
@@ -135,147 +160,24 @@ class ProjectsView extends IndexView<FileNode> {
 			return [];
 		}
 		const snapshot = await this.index.snapshot();
-		return snapshot.projects
-			.map((entry): FileNode => ({
-				uri: entry.uri,
-				label: entry.project?.name.trim() || entry.relativePath,
-				description: entry.relativePath,
-				valid: !!entry.project,
-			}))
-			.sort((a, b) => a.label.localeCompare(b.label));
+		return this.config.items(snapshot).sort((a, b) => a.label.localeCompare(b.label));
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Lookup lists: flat list, list name instead of file name
-// ---------------------------------------------------------------------------
-
-class LookupsView extends IndexView<FileNode> {
-	constructor(context: vscode.ExtensionContext, index: WorkspaceIndex) {
-		super(context, index, ['lkp']);
-	}
-
-	protected isEmpty(snapshot: WorkspaceSnapshot): boolean {
-		return snapshot.lookups.length === 0;
-	}
-
-	protected emptyMessage(): string {
-		return vscode.l10n.t('No lookup lists in this workspace.');
-	}
-
-	public getTreeItem(element: FileNode): vscode.TreeItem {
-		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-		item.description = element.description;
-		item.resourceUri = element.uri;
-		item.tooltip = element.description;
-		item.command = openCommand(element.uri);
-		item.contextValue = 'datenschmiede.lookup';
-		item.iconPath = element.valid
-			? fileIcon(this.context, 'lookup')
-			: new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
-		return item;
-	}
-
-	public async getChildren(element?: FileNode): Promise<FileNode[]> {
-		if (element) {
-			return [];
-		}
-		const snapshot = await this.index.snapshot();
-		return snapshot.lookups
-			.map((entry): FileNode => ({
-				// entry.name is the `# name:` metadata, falling back to the file name.
-				uri: entry.uri,
-				label: entry.lookup ? entry.name : entry.relativePath,
-				description: entry.relativePath,
-				valid: !!entry.lookup,
-			}))
-			.sort((a, b) => a.label.localeCompare(b.label));
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Generators: two groups - data generators (.tdgen) and file generators (.filegen)
-// ---------------------------------------------------------------------------
-
-type GeneratorNode = { kind: 'group'; group: 'data' | 'file'; label: string } | ({ kind: 'file' } & FileNode);
-
-class GeneratorsView extends IndexView<GeneratorNode> {
-	constructor(context: vscode.ExtensionContext, index: WorkspaceIndex) {
-		super(context, index, ['tdgen', 'filegen']);
-		this.nested = true;
-	}
-
-	protected isEmpty(snapshot: WorkspaceSnapshot): boolean {
-		return snapshot.generators.length === 0 && snapshot.fileGenerators.length === 0;
-	}
-
-	protected emptyMessage(): string {
-		return vscode.l10n.t('No custom generators in this workspace.');
-	}
-
-	public getTreeItem(element: GeneratorNode): vscode.TreeItem {
-		if (element.kind === 'group') {
-			// The two groups stay expanded: with a handful of generators each,
-			// collapsing them would hide everything the view is there for.
-			const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Expanded);
-			item.iconPath = new vscode.ThemeIcon(element.group === 'data' ? 'symbol-method' : 'file-binary');
-			item.contextValue = `datenschmiede.generatorGroup.${element.group}`;
-			return item;
-		}
-		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-		item.description = element.description;
-		item.resourceUri = element.uri;
-		item.tooltip = element.description;
-		item.command = openCommand(element.uri);
-		item.contextValue = 'datenschmiede.generator';
-		item.iconPath = element.valid
-			? fileIcon(this.context, element.uri.path.endsWith('.filegen') ? 'filegen' : 'tdgen')
-			: new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
-		return item;
-	}
-
-	public async getChildren(element?: GeneratorNode): Promise<GeneratorNode[]> {
-		const snapshot = await this.index.snapshot();
-		if (!element) {
-			// Both groups always exist, even while empty - otherwise the view
-			// would silently change shape depending on what happens to be there.
-			return [
-				{ kind: 'group', group: 'data', label: vscode.l10n.t('Data') },
-				{ kind: 'group', group: 'file', label: vscode.l10n.t('File') },
-			];
-		}
-		if (element.kind !== 'group') {
-			return [];
-		}
-		const files: GeneratorNode[] =
-			element.group === 'data'
-				? snapshot.generators.map((entry) => ({
-						kind: 'file',
-						uri: entry.uri,
-						label: entry.generator?.name.trim() || entry.file?.name.trim() || entry.relativePath,
-						description: entry.relativePath,
-						valid: !!entry.file,
-					}))
-				: snapshot.fileGenerators.map((entry) => ({
-						kind: 'file',
-						uri: entry.uri,
-						label: entry.file?.name.trim() || entry.relativePath,
-						description: entry.relativePath,
-						valid: !!entry.file,
-					}));
-		return files.sort((a, b) => a.label.localeCompare(b.label));
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Schema: namespace tree with the tables underneath
+// Schema: namespace tree with the tables underneath, filterable
 // ---------------------------------------------------------------------------
 
 type SchemaNode =
 	| { kind: 'schema'; id: string; segment: string; children: SchemaNode[] }
-	| ({ kind: 'table' } & FileNode);
+	| ({ kind: 'table'; id: string; parent: string | null } & FileNode);
 
 class SchemaView extends IndexView<SchemaNode> {
+	/** Active filter (lower case), or `''` for none. */
+	private filter = '';
+	/** Every node of the last build, by id — for `getParent`, which `reveal` needs. */
+	private readonly nodes = new Map<string, SchemaNode>();
+
 	constructor(context: vscode.ExtensionContext, index: WorkspaceIndex) {
 		super(context, index, ['td']);
 		this.nested = true;
@@ -286,7 +188,69 @@ class SchemaView extends IndexView<SchemaNode> {
 	}
 
 	protected emptyMessage(): string {
-		return vscode.l10n.t('No table definitions in this workspace.');
+		return this.filter
+			? vscode.l10n.t('No table matches the filter.')
+			: vscode.l10n.t('No table definitions in this workspace.');
+	}
+
+	/**
+	 * Asks for a filter and applies it. Empty input removes the filter, so the
+	 * same command both sets and clears it.
+	 */
+	public async promptFilter(): Promise<void> {
+		const input = await vscode.window.showInputBox({
+			title: vscode.l10n.t('Filter Schema'),
+			prompt: vscode.l10n.t('Show only schemas and tables containing this text.'),
+			value: this.filter,
+			placeHolder: vscode.l10n.t('e.g. customer'),
+		});
+		if (input === undefined) {
+			return;
+		}
+		this.applyFilter(input.trim());
+	}
+
+	public clearFilter(): void {
+		this.applyFilter('');
+	}
+
+	private applyFilter(filter: string): void {
+		this.filter = filter.toLowerCase();
+		// The active filter belongs in the title line: a view showing three of
+		// thirty tables must not look like the whole workspace.
+		if (this.view) {
+			this.view.description = filter || undefined;
+		}
+		void vscode.commands.executeCommand('setContext', SCHEMA_FILTERED_KEY, this.filter.length > 0);
+		this.refresh();
+	}
+
+	/**
+	 * Expands every namespace. VS Code honours `collapsibleState` only the first
+	 * time an item is rendered (after that it remembers what the user did), so
+	 * expanding has to go through `reveal` — which is why this view implements
+	 * `getParent`.
+	 */
+	public async expandAll(): Promise<void> {
+		if (!this.view) {
+			return;
+		}
+		// Rebuilds this.nodes, so the reveal below also works right after a
+		// refresh or before the tree has ever been opened.
+		await this.getChildren();
+		for (const node of [...this.nodes.values()]) {
+			if (node.kind === 'schema') {
+				await this.view.reveal(node, { expand: true, select: false, focus: false });
+			}
+		}
+	}
+
+	public getParent(element: SchemaNode): SchemaNode | undefined {
+		if (element.kind === 'table') {
+			return element.parent ? this.nodes.get(element.parent) : undefined;
+		}
+		const cut = element.id.lastIndexOf('.');
+		return cut < 0 ? undefined : this.nodes.get(element.id.slice(0, cut));
 	}
 
 	public getTreeItem(element: SchemaNode): vscode.TreeItem {
@@ -298,14 +262,12 @@ class SchemaView extends IndexView<SchemaNode> {
 			return item;
 		}
 		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-		item.description = element.description;
 		item.resourceUri = element.uri;
-		item.tooltip = element.tooltip ?? element.description;
+		item.tooltip = element.path;
 		item.command = openCommand(element.uri);
 		item.contextValue = 'datenschmiede.table';
-		item.iconPath = element.valid
-			? fileIcon(this.context, 'td')
-			: new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+		item.id = element.id;
+		item.iconPath = element.valid ? fileIcon(this.context, 'td') : invalidIcon();
 		return item;
 	}
 
@@ -321,11 +283,20 @@ class SchemaView extends IndexView<SchemaNode> {
 		interface Group {
 			segment: string;
 			children: Map<string, Group>;
-			tables: SchemaNode[];
+			tables: { entry: (typeof snapshot.tables)[number]; label: string }[];
 		}
 		const root: Group = { segment: '', children: new Map(), tables: [] };
 		for (const entry of snapshot.tables) {
-			const segments = (entry.table?.schema.trim() ?? '')
+			const schema = entry.table?.schema.trim() ?? '';
+			const label = entry.table ? entry.table.name.trim() || entry.relativePath : entry.relativePath;
+			// The filter runs against the full logical name, so both "shop" and
+			// "customer" find shop.master.customers — and a matching namespace
+			// keeps everything below it, which is what one wants when filtering
+			// by schema.
+			if (this.filter && !`${schema}.${label}`.toLowerCase().includes(this.filter)) {
+				continue;
+			}
+			const segments = schema
 				.split('.')
 				.map((segment) => segment.trim())
 				.filter((segment) => segment.length > 0);
@@ -338,41 +309,111 @@ class SchemaView extends IndexView<SchemaNode> {
 				}
 				node = child;
 			}
-			node.tables.push({
-				kind: 'table',
-				uri: entry.uri,
-				// Only the table name here - the schema is already the path to it,
-				// so the file path is the more useful second piece of information.
-				label: entry.table ? entry.table.name.trim() || entry.relativePath : entry.relativePath,
-				description: entry.relativePath,
-				tooltip: entry.table ? `${tableLabel(entry.table, entry.relativePath)}
-${entry.relativePath}` : entry.relativePath,
-				valid: !!entry.table,
-			});
+			node.tables.push({ entry, label });
 		}
 
+		this.nodes.clear();
 		const toNodes = (group: Group, path: string): SchemaNode[] => {
 			const schemas = [...group.children.values()]
 				.sort((a, b) => a.segment.localeCompare(b.segment))
 				.map((child): SchemaNode => {
 					const id = path ? `${path}.${child.segment}` : child.segment;
-					return { kind: 'schema', id, segment: child.segment, children: toNodes(child, id) };
+					const node: SchemaNode = { kind: 'schema', id, segment: child.segment, children: toNodes(child, id) };
+					this.nodes.set(id, node);
+					return node;
 				});
-			const tables = [...group.tables].sort((a, b) =>
-				a.kind === 'table' && b.kind === 'table' ? a.label.localeCompare(b.label) : 0,
-			);
+			const tables = group.tables
+				.slice()
+				.sort((a, b) => a.label.localeCompare(b.label))
+				.map((item): SchemaNode => {
+					const node: SchemaNode = {
+						kind: 'table',
+						// The path keeps the id unique even if two files claim the
+						// same schema and name.
+						id: `table:${item.entry.relativePath}`,
+						parent: path || null,
+						uri: item.entry.uri,
+						label: item.label,
+						path: item.entry.relativePath,
+						valid: !!item.entry.table,
+					};
+					this.nodes.set(node.id, node);
+					return node;
+				});
 			return [...schemas, ...tables];
 		};
 		return toNodes(root, '');
 	}
 }
 
-/** Registers all four sidebar views; call once during activation. */
+// ---------------------------------------------------------------------------
+
+/** Registers all sidebar views and their commands; call once during activation. */
 export function registerSidebar(context: vscode.ExtensionContext, index: WorkspaceIndex): void {
+	const projects = new FlatFileView(context, index, ['tdproject'], {
+		icon: 'tdproject',
+		contextValue: 'datenschmiede.project',
+		emptyText: vscode.l10n.t('No test data projects in this workspace.'),
+		items: (snapshot) =>
+			snapshot.projects.map((entry) => ({
+				uri: entry.uri,
+				label: entry.project?.name.trim() || entry.relativePath,
+				path: entry.relativePath,
+				valid: !!entry.project,
+			})),
+	});
+
+	const schema = new SchemaView(context, index);
+
+	const lookups = new FlatFileView(context, index, ['lkp'], {
+		icon: 'lookup',
+		contextValue: 'datenschmiede.lookup',
+		emptyText: vscode.l10n.t('No lookup lists in this workspace.'),
+		items: (snapshot) =>
+			snapshot.lookups.map((entry) => ({
+				uri: entry.uri,
+				// entry.name is the `# name:` metadata, falling back to the file name.
+				label: entry.lookup ? entry.name : entry.relativePath,
+				path: entry.relativePath,
+				valid: !!entry.lookup,
+			})),
+	});
+
+	const generators = new FlatFileView(context, index, ['tdgen'], {
+		icon: 'tdgen',
+		contextValue: 'datenschmiede.generator',
+		emptyText: vscode.l10n.t('No generators in this workspace.'),
+		items: (snapshot) =>
+			snapshot.generators.map((entry) => ({
+				uri: entry.uri,
+				label: entry.generator?.name.trim() || entry.file?.name.trim() || entry.relativePath,
+				path: entry.relativePath,
+				valid: !!entry.file,
+			})),
+	});
+
+	const fileGenerators = new FlatFileView(context, index, ['filegen'], {
+		icon: 'filegen',
+		contextValue: 'datenschmiede.fileGenerator',
+		emptyText: vscode.l10n.t('No file generators in this workspace.'),
+		items: (snapshot) =>
+			snapshot.fileGenerators.map((entry) => ({
+				uri: entry.uri,
+				label: entry.file?.name.trim() || entry.relativePath,
+				path: entry.relativePath,
+				valid: !!entry.file,
+			})),
+	});
+
 	context.subscriptions.push(
-		...new ProjectsView(context, index).register('datenschmiede.projectsView'),
-		...new LookupsView(context, index).register('datenschmiede.lookupsView'),
-		...new GeneratorsView(context, index).register('datenschmiede.generatorsView'),
-		...new SchemaView(context, index).register('datenschmiede.schemaView'),
+		...projects.register('datenschmiede.projectsView'),
+		...schema.register('datenschmiede.schemaView'),
+		...lookups.register('datenschmiede.lookupsView'),
+		...generators.register('datenschmiede.generatorsView'),
+		...fileGenerators.register('datenschmiede.fileGeneratorsView'),
+		vscode.commands.registerCommand('datenschmiede.filterSchemaView', () => schema.promptFilter()),
+		vscode.commands.registerCommand('datenschmiede.clearSchemaViewFilter', () => schema.clearFilter()),
+		vscode.commands.registerCommand('datenschmiede.expandSchemaView', () => schema.expandAll()),
 	);
+	void vscode.commands.executeCommand('setContext', SCHEMA_FILTERED_KEY, false);
 }

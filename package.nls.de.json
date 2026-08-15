@@ -19,5 +19,9 @@
 	"view.projects.name": "Projekte",
 	"view.lookups.name": "Nachschlagelisten",
 	"view.generators.name": "Generatoren",
-	"view.schema.name": "Schema"
+	"view.schema.name": "Schema",
+	"view.fileGenerators.name": "Dateigeneratoren",
+	"command.filterSchemaView.title": "Schema filtern…",
+	"command.clearSchemaViewFilter.title": "Schema-Filter aufheben",
+	"command.expandSchemaView.title": "Alle aufklappen"
 }

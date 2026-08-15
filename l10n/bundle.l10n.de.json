@@ -116,8 +116,11 @@
 	"Open": "Öffnen",
 	"No test data projects in this workspace.": "Keine Testdaten-Projekte in diesem Workspace.",
 	"No lookup lists in this workspace.": "Keine Nachschlagelisten in diesem Workspace.",
-	"No custom generators in this workspace.": "Keine eigenen Generatoren in diesem Workspace.",
 	"No table definitions in this workspace.": "Keine Tabellendefinitionen in diesem Workspace.",
-	"Data": "Daten",
-	"File": "Datei"
+	"No generators in this workspace.": "Keine Generatoren in diesem Workspace.",
+	"No file generators in this workspace.": "Keine Dateigeneratoren in diesem Workspace.",
+	"No table matches the filter.": "Keine Tabelle passt zum Filter.",
+	"Filter Schema": "Schema filtern",
+	"Show only schemas and tables containing this text.": "Nur Schemas und Tabellen anzeigen, die diesen Text enthalten.",
+	"e.g. customer": "z. B. kunde"
 }

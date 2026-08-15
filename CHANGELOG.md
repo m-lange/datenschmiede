@@ -2,13 +2,14 @@
 
 ## 0.10.0
 
-- **Eigene Seitenleiste** (Symbol in der Aktivitätsleiste) mit vier Ansichten:
-  **Projekte** und **Nachschlagelisten** als flache Liste — jeweils mit dem
-  Namen *aus der Datei* statt dem Dateinamen und dem Pfad daneben —,
-  **Generatoren** als Baum mit den beiden Punkten „Daten“ (`.tdgen`) und
-  „Datei“ (`.filegen`) sowie **Schema** als Baum aus Namensräumen und
-  Tabellen wie im Projekt-Editor. Eine Datei mit kaputtem TOML verschwindet
-  nicht, sondern steht mit Warnsymbol und Pfad in der Liste.
+- **Eigene Seitenleiste** (Symbol in der Aktivitätsleiste) mit fünf
+  Ansichten: **Projekte**, **Schema**, **Nachschlagelisten**, **Generatoren**
+  und **Dateigeneratoren**. Beschriftet wird durchgehend mit dem Namen *aus
+  der Datei*, nicht mit dem Dateinamen — der steht nur im Tooltip. **Schema**
+  ist ein Baum aus Namensräumen und Tabellen wie im Projekt-Editor, mit
+  **Filter** und **Alle aufklappen** in der Titelzeile. Eine Datei mit
+  kaputtem TOML verschwindet nicht, sondern steht mit Warnsymbol und Pfad in
+  der Liste.
 - **Datensatzzahlen berücksichtigen die führende Nachschlageliste**: Die
   Schätzung im Projekt-Editor kannte sie nicht und ließ die geführte Tabelle
   — und alles, was per Fremdschlüssel daran hängt — leer bzw. falsch. Sie

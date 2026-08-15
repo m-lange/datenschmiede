@@ -177,7 +177,7 @@
 				{
 					"id": "datenschmiede",
 					"title": "%viewsContainer.datenschmiede.title%",
-					"icon": "./icons/datenschmiede-activitybar.svg"
+					"icon": "./icons/activitybar.svg"
 				}
 			]
 		},
@@ -187,6 +187,11 @@
 					"id": "datenschmiede.projectsView",
 					"name": "%view.projects.name%",
 					"icon": "./icons/tdproject-dark.svg"
+				},
+				{
+					"id": "datenschmiede.schemaView",
+					"name": "%view.schema.name%",
+					"icon": "./icons/schema-dark.svg"
 				},
 				{
 					"id": "datenschmiede.lookupsView",
@@ -199,9 +204,9 @@
 					"icon": "./icons/tdgen-dark.svg"
 				},
 				{
-					"id": "datenschmiede.schemaView",
-					"name": "%view.schema.name%",
-					"icon": "./icons/schema-dark.svg"
+					"id": "datenschmiede.fileGeneratorsView",
+					"name": "%view.fileGenerators.name%",
+					"icon": "./icons/filegen-dark.svg"
 				}
 			]
 		},
@@ -253,6 +258,24 @@
 				"title": "%command.previewFile.title%",
 				"category": "Datenschmiede",
 				"icon": "$(play)"
+			},
+			{
+				"command": "datenschmiede.filterSchemaView",
+				"title": "%command.filterSchemaView.title%",
+				"category": "Datenschmiede",
+				"icon": "$(filter)"
+			},
+			{
+				"command": "datenschmiede.clearSchemaViewFilter",
+				"title": "%command.clearSchemaViewFilter.title%",
+				"category": "Datenschmiede",
+				"icon": "$(filter-filled)"
+			},
+			{
+				"command": "datenschmiede.expandSchemaView",
+				"title": "%command.expandSchemaView.title%",
+				"category": "Datenschmiede",
+				"icon": "$(expand-all)"
 			}
 		],
 		"keybindings": [
@@ -329,6 +352,31 @@
 				},
 				{
 					"command": "datenschmiede.previewFile"
+				},
+				{
+					"command": "datenschmiede.clearSchemaViewFilter",
+					"when": "false"
+				},
+				{
+					"command": "datenschmiede.expandSchemaView",
+					"when": "false"
+				}
+			],
+			"view/title": [
+				{
+					"command": "datenschmiede.expandSchemaView",
+					"when": "view == datenschmiede.schemaView",
+					"group": "navigation@1"
+				},
+				{
+					"command": "datenschmiede.filterSchemaView",
+					"when": "view == datenschmiede.schemaView && !datenschmiede.schemaFiltered",
+					"group": "navigation@2"
+				},
+				{
+					"command": "datenschmiede.clearSchemaViewFilter",
+					"when": "view == datenschmiede.schemaView && datenschmiede.schemaFiltered",
+					"group": "navigation@2"
 				}
 			]
 		}
