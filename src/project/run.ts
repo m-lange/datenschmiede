@@ -10,6 +10,7 @@ import { GeneratorBase } from '../generator/base';
 import { listGenerators, toGeneratorList } from '../generator/repository';
 import { CustomGenerator } from '../generator/custom';
 import { listLookups } from '../lookup/repository';
+import { listFileGenerators, toPlanFileGenerators } from '../filegen/repository';
 import { runPlanProcess, toPlanOutput, writePlanFile } from './planRunner';
 import { saveRunResult } from './runResults';
 import { getOutputChannel, log, showErrorWithDetails } from '../outputChannel';
@@ -63,10 +64,15 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 		return;
 	}
 
-	const [entries, generatorEntries, lookupEntries] = await Promise.all([listTables(), listGenerators(), listLookups()]);
+	const [entries, generatorEntries, lookupEntries, fileGeneratorEntries] = await Promise.all([
+		listTables(),
+		listGenerators(),
+		listLookups(),
+		listFileGenerators(),
+	]);
 	const generators = toGeneratorList(generatorEntries);
 
-	const plan = buildPlan(uri, project, entries, generators, lookupEntries);
+	const plan = buildPlan(uri, project, entries, generators, lookupEntries, fileGeneratorEntries);
 	if ('errors' in plan) {
 		void vscode.window.showErrorMessage(
 			vscode.l10n.t('Cannot generate test data: {0}', plan.errors[0]) +
@@ -306,6 +312,8 @@ export interface Plan {
 		display_value: string;
 		validate: string;
 	}[];
+	/** Custom file generators (.filegen) used by the plan's tables. */
+	file_generators: { name: string; extension: string; structure: string; write: string }[];
 	/** Preview mode (see table/preview.ts): write nothing, report this table's rows back instead. */
 	preview?: { table: string; limit: number };
 }
@@ -397,6 +405,7 @@ function buildPlan(
 	entries: TableEntry[],
 	generators: GeneratorBase[],
 	lookupEntries: Awaited<ReturnType<typeof listLookups>>,
+	fileGeneratorEntries: Awaited<ReturnType<typeof listFileGenerators>>,
 ): { plan: Plan } | { errors: string[] } {
 	const errors: string[] = [];
 	const byPath = new Map(entries.map((entry) => [entry.relativePath, entry] as const));
@@ -475,6 +484,7 @@ function buildPlan(
 			tables,
 			lookups: toPlanLookups(lookupEntries),
 			custom_generators: toPlanCustomGenerators(usedCustomGenerators),
+			file_generators: toPlanFileGenerators(fileGeneratorEntries),
 		},
 	};
 }

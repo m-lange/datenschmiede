@@ -107,6 +107,13 @@
 	/** @type {LookupOption[]} Lookup lists (.lkp) in the workspace, for lookup parameters */
 	let lookupOptions = [];
 	/**
+	 * Custom file generators (.filegen) in the workspace — they appear in the
+	 * file type picker as `custom:<name>` and bring their own extension and
+	 * (optionally) a structure tab.
+	 * @type {{name:string,description:string,extension:string,structure:string}[]}
+	 */
+	let fileGeneratorOptions = [];
+	/**
 	 * Manually dragged grid column widths (px), per column key. It arrives
 	 * initially from the extension host (remembered per machine across all .td
 	 * files via globalState, see table/editorProvider.ts) and is sent back there
@@ -137,10 +144,11 @@
 		{ value: 'json', label: 'JSON' },
 		{ value: 'xml', label: 'XML' },
 		{ value: 'fixed', label: 'Fixed length' },
+		{ value: 'temp', label: 'Temporary table (no file)' },
 	];
 
 	/** File extension per format (counterpart to outputExtension in src/table/model.ts). */
-	const OUTPUT_EXTENSIONS = { csv: 'csv', xlsx: 'xlsx', json: 'json', xml: 'xml', fixed: 'txt' };
+	const OUTPUT_EXTENSIONS = { csv: 'csv', xlsx: 'xlsx', json: 'json', xml: 'xml', fixed: 'txt', temp: '' };
 
 	/** Default width of a derived fixed-length field (see FIXED_DEFAULT_WIDTH in src/table/model.ts). */
 	const FIXED_DEFAULT_WIDTH = 20;
@@ -202,21 +210,56 @@
 		};
 	}
 
-	/** Currently selected output file type ('csv' when nothing valid is set). */
+	/**
+	 * Currently selected output file type — a built-in one, or `custom:<name>`
+	 * pointing at a file generator ('csv' when nothing valid is set).
+	 */
 	function currentFormat() {
-		const format = ((state.output && state.output.format) || 'csv').trim().toLowerCase();
-		return OUTPUT_FORMATS.some((f) => f.value === format) ? format : 'csv';
+		const format = ((state.output && state.output.format) || 'csv').trim();
+		if (format.toLowerCase().startsWith('custom:')) {
+			return format;
+		}
+		const lower = format.toLowerCase();
+		return OUTPUT_FORMATS.some((f) => f.value === lower) ? lower : 'csv';
 	}
 
-	/** `true` for the two record-shaped file types, which get the structure tab. */
-	function isStructuredFormat() {
+	/** The file generator behind a `custom:<name>` file type, or null. */
+	function currentFileGenerator() {
 		const format = currentFormat();
-		return format === 'json' || format === 'xml';
+		if (!format.toLowerCase().startsWith('custom:')) {
+			return null;
+		}
+		const name = format.slice('custom:'.length).trim();
+		return fileGeneratorOptions.find((g) => g.name === name) || { name, description: '', extension: 'txt', structure: 'none', missing: true };
 	}
 
-	/** File extension the selected format writes. */
+	/**
+	 * `true` for the file types that get the structure tab: JSON and XML
+	 * directly, and a custom file generator that declares it needs one.
+	 */
+	function isStructuredFormat() {
+		return structureFormat() !== '';
+	}
+
+	/** Which structure the current file type uses: 'json', 'xml' or '' for none. */
+	function structureFormat() {
+		const format = currentFormat();
+		if (format === 'json' || format === 'xml') {
+			return format;
+		}
+		const generator = currentFileGenerator();
+		const structure = generator ? generator.structure : 'none';
+		return structure === 'json' || structure === 'xml' ? structure : '';
+	}
+
+	/** File extension the selected format writes ('' for a temporary table). */
 	function currentExtension() {
-		return OUTPUT_EXTENSIONS[currentFormat()] || 'csv';
+		const generator = currentFileGenerator();
+		if (generator) {
+			return (generator.extension || 'txt').replace(/^\./, '');
+		}
+		const format = currentFormat();
+		return format in OUTPUT_EXTENSIONS ? OUTPUT_EXTENSIONS[format] : 'csv';
 	}
 
 	/**
@@ -252,7 +295,7 @@
 	 * @returns {JsonOptions | XmlOptions}
 	 */
 	function structureOptions() {
-		return currentFormat() === 'xml' ? state.output.xml : state.output.json;
+		return structureFormat() === 'xml' ? state.output.xml : state.output.json;
 	}
 
 	function postEdit() {
@@ -336,7 +379,7 @@
 			// is named after the file type, since the two keep separate
 			// structures and only the selected one is shown.
 			bar.appendChild(
-				renderTabButton('structure', strings.tabStructure.replace('{0}', currentFormat().toUpperCase())),
+				renderTabButton('structure', strings.tabStructure.replace('{0}', structureFormat().toUpperCase())),
 			);
 		} else if (currentFormat() === 'fixed') {
 			bar.appendChild(renderTabButton('fixed', strings.tabFixedLayout));
@@ -496,7 +539,30 @@
 			option.value = format.value;
 			formatSelect.appendChild(option);
 		}
-		formatSelect.value = currentFormat();
+		if (fileGeneratorOptions.length > 0) {
+			// Custom file generators (.filegen) write the file themselves — see
+			// the group label; the value is `custom:<name>`.
+			const group = /** @type {HTMLOptGroupElement} */ (el('optgroup'));
+			group.label = strings.outputCustomGroupLabel;
+			for (const generator of fileGeneratorOptions) {
+				const option = /** @type {HTMLOptionElement} */ (el('option', { text: generator.name }));
+				option.value = `custom:${generator.name}`;
+				option.title = generator.description;
+				group.appendChild(option);
+			}
+			formatSelect.appendChild(group);
+		}
+		const format = currentFormat();
+		if (format.toLowerCase().startsWith('custom:') && !fileGeneratorOptions.some((g) => `custom:${g.name}` === format)) {
+			// The configured generator is gone (file deleted or renamed) — keep
+			// showing it instead of silently switching to CSV.
+			const option = /** @type {HTMLOptionElement} */ (
+				el('option', { text: format.slice('custom:'.length) + strings.generatorNotFoundSuffix })
+			);
+			option.value = format;
+			formatSelect.appendChild(option);
+		}
+		formatSelect.value = format;
 		formatSelect.addEventListener('change', () => {
 			state.output.format = formatSelect.value;
 			postEdit();
@@ -523,9 +589,45 @@
 				return renderXmlSettings();
 			case 'fixed':
 				return renderFixedSettings();
+			case 'temp':
+				return renderTempSettings();
 			default:
+				if (currentFileGenerator()) {
+					return renderCustomSettings();
+				}
 				return renderCsvSettings();
 		}
+	}
+
+	/** A temporary table writes nothing — there is nothing to configure. */
+	function renderTempSettings() {
+		const section = el('div', { className: 'csv-settings' });
+		section.appendChild(el('p', { className: 'hint', text: strings.outputTempHint }));
+		return section;
+	}
+
+	/**
+	 * A custom file generator brings its own writing code, so the only settings
+	 * shown are the ones it can still read through `ctx` (the CSV block, which
+	 * ctx.as_csv() uses, plus encoding).
+	 */
+	function renderCustomSettings() {
+		const generator = currentFileGenerator();
+		const section = el('div', { className: 'csv-settings' });
+		section.appendChild(el('h4', { className: 'csv-settings-title', text: strings.outputCustomSectionLabel }));
+		if (generator && generator.missing) {
+			section.appendChild(el('p', { className: 'hint has-warning-text', text: strings.outputCustomMissingHint }));
+			return section;
+		}
+		if (generator && generator.description) {
+			section.appendChild(el('p', { className: 'hint', text: generator.description }));
+		}
+		section.appendChild(el('p', { className: 'hint', text: strings.outputCustomHint }));
+		const actions = el('div', { className: 'filename-actions' });
+		actions.appendChild(renderDocumentPreviewButton());
+		section.appendChild(actions);
+		section.appendChild(renderCsvSettings());
+		return section;
 	}
 
 	/** Frame of a settings section: a title plus the grid its fields go into. */
@@ -2878,7 +2980,13 @@
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
 				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
 				lookupOptions = Array.isArray(message.lookupOptions) ? message.lookupOptions : [];
-				lastOptionsJson = JSON.stringify([message.tableOptions, message.generatorOptions, message.lookupOptions]);
+				fileGeneratorOptions = Array.isArray(message.fileGeneratorOptions) ? message.fileGeneratorOptions : [];
+				lastOptionsJson = JSON.stringify([
+					message.tableOptions,
+					message.generatorOptions,
+					message.lookupOptions,
+					message.fileGeneratorOptions,
+				]);
 				columnWidths = message.columnWidths && typeof message.columnWidths === 'object' ? message.columnWidths : {};
 				parseError = 'parseError' in message ? message.parseError : null;
 				if ('table' in message) {
@@ -2911,10 +3019,16 @@
 				// changes in the workspace. Unchanged -> do nothing at all;
 				// changed -> re-render, but only once no input has focus (see
 				// renderSoon).
-				const optionsJson = JSON.stringify([message.tableOptions, message.generatorOptions, message.lookupOptions]);
+				const optionsJson = JSON.stringify([
+					message.tableOptions,
+					message.generatorOptions,
+					message.lookupOptions,
+					message.fileGeneratorOptions,
+				]);
 				tableOptions = Array.isArray(message.tableOptions) ? message.tableOptions : [];
 				generatorOptions = Array.isArray(message.generatorOptions) ? message.generatorOptions : [];
 				lookupOptions = Array.isArray(message.lookupOptions) ? message.lookupOptions : [];
+				fileGeneratorOptions = Array.isArray(message.fileGeneratorOptions) ? message.fileGeneratorOptions : [];
 				if (optionsJson === lastOptionsJson) {
 					break;
 				}

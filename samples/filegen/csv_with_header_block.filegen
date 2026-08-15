@@ -1,0 +1,57 @@
+# Datenschmiede Dateigenerator
+name = "csv_with_header_block"
+description = """
+**Beispiel für einen eigenen Dateigenerator** — schreibt die Daten als
+gewöhnliches CSV, stellt ihnen aber einen **Kopfblock** voran, wie ihn
+viele Austauschformate verlangen:
+
+- **Zeilen 1–5**: Datei-Informationen (Kennung, Tabelle, Erzeugungszeitpunkt,
+  Datensatzanzahl, Feldliste)
+- **Zeilen 6–19**: leer, als Reserve für spätere Ergänzungen
+- **Zeile 20**: die **Kopfzeile** des CSV — genau dort, wo der empfangende
+  Prozess sie erwartet
+- ab Zeile 21: die Datensätze
+
+Die Position der Kopfzeile steht als Konstante `HEADER_LINE` im Code und
+wird nicht von Hand ausgezählt: der Generator füllt so viele Leerzeilen ein,
+dass die Kopfzeile exakt dort landet. Wird der Kopfblock später länger oder
+kürzer, stimmt es weiterhin.
+
+Das eigentliche CSV kommt von `ctx.as_csv(df)` — die CSV-Einstellungen der
+Tabelle (Trennzeichen, Anführungszeichen, Dezimaltrenner) gelten also
+unverändert weiter; der Generator kümmert sich nur um das Drumherum.
+"""
+extension = "csv"
+structure = "none"
+
+[code]
+write = """
+# The header row has to land on exactly this line — the empty filler block
+# below is computed from it instead of being counted out by hand, so the file
+# stays correct if the info block ever grows or shrinks.
+HEADER_LINE = 20
+
+info = [
+    "#DATENSCHMIEDE-EXPORT V1",
+    f"#TABLE={ctx.label}",
+    f"#CREATED={ctx.now:%Y-%m-%d %H:%M:%S}",
+    f"#RECORDS={ctx.records}",
+    "#FIELDS=" + ",".join(ctx.columns),
+]
+
+# The records as CSV, using the table's own CSV settings — its first line is
+# the header row.
+body = ctx.as_csv(df).replace("\\r\\n", "\\n").rstrip("\\n").split("\\n")
+
+# Pad with empty lines until the header row sits on HEADER_LINE (1-based).
+filler = [""] * max(0, HEADER_LINE - 1 - len(info))
+ctx.log(f"header row on line {len(info) + len(filler) + 1}")
+
+return "\\n".join(info + filler + body) + "\\n"
+"""
+scratch = """
+# Test values for the write cell below — adjust and execute, then run write(df, ctx).
+import pandas as pd
+
+df = pd.DataFrame({"id": [1, 2, 3], "name": ["Anna", "Bert", "Cem"]})
+"""

@@ -52,23 +52,42 @@ export interface Column {
 	generator?: GeneratorConfig;
 }
 
-/** Output file types a table can be written as (see python/generate.py). */
-export const OUTPUT_FORMATS = ['csv', 'xlsx', 'json', 'xml', 'fixed'] as const;
+/**
+ * Built-in output file types a table can be written as (see python/generate.py).
+ * `temp` is the odd one out: the records are generated as usual — other tables
+ * can reference them by foreign key, generators can read them — but nothing is
+ * written to disk.
+ *
+ * A table may additionally point at a custom file generator via
+ * `format = "custom:<name>"` (see filegen/model.ts).
+ */
+export const OUTPUT_FORMATS = ['csv', 'xlsx', 'json', 'xml', 'fixed', 'temp'] as const;
 
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
-/** File extension per format — only "fixed" (fixed length) differs from its own name. */
+/** File extension per format — "fixed" writes .txt, "temp" writes nothing at all. */
 const OUTPUT_EXTENSIONS: Record<string, string> = {
 	csv: 'csv',
 	xlsx: 'xlsx',
 	json: 'json',
 	xml: 'xml',
 	fixed: 'txt',
+	temp: '',
 };
 
-/** File extension a format writes (also drives the `.xyz` hint next to the file name field). */
+/**
+ * File extension a format writes (also drives the `.xyz` hint next to the file
+ * name field). For a custom file generator the extension comes from the
+ * generator file, which this vscode-free helper cannot see — the caller
+ * resolves that itself (see the table editor and project/run.ts).
+ */
 export function outputExtension(format: string): string {
 	return OUTPUT_EXTENSIONS[(format || '').trim().toLowerCase()] ?? 'csv';
+}
+
+/** `true` for the file type that generates records without writing a file. */
+export function isTemporaryFormat(format: string): boolean {
+	return (format || '').trim().toLowerCase() === 'temp';
 }
 
 /** CSV output settings of a table (see python/generate.py for the counterpart). */

@@ -87,6 +87,9 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			const generators = toGeneratorList(snapshot.generators);
 			const lookups = toLookupRefs(snapshot.lookups);
 			const tableOptions = toTableOptions(snapshot.tables);
+			const fileGeneratorNames = snapshot.fileGenerators
+				.map((entry) => entry.file?.name.trim() ?? '')
+				.filter((name) => name.length > 0);
 			const edges = buildTableRefEdges(snapshot.tables, generators);
 
 			const tableChecks: TableCheck[] = snapshot.tables.map((entry) => ({
@@ -96,7 +99,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				diagnostics: [],
 			}));
 			for (const check of tableChecks) {
-				this.checkTable(check, { tableOptions, generators, lookups, edges });
+				this.checkTable(check, { tableOptions, generators, lookups, edges, fileGeneratorNames });
 			}
 
 			const generatorChecks: GeneratorCheck[] = snapshot.generators.map((entry) => ({
@@ -186,6 +189,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			generators: ReturnType<typeof toGeneratorList>;
 			lookups: ReturnType<typeof toLookupRefs>;
 			edges: Map<string, string[]>;
+			fileGeneratorNames: string[];
 		},
 	): void {
 		const { entry, lines, columnLines, diagnostics } = check;
@@ -199,7 +203,7 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 			return;
 		}
 
-		const issues = validateTable(table, ctx.tableOptions, ctx.generators, ctx.lookups);
+		const issues = validateTable(table, ctx.tableOptions, ctx.generators, ctx.lookups, ctx.fileGeneratorNames);
 		// Only computed when an output problem actually turns up — scanning for
 		// the `[output]` line is pointless for the common column-only case.
 		let outputLine: number | null = null;
@@ -359,6 +363,11 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 				return vscode.l10n.t('Fixed-length field "{0}" has no width — every field needs at least one character.', path);
 			case 'output-field-column-missing':
 				return vscode.l10n.t('Fixed-length field "{0}" has no column selected.', path);
+			case 'output-filegen-not-found':
+				return vscode.l10n.t(
+					'This table is written by file generator "{0}", which was not found. Its .filegen file may have been deleted, or the generator was renamed.',
+					issue.detail ?? '',
+				);
 			case 'output-field-column-not-found':
 				return vscode.l10n.t(
 					'Fixed-length field "{0}" uses column "{1}", which does not exist in this table. It may have been renamed or removed.',

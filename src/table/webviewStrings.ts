@@ -14,6 +14,12 @@ export interface WebviewStrings {
 	tabStructure: string;
 	/** Only shown for the fixed-length file type. */
 	tabFixedLayout: string;
+	/** Custom file generators (.filegen) in the file type picker. */
+	outputCustomGroupLabel: string;
+	outputCustomSectionLabel: string;
+	outputCustomHint: string;
+	outputCustomMissingHint: string;
+	outputTempHint: string;
 
 	fieldNameLabel: string;
 	fieldNamePlaceholder: string;
@@ -227,6 +233,14 @@ const en: WebviewStrings = {
 	tabColumns: 'Columns',
 	tabStructure: '{0} structure',
 	tabFixedLayout: 'Record layout',
+	outputCustomGroupLabel: 'Custom file generators',
+	outputCustomSectionLabel: 'Custom file generator',
+	outputCustomHint:
+		'This generator writes the file itself. The CSV settings below stay available to it through ctx.as_csv(…); everything else is up to its code.',
+	outputCustomMissingHint:
+		'This file generator was not found. Its .filegen file may have been deleted, or the generator was renamed.',
+	outputTempHint:
+		'The records are generated as usual — other tables can reference them by foreign key and generators can read them — but no file is written.',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'e.g. customers',
@@ -429,6 +443,14 @@ const de: WebviewStrings = {
 	tabColumns: 'Spalten',
 	tabStructure: '{0}-Struktur',
 	tabFixedLayout: 'Satzaufbau',
+	outputCustomGroupLabel: 'Eigene Dateigeneratoren',
+	outputCustomSectionLabel: 'Eigener Dateigenerator',
+	outputCustomHint:
+		'Dieser Generator schreibt die Datei selbst. Die CSV-Einstellungen unten bleiben ihm über ctx.as_csv(…) zugänglich; alles Weitere bestimmt sein Code.',
+	outputCustomMissingHint:
+		'Dieser Dateigenerator wurde nicht gefunden. Seine .filegen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.',
+	outputTempHint:
+		'Die Datensätze werden wie gewohnt erzeugt — andere Tabellen können sie über Fremdschlüssel referenzieren und Generatoren sie lesen —, es wird aber keine Datei geschrieben.',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'z. B. customers',

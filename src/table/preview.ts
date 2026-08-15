@@ -3,6 +3,7 @@ import { parseTableText } from './toml';
 import { computeRequiredClosure, listTables, tableLabel } from './repository';
 import { listGenerators, toGeneratorList } from '../generator/repository';
 import { listLookups } from '../lookup/repository';
+import { listFileGenerators, toPlanFileGenerators } from '../filegen/repository';
 import { CustomGenerator } from '../generator/custom';
 import { resolveAnyInterpreter } from '../project/python';
 import { Plan, PlanTable, buildPlanColumns, toPlanCustomGenerators, toPlanLookups } from '../project/run';
@@ -59,7 +60,12 @@ export async function runTablePreview(
 		return null;
 	}
 
-	const [entries, generatorEntries, lookupEntries] = await Promise.all([listTables(), listGenerators(), listLookups()]);
+	const [entries, generatorEntries, lookupEntries, fileGeneratorEntries] = await Promise.all([
+		listTables(),
+		listGenerators(),
+		listLookups(),
+		listFileGenerators(),
+	]);
 	const generators = toGeneratorList(generatorEntries);
 
 	const targetPath = vscode.workspace.asRelativePath(document.uri, false);
@@ -108,6 +114,7 @@ export async function runTablePreview(
 		tables,
 		lookups: toPlanLookups(lookupEntries),
 		custom_generators: toPlanCustomGenerators(usedCustomGenerators),
+		file_generators: toPlanFileGenerators(fileGeneratorEntries),
 		preview: { table: targetLabel, limit: PREVIEW_LIMIT },
 	};
 

@@ -4,11 +4,13 @@
 	"language.td.alias": "Table Definition",
 	"language.tdproject.alias": "Test Data Project",
 	"language.lkp.alias": "Lookup List",
+	"language.filegen.alias": "File Generator",
 	"language.tdgen.alias": "Generator",
 	"command.newTable.title": "New Table…",
 	"command.newProject.title": "New Test Data Project…",
 	"command.newLookup.title": "New Lookup List…",
 	"command.newGenerator.title": "New Generator…",
+	"command.newFileGenerator.title": "New File Generator…",
 	"command.runGeneration.title": "Generate Test Data",
 	"command.generateTestData.title": "Generate Test Data (Select Project)…",
 	"command.selectPythonInterpreter.title": "Select Python Interpreter…"

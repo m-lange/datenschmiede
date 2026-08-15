@@ -94,5 +94,11 @@
 	"Structure node \"{0}\" is mapped to column \"{1}\", which does not exist in this table. It may have been renamed or removed.": "Struktur-Knoten „{0}“ ist der Spalte „{1}“ zugeordnet, die es in dieser Tabelle nicht gibt. Sie wurde möglicherweise umbenannt oder entfernt.",
 	"Select Output Folder": "Ausgabeordner auswählen",
 	"Select": "Auswählen",
-	"Show Details": "Details anzeigen"
+	"Show Details": "Details anzeigen",
+	"New File Generator": "Neuer Dateigenerator",
+	"File generator name": "Name des Dateigenerators",
+	"This table is written by file generator \"{0}\", which was not found. Its .filegen file may have been deleted, or the generator was renamed.": "Diese Tabelle wird vom Dateigenerator „{0}“ geschrieben, der nicht gefunden wurde. Seine .filegen-Datei wurde möglicherweise gelöscht oder der Generator umbenannt.",
+	"Fixed-length field \"{0}\" has no width — every field needs at least one character.": "Feld „{0}“ mit fester Länge hat keine Breite — jedes Feld braucht mindestens ein Zeichen.",
+	"Fixed-length field \"{0}\" has no column selected.": "Feld „{0}“ mit fester Länge hat keine Spalte ausgewählt.",
+	"Fixed-length field \"{0}\" uses column \"{1}\", which does not exist in this table. It may have been renamed or removed.": "Feld „{0}“ mit fester Länge verwendet die Spalte „{1}“, die es in dieser Tabelle nicht gibt. Sie wurde möglicherweise umbenannt oder entfernt."
 }

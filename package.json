@@ -2,7 +2,7 @@
   "name": "datenschmiede-td",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "l10n": "./l10n",
   "publisher": "datenschmiede",
   "private": true,
@@ -40,6 +40,10 @@
         "files.autoGuessEncoding": false
       },
       "[tdgen]": {
+        "files.encoding": "utf8",
+        "files.autoGuessEncoding": false
+      },
+      "[filegen]": {
         "files.encoding": "utf8",
         "files.autoGuessEncoding": false
       }
@@ -100,6 +104,20 @@
           "light": "./icons/tdgen-light.svg",
           "dark": "./icons/tdgen-dark.svg"
         }
+      },
+      {
+        "id": "filegen",
+        "aliases": [
+          "%language.filegen.alias%",
+          "filegen"
+        ],
+        "extensions": [
+          ".filegen"
+        ],
+        "icon": {
+          "light": "./icons/filegen-light.svg",
+          "dark": "./icons/filegen-dark.svg"
+        }
       }
     ],
     "customEditors": [
@@ -143,6 +161,15 @@
             "filenamePattern": "*.tdgen"
           }
         ]
+      },
+      {
+        "type": "datenschmiede-filegen",
+        "displayName": "Datenschmiede File Generator",
+        "selector": [
+          {
+            "filenamePattern": "*.filegen"
+          }
+        ]
       }
     ],
     "commands": [
@@ -169,6 +196,11 @@
       {
         "command": "datenschmiede.newGenerator",
         "title": "%command.newGenerator.title%",
+        "category": "Datenschmiede"
+      },
+      {
+        "command": "datenschmiede.newFileGenerator",
+        "title": "%command.newFileGenerator.title%",
         "category": "Datenschmiede"
       },
       {
@@ -201,6 +233,10 @@
         {
           "command": "datenschmiede.newGenerator",
           "group": "navigation"
+        },
+        {
+          "command": "datenschmiede.newFileGenerator",
+          "group": "navigation"
         }
       ],
       "editor/title/run": [
@@ -222,6 +258,9 @@
         },
         {
           "command": "datenschmiede.newGenerator"
+        },
+        {
+          "command": "datenschmiede.newFileGenerator"
         },
         {
           "command": "datenschmiede.selectPythonInterpreter"

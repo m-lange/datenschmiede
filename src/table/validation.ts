@@ -1,4 +1,5 @@
 import { StructureNode, Table, logicalTableName, walkStructure } from './model';
+import { customFormatName, isCustomFormat } from '../filegen/model';
 import { GeneratorBase } from '../generator/base';
 import { GeneratorContext, GeneratorIssueKind, KnownLookupRef } from '../generator/types';
 
@@ -40,7 +41,8 @@ export type OutputIssueKind =
 	| 'output-mapping-column-not-found'
 	| 'output-field-width'
 	| 'output-field-column-missing'
-	| 'output-field-column-not-found';
+	| 'output-field-column-not-found'
+	| 'output-filegen-not-found';
 
 /** `Issue.columnIndex` of a problem that concerns the output configuration, not a column. */
 export const OUTPUT_ISSUE_INDEX = -1;
@@ -163,6 +165,7 @@ export function validateTable(
 	knownTables: KnownTable[] = [],
 	generators: GeneratorBase[] = [],
 	lookups: KnownLookupRef[] = [],
+	knownFileGenerators: string[] = [],
 ): Issue[] {
 	const issues: Issue[] = [];
 	// This table's own logical identity, used to detect a self-reference (empty
@@ -249,7 +252,7 @@ export function validateTable(
 		}
 	});
 
-	issues.push(...validateOutputStructure(table));
+	issues.push(...validateOutputStructure(table, knownFileGenerators));
 
 	return issues;
 }
@@ -263,9 +266,30 @@ export function validateTable(
  * Only runs for the file type actually selected; a structure left over from a
  * different file type is not written and therefore not reported.
  */
-export function validateOutputStructure(table: Table): Issue[] {
-	const format = (table.output.format || 'csv').trim().toLowerCase();
+export function validateOutputStructure(table: Table, knownFileGenerators: string[] = []): Issue[] {
+	const rawFormat = (table.output.format || 'csv').trim();
+	const format = rawFormat.toLowerCase();
 	const ownColumns = new Set(table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0));
+
+	if (isCustomFormat(rawFormat)) {
+		// A custom file generator writes the file itself; the only thing to
+		// check here is that it still exists. `knownFileGenerators` empty means
+		// the caller does not know them — then nothing is reported rather than
+		// everything being flagged as missing.
+		const name = customFormatName(rawFormat);
+		if (knownFileGenerators.length > 0 && !knownFileGenerators.includes(name)) {
+			return [
+				{
+					columnIndex: OUTPUT_ISSUE_INDEX,
+					columnName: '',
+					kind: 'output-filegen-not-found',
+					detail: name,
+					warning: true,
+				},
+			];
+		}
+		return [];
+	}
 
 	if (format === 'fixed') {
 		return validateFixedLayout(table, ownColumns);

@@ -8,6 +8,7 @@ import { TableOption, toTableOptions } from './repository';
 import { GeneratorBase } from '../generator/base';
 import { toGeneratorList } from '../generator/repository';
 import { toLookupRefs } from '../lookup/repository';
+import { FileGeneratorOption, toFileGeneratorOptions } from '../filegen/repository';
 import { GeneratorParameter, KnownLookupRef } from '../generator/types';
 import { isCustomGeneratorId } from '../generator/custom';
 import { runTablePreview } from './preview';
@@ -97,6 +98,8 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 	private cachedGenerators: GeneratorBase[] = [];
 	/** Most recently determined lookup lists (.lkp), analogous to cachedTableOptions. */
 	private cachedLookups: KnownLookupRef[] = [];
+	/** Most recently determined custom file generators (.filegen) for the file type picker. */
+	private cachedFileGenerators: FileGeneratorOption[] = [];
 	private readonly indexSub: vscode.Disposable;
 
 	constructor(
@@ -107,7 +110,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		// watchers needed) and already reports changes debounced — .td/.tdgen/.lkp
 		// are the ones affecting the three picker lists.
 		this.indexSub = index.onDidChange((kinds) => {
-			if (kinds.has('td') || kinds.has('tdgen') || kinds.has('lkp')) {
+			if (kinds.has('td') || kinds.has('tdgen') || kinds.has('lkp') || kinds.has('filegen')) {
 				void this.broadcastOptions();
 			}
 		});
@@ -191,6 +194,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 						tableOptions: this.cachedTableOptions,
 						generatorOptions: toGeneratorOptions(this.cachedGenerators),
 						lookupOptions: this.cachedLookups,
+						fileGeneratorOptions: this.cachedFileGenerators,
 						columnWidths,
 						...state,
 					});
@@ -263,6 +267,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		this.cachedTableOptions = toTableOptions(snapshot.tables);
 		this.cachedGenerators = toGeneratorList(snapshot.generators);
 		this.cachedLookups = toLookupRefs(snapshot.lookups);
+		this.cachedFileGenerators = toFileGeneratorOptions(snapshot.fileGenerators);
 	}
 
 	/**
@@ -281,6 +286,7 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 				tableOptions: this.cachedTableOptions,
 				generatorOptions,
 				lookupOptions: this.cachedLookups,
+				fileGeneratorOptions: this.cachedFileGenerators,
 			});
 		}
 	}

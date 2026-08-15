@@ -3,11 +3,13 @@ import { TableEditorProvider } from './table/editorProvider';
 import { ProjectEditorProvider } from './project/editorProvider';
 import { LookupEditorProvider } from './lookup/editorProvider';
 import { GeneratorNotebook } from './generator/notebook';
+import { FileGeneratorNotebook } from './filegen/notebook';
 import { WorkspaceDiagnostics } from './diagnostics';
 import { newTableCommand } from './table/commands/newTable';
 import { newProjectCommand } from './project/commands/newProject';
 import { newLookupCommand } from './lookup/commands/newLookup';
 import { newGeneratorCommand } from './generator/commands/newGenerator';
+import { newFileGeneratorCommand } from './filegen/commands/newFileGenerator';
 import { selectPythonInterpreterCommand } from './project/commands/selectPythonInterpreter';
 import { generateWithProjectPickCommand } from './project/commands/generateWithProjectPick';
 import { runGenerationCommand } from './project/run';
@@ -31,6 +33,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(ProjectEditorProvider.register(context, index));
 	context.subscriptions.push(LookupEditorProvider.register(context));
 	context.subscriptions.push(GeneratorNotebook.register(context));
+	context.subscriptions.push(FileGeneratorNotebook.register(context));
 	// Background validation of every file in the workspace, opened or not.
 	context.subscriptions.push(WorkspaceDiagnostics.register(context, index));
 	// The shared "Datenschmiede" output channel (run logs, Python tracebacks).
@@ -40,6 +43,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newProject', newProjectCommand));
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newLookup', newLookupCommand));
 	context.subscriptions.push(vscode.commands.registerCommand('datenschmiede.newGenerator', newGeneratorCommand));
+	context.subscriptions.push(
+		vscode.commands.registerCommand('datenschmiede.newFileGenerator', newFileGeneratorCommand),
+	);
 	context.subscriptions.push(
 		vscode.commands.registerCommand('datenschmiede.selectPythonInterpreter', selectPythonInterpreterCommand),
 	);

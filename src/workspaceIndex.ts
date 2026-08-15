@@ -5,12 +5,13 @@ import { ParseError } from './tomlUtil';
 import { TableEntry, buildTableEntry, readFileText } from './table/repository';
 import { GeneratorEntry, buildGeneratorEntry } from './generator/repository';
 import { LookupEntry, buildLookupEntry } from './lookup/repository';
+import { FileGeneratorEntry, buildFileGeneratorEntry } from './filegen/repository';
 
 /** Every file type of this extension that the index watches. */
-const WATCH_PATTERN = '**/*.{td,tdproject,lkp,tdgen}';
+const WATCH_PATTERN = '**/*.{td,tdproject,lkp,tdgen,filegen}';
 
 /** File kind derived from the extension — lets consumers be notified selectively. */
-export type IndexedFileKind = 'td' | 'tdgen' | 'lkp' | 'tdproject';
+export type IndexedFileKind = 'td' | 'tdgen' | 'lkp' | 'tdproject' | 'filegen';
 
 /** Maps a URI to its indexed file kind, or `null` for unrelated files. */
 
@@ -21,6 +22,9 @@ function kindOf(uri: vscode.Uri): IndexedFileKind | null {
 	}
 	if (path.endsWith('.tdgen')) {
 		return 'tdgen';
+	}
+	if (path.endsWith('.filegen')) {
+		return 'filegen';
 	}
 	if (path.endsWith('.lkp')) {
 		return 'lkp';
@@ -63,6 +67,7 @@ export interface WorkspaceSnapshot {
 	generators: GeneratorEntry[];
 	lookups: LookupEntry[];
 	projects: ProjectEntry[];
+	fileGenerators: FileGeneratorEntry[];
 }
 
 /**
@@ -158,7 +163,7 @@ export class WorkspaceIndex implements vscode.Disposable {
 		);
 		read.sort((a, b) => (a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0));
 
-		const snapshot: WorkspaceSnapshot = { tables: [], generators: [], lookups: [], projects: [] };
+		const snapshot: WorkspaceSnapshot = { tables: [], generators: [], lookups: [], projects: [], fileGenerators: [] };
 		for (const { uri, kind, relativePath, text } of read) {
 			switch (kind) {
 				case 'td':
@@ -172,6 +177,9 @@ export class WorkspaceIndex implements vscode.Disposable {
 					break;
 				case 'tdproject':
 					snapshot.projects.push(buildProjectEntry(uri, relativePath, text));
+					break;
+				case 'filegen':
+					snapshot.fileGenerators.push(buildFileGeneratorEntry(uri, relativePath, text));
 					break;
 			}
 		}

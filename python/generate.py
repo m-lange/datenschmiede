@@ -219,6 +219,86 @@ def indent_body(body):
     return "\n".join("    " + line for line in (body or "pass").split("\n"))
 
 
+def os_path_stem(path):
+    """File name of a path without its extension (for ctx.file_name)."""
+    import os
+
+    return os.path.splitext(os.path.basename(path))[0]
+
+
+class FileContext:
+    """
+    The `ctx` object handed to a custom file generator's `write` method (see the
+    .filegen editor). Besides facts about the run it offers the built-in writers
+    as ready-made renderings, so a generator that only wraps the records — a
+    header block in front of a CSV, say — does not have to re-implement them.
+    """
+
+    def __init__(self, runner, table, records, file_name):
+        self._runner = runner
+        self._table = table
+        self.pd = pd
+        self.np = np
+        self.records = records
+        self.file_name = file_name
+        self.now = RUN_DT
+        self.table_name = table.get("name", "")
+        self.schema = (table.get("schema") or "").strip()
+        self.label = table.get("label", "")
+
+    @property
+    def columns(self):
+        """Names of the columns being written (hidden ones already dropped)."""
+        return [c["name"] for c in self._table["columns"] if not c.get("hidden")]
+
+    def log(self, *args):
+        """Writes a message to the run log (the "Datenschmiede" output channel)."""
+        emit("log", table=self._table["label"], message=" ".join(str(a) for a in args))
+
+    def as_csv(self, df, **overrides):
+        """
+        The records as CSV text. Without arguments the table's own CSV settings
+        apply; individual ones can be overridden (delimiter, include_header,
+        decimal, quote_all).
+        """
+        cfg = {**(self._table["output"].get("csv") or {}), **overrides}
+        return df.to_csv(
+            index=False,
+            sep=cfg.get("delimiter") or ";",
+            decimal=cfg.get("decimal") or ".",
+            header=cfg.get("include_header", True),
+            quoting=csv_module.QUOTE_ALL if cfg.get("quote_all", True) else csv_module.QUOTE_MINIMAL,
+            lineterminator="\n",
+        )
+
+    def as_json(self, df):
+        """The records as a JSON document, using the table's JSON structure tab."""
+        return self._runner.render_json(self._table, df)
+
+    def as_xml(self, df):
+        """The records as an XML document, using the table's XML structure tab."""
+        return self._runner.render_xml(self._table, df)
+
+    def as_fixed(self, df):
+        """The records as fixed-length lines, using the table's record layout."""
+        return self._runner.render_fixed(self._table, df)
+
+    def as_excel(self, df, sheet_name=None):
+        """The records as an Excel workbook — returns bytes, ready to be returned from write()."""
+        import io as _io
+
+        try:
+            import openpyxl  # noqa: F401 — only needed as the pandas engine
+        except ImportError:
+            emit("error", code="missing-packages", packages=["openpyxl"],
+                 message="Missing Python package: openpyxl (required for Excel output)")
+            sys.exit(3)
+        buffer = _io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            df.to_excel(writer, sheet_name=sanitize_sheet_name(sheet_name or self.table_name), index=False)
+        return buffer.getvalue()
+
+
 def build_custom_functions(defn):
     """Builds generate/parse_params from the .tdgen code shipped in the plan."""
     namespace = {"np": np, "pd": pd}
@@ -446,6 +526,11 @@ class Runner:
         self.custom = {}
         for defn in plan.get("custom_generators", []):
             self.custom[defn["name"]] = defn
+        # Custom file generators (.filegen) — keyed by their logical name, as a
+        # table's `format = "custom:<name>"` refers to them.
+        self.file_generators = {}
+        for defn in plan.get("file_generators", []):
+            self.file_generators[defn["name"]] = defn
         # label -> {column name -> pd.Series} of the values generated so far
         self.data = {}
         # label -> row count
@@ -926,11 +1011,21 @@ class Runner:
         return out[visible]
 
     def write_output(self, table, df, n):
-        """Writes one table in its configured file type and returns the path of the file created."""
+        """
+        Writes one table in its configured file type and returns the path of the
+        file created — or None for the "temp" file type, which generates the
+        records without writing anything.
+        """
         import os
 
-        os.makedirs(self.out_dir, exist_ok=True)
         fmt = (table["output"].get("format") or "csv").strip().lower()
+        if fmt == "temp":
+            # Temporary table: the records stay in memory for other tables to
+            # reference (FK, ctx.table(...)); nothing lands on disk.
+            return None
+        os.makedirs(self.out_dir, exist_ok=True)
+        if fmt.startswith("custom:"):
+            return self.write_custom(table, df, n, fmt[len("custom:"):])
         if fmt == "xlsx":
             return self.write_xlsx(table, df, n)
         if fmt == "json":
@@ -1052,6 +1147,54 @@ class Runner:
         return path
 
     # ------------------------------------------------------------------
+    # Custom file generators (.filegen)
+    # ------------------------------------------------------------------
+
+    def custom_writer(self, name):
+        """Compiles a `.filegen` write method from the code shipped in the plan (once per run)."""
+        defn = self.file_generators.get(name)
+        if defn is None:
+            raise RuntimeError(f'File generator "{name}" was not found')
+        if "function" not in defn:
+            namespace = {"np": np, "pd": pd}
+            source = f'def write(df, ctx):\n{indent_body(defn.get("write"))}\n'
+            try:
+                exec(compile(source, f"<filegen:{name}>", "exec"), namespace)
+            except SyntaxError as err:
+                raise RuntimeError(f'File generator "{name}": syntax error in code ({err})') from err
+            defn["function"] = namespace["write"]
+        return defn["function"]
+
+    def write_custom(self, table, df, n, name):
+        """
+        Hands the finished records to a custom file generator and writes what it
+        returns: `str` with the table's encoding, `bytes` unchanged (that is how
+        a binary format such as Excel gets out).
+        """
+        defn = self.file_generators.get(name)
+        if defn is None:
+            raise RuntimeError(
+                f'Table {table["label"]}: file generator "{name}" was not found'
+            )
+        write = self.custom_writer(name)
+        # The frame the generator sees is the one the built-in writers would see:
+        # dates formatted, hidden columns dropped.
+        out = self.visible_frame(table, self.format_dataframe(table, df, table["output"].get("csv", {})))
+        extension = (defn.get("extension") or "txt").strip().lstrip(".") or "txt"
+        path = self.output_path(table, n, out, extension)
+
+        ctx = FileContext(self, table, n, os_path_stem(path))
+        result = write(out, ctx)
+        if isinstance(result, (bytes, bytearray)):
+            with open(path, "wb") as handle:
+                handle.write(result)
+        else:
+            encoding = table["output"].get("csv", {}).get("encoding") or "utf-8"
+            with open(path, "w", encoding=encoding, newline="") as handle:
+                handle.write("" if result is None else str(result))
+        return path
+
+    # ------------------------------------------------------------------
     # Fixed length: field layout
     # ------------------------------------------------------------------
 
@@ -1162,6 +1305,19 @@ class Runner:
             return self.render_xml(table, self.format_dataframe(table, df, table["output"].get("xml", {})))
         if fmt == "fixed":
             return self.render_fixed(table, self.format_dataframe(table, df, table["output"].get("fixed", {})))
+        if fmt.startswith("custom:"):
+            # Run the custom writer over the preview records so its output can be
+            # checked without writing anything.
+            name = fmt[len("custom:"):]
+            if name not in self.file_generators:
+                return None
+            out = self.visible_frame(table, self.format_dataframe(table, df, table["output"].get("csv", {})))
+            result = self.custom_writer(name)(out, FileContext(self, table, len(out), "preview"))
+            if isinstance(result, (bytes, bytearray)):
+                # A binary format has nothing readable to show — report its size
+                # instead of dumping raw bytes into the dialog.
+                return f"<{len(result)} bytes>"
+            return "" if result is None else str(result)
         return None
 
     def run(self):
@@ -1193,8 +1349,11 @@ class Runner:
                     )
                 continue
             path = self.write_output(table, df, n)
-            files.append({"table": table["label"], "file": path, "records": n})
-            emit("table_done", table=table["label"], file=path, records=n, index=index, total=len(ordered))
+            if path is not None:
+                files.append({"table": table["label"], "file": path, "records": n})
+            # table_done is reported either way, so the progress indicator and
+            # the record counts of the ER diagram stay complete.
+            emit("table_done", table=table["label"], file=path or "", records=n, index=index, total=len(ordered))
         if not preview:
             emit("done", files=files, output_dir=self.out_dir)
 

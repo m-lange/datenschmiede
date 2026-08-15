@@ -3,8 +3,9 @@
 Eine VS-Code-Extension für **synthetische Testdaten**: Tabellen visuell
 definieren, Spalten mit Generatoren belegen, Tabellen zu Projekten bündeln
 und die Daten vektorisiert über **pandas/numpy** erzeugen — als **CSV,
-Excel, JSON, XML oder mit fester Satzlänge**, mit konsistenten
-Fremdschlüssel-Beziehungen über beliebig viele Ebenen.
+Excel, JSON, XML, mit fester Satzlänge oder über einen eigenen
+Dateigenerator**, mit konsistenten Fremdschlüssel-Beziehungen über beliebig
+viele Ebenen.
 
 Alle Dateitypen sind unter der Haube normale Klartext-Dateien (TOML bzw.
 CSV) und damit git-freundlich; die Extension stellt dafür grafische Custom
@@ -16,6 +17,7 @@ Rechtsklick auf den Tab → **„Reopen Editor With…“** als Text.
 | `.td` | Eine Tabellendefinition (Spalten, Schlüssel, Generatoren, Ausgabe) | **Datenschmiede: Neue Tabelle erstellen…** |
 | `.lkp` | Eine Nachschlageliste (gewichtete Wertezeilen) | **Datenschmiede: Neue Nachschlageliste erstellen…** |
 | `.tdgen` | Ein benutzerdefinierter Generator (Python, als Notebook) | **Datenschmiede: Neuen Generator erstellen…** |
+| `.filegen` | Ein eigener Dateigenerator (Python, als Notebook) | **Datenschmiede: Neuen Dateigenerator erstellen…** |
 | `.tdproject` | Ein Testdatenprojekt (Tabellenauswahl, Anzahlen, Interpreter, Ausgabeordner) | **Datenschmiede: Neues Testdatenprojekt erstellen…** |
 
 **Referenzen über logische Namen**: Tabellen werden als `schema.name`
@@ -51,6 +53,10 @@ ohne Fremdschlüssel, also direkt über die **Vorschau** ausprobierbar:
 - [`samples/tables/payment_records.td`](samples/tables/payment_records.td)
   — **feste Satzlänge** im Stil einer Zahlungsdatei (121 Zeichen je Satz,
   null- und leerzeichengefüllte Felder, CRLF)
+- [`samples/tables/partner_export.td`](samples/tables/partner_export.td) mit
+  [`samples/filegen/csv_with_header_block.filegen`](samples/filegen/csv_with_header_block.filegen)
+  — ein **eigener Dateigenerator**: CSV mit fünf Informationszeilen davor,
+  Leerzeilen als Reserve und der Kopfzeile exakt in Zeile 20
 
 ## Tabellen (`.td`)
 
@@ -58,6 +64,9 @@ Jede `.td`-Datei beschreibt **eine Tabelle** und öffnet als Editor mit zwei
 Tabs; die Dateitypen JSON, XML und feste Satzlänge bringen je einen dritten
 mit (siehe [Zielstruktur](#zielstruktur-json--xml) und
 [Satzaufbau](#satzaufbau-feste-satzlänge)).
+
+Dazu je eine eigenständige Tabelle für die übrigen Dateitypen — alle ohne
+Fremdschlüssel, also direkt über die **Vorschau** ausprobierbar.
 
 **Übersicht**: **Schema**, **Name** und **Beschreibung** — Beschreibungen
 unterstützen überall in der Extension Markdown (fett, kursiv, Code, Links,
@@ -69,9 +78,10 @@ bearbeitet. Dazu die Karte **„Ausgabe“**:
   Zeitstempel, Schema, Tabellenname, Datensatzanzahl oder der Wert einer
   Spalte aus dem ersten generierten Datensatz (Menü **„Dynamischen Wert
   einfügen“**; Klick auf ein Tag entfernt es). Leer ergibt `schema_tabelle`
-- **Dateityp** — **CSV**, **Excel (XLSX)**, **JSON**, **XML** oder
-  **feste Satzlänge**, je mit eigenen Einstellungen (die Dateiendung neben
-  dem Dateinamen folgt der Auswahl):
+- **Dateityp** — **CSV**, **Excel (XLSX)**, **JSON**, **XML**, **feste
+  Satzlänge**, **temporäre Tabelle** oder ein eigener **Dateigenerator**, je
+  mit eigenen Einstellungen (die Dateiendung neben dem Dateinamen folgt der
+  Auswahl):
   - **CSV**: Spaltentrenner, „jeden Wert in doppelte Anführungszeichen“,
     Dezimaltrenner, Datums-/Zeitstempelformat, Kopfzeile, Encoding
   - **Excel**: **Blattname** (mit denselben `{…}`-Variablen wie der
@@ -86,6 +96,11 @@ bearbeitet. Dazu die Karte **„Ausgabe“**:
   - **Feste Satzlänge**: Zeilenende (LF/CRLF), Dezimaltrenner, Kopfzeile,
     „zu lange Werte abschneiden“, Datums-/Zeitstempelformat, Encoding —
     der Satzaufbau selbst steht im eigenen Tab (siehe unten)
+  - **Temporäre Tabelle**: die Datensätze entstehen wie gewohnt — andere
+    Tabellen können sie über Fremdschlüssel referenzieren, Generatoren sie
+    lesen —, es wird aber **keine Datei** geschrieben
+  - jeder **eigene Dateigenerator** (`.filegen`) des Workspace, der die
+    Datei komplett selbst schreibt (siehe unten)
 
 **Spalten**: ein Grid mit einer Zeile je Spalte — Name, Datentyp (`string`,
 `integer`, `uuid`, `email`, …), Beschreibung (Markdown, einzeilig mit
@@ -181,6 +196,40 @@ bleiben dabei die *hinteren* Zeichen stehen, damit einer Zahl nicht die
 niedrigen Stellen fehlen. Auch hier zeigt **„Dokument-Vorschau“** 20 Sätze
 genau so, wie der Lauf sie schreiben würde — die beste Kontrolle dafür, ob
 die Spalten wirklich untereinander stehen.
+
+### Eigene Dateigeneratoren (`.filegen`)
+
+Reichen die eingebauten Dateitypen nicht — ein CSV hinter einem Block
+Kopfzeilen, ein Report mit Fußzeile, ein proprietäres Layout —, schreibt ein
+**Dateigenerator** die Datei komplett selbst. Wo ein `.tdgen` die Werte
+*einer Spalte* erzeugt, erzeugt ein `.filegen` die *ganze Datei*: nach dem
+Generieren bekommt seine `write`-Methode den fertigen DataFrame und gibt den
+Dateiinhalt zurück.
+
+Eine `.filegen`-Datei öffnet — wie ein `.tdgen` — als **Notebook** mit einem
+persistenten Python-Prozess:
+
+- **Kopfzelle** (Markdown): Name und Beschreibung
+- **Einstellungen**: `extension` (die geschriebene Dateiendung) und
+  `structure` — `"none"`, `"json"` oder `"xml"`. Bei `json`/`xml` bekommt
+  jede Tabelle, die diesen Generator verwendet, den passenden Struktur-Tab,
+  und `ctx.as_json(df)`/`ctx.as_xml(df)` liefern genau diese Struktur fertig
+  gerendert
+- **Testwerte**: eine freie Zelle, die ein kleines `df` für den Testlauf baut
+- **write**: die eine Pflichtmethode. Rückgabe `str` (mit dem Encoding der
+  Tabelle geschrieben) oder `bytes` (unverändert geschrieben — so kommt z. B.
+  eine Excel-Mappe heraus)
+
+Der `ctx` bietet die eingebauten Schreiber als fertige Renderings an, damit
+ein Generator, der die Datensätze nur *umhüllt*, sie nicht nachbauen muss:
+`ctx.as_csv(df)`, `ctx.as_json(df)`, `ctx.as_xml(df)`, `ctx.as_fixed(df)`,
+`ctx.as_excel(df)` — dazu `ctx.table_name`, `ctx.schema`, `ctx.label`,
+`ctx.records`, `ctx.file_name`, `ctx.now`, `ctx.columns` und `ctx.log(…)`.
+
+In der Ausgabe-Karte der Tabelle erscheinen alle Dateigeneratoren des
+Workspace unter **„Eigene Dateigeneratoren“**; der Knopf
+**„Dokument-Vorschau“** dort ruft den Generator mit 20 Vorschau-Datensätzen
+auf und zeigt die entstehende Datei, ohne etwas zu schreiben.
 
 ### Validierung (Problems-Ansicht)
 
@@ -364,8 +413,9 @@ Ablauf des Laufs:
    Tabellen entstehen über die Kardinalität je Datensatz der
    referenzierten Tabelle, die treibende FK-Spalte gleich mit
 3. **Schreiben**: eine Datei je Tabelle im konfigurierten Dateityp (CSV,
-   Excel, JSON, XML oder feste Satzlänge) in den aufgelösten Ausgabeordner
-   des Projekts
+   Excel, JSON, XML, feste Satzlänge oder ein eigener Dateigenerator) in den
+   aufgelösten Ausgabeordner des Projekts — temporäre Tabellen werden
+   erzeugt, aber nicht geschrieben
 
 Der Fortschritt erscheint als abbrechbare Benachrichtigung mit
 Fortschrittsbalken; das vollständige Protokoll (Tabellen, Spalten,

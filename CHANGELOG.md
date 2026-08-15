@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.0
+
+- **Eigene Dateigeneratoren (`.filegen`)**: eine neue Dateiart, die die
+  Ausgabedatei komplett selbst schreibt — für Formate, die die eingebauten
+  Schreiber nicht abdecken (ein CSV hinter einem Block Kopfzeilen, ein
+  Report mit Fußzeile, ein proprietäres Layout). Sie öffnet wie ein
+  `.tdgen` als **Notebook** mit persistentem Python-Prozess, hat aber keine
+  Parameter und genau eine Methode: `write(df, ctx)` bekommt die fertigen
+  Datensätze und gibt den Dateiinhalt als `str` oder `bytes` zurück.
+  Der `ctx` reicht die eingebauten Schreiber als fertige Renderings durch
+  (`ctx.as_csv/as_json/as_xml/as_fixed/as_excel`), sodass ein Generator, der
+  die Daten nur umhüllt, sie nicht nachbauen muss. Über `structure = "json"`
+  bzw. `"xml"` fordert ein Generator den passenden Struktur-Tab an. In der
+  Ausgabe-Karte erscheinen alle Dateigeneratoren des Workspace; der Knopf
+  **„Dokument-Vorschau“** ruft den Generator dort mit 20 Vorschau-Datensätzen
+  auf und zeigt die entstehende Datei, ohne etwas zu schreiben. Beispiel:
+  `samples/filegen/csv_with_header_block.filegen` mit
+  `samples/tables/partner_export.td`.
+- **Neuer Dateityp „Temporäre Tabelle“**: die Datensätze entstehen wie
+  gewohnt — andere Tabellen können sie über Fremdschlüssel referenzieren
+  und Generatoren sie lesen —, es wird aber keine Datei geschrieben.
+
 ## 0.8.0
 
 - **Neuer Dateityp „Feste Satzlänge“**: schreibt eine Textdatei (`.txt`),
