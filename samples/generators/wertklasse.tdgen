@@ -1,0 +1,122 @@
+# Datenschmiede Generator
+name = "wertklasse"
+description = """
+Ordnet einen numerischen Wert **einer von drei Klassen** zu — klein, mittel,
+groß — anhand zweier Grenzen. Typisch für ABC-Analysen, Sendungsklassen
+oder Größenkennzeichen, die sich aus einer bereits erzeugten Zahl ergeben
+sollen statt unabhängig gewürfelt zu werden.
+
+**Parameter**
+
+- `eigene_spalte` *(Pflicht)* — Parametertyp `own_column`: die zu
+  klassifizierende Spalte **dieser** Tabelle
+- `grenze_1`, `grenze_2` *(Pflicht)* — die beiden Schwellen
+- `bezeichner` — welche Beschriftungen die Klassen bekommen, als **feste
+  Werteliste**
+
+**Was dieses Beispiel zeigt**
+
+- die Zelle **`parameters()`** ist hier **selbst geschrieben**: Die
+  Parameter stehen als Literal-Liste von dicts im Python-Code, und beim
+  Speichern leitet die Erweiterung daraus die Parameterliste der Datei ab.
+  Bei den anderen Beispielen ist es umgekehrt — dort wird die Zelle aus der
+  Parameterliste erzeugt
+- `ctx.np.searchsorted` als vektorisierte Alternative zu verschachtelten
+  `if`-Abfragen
+- `validate` prüft die **Beziehung** zweier Parameter zueinander
+  (`grenze_1 < grenze_2`), was eine reine Typprüfung nicht leisten kann
+"""
+
+[[parameters]]
+name = "eigene_spalte"
+type = "own_column"
+description = "Numerische Spalte dieser Tabelle, die klassifiziert wird."
+required = true
+
+[[parameters]]
+name = "grenze_1"
+type = "float"
+description = "Untere Schwelle: alles darunter fällt in die erste Klasse."
+required = true
+
+[[parameters]]
+name = "grenze_2"
+type = "float"
+description = "Obere Schwelle: alles ab hier fällt in die dritte Klasse."
+required = true
+
+[[parameters]]
+name = "bezeichner"
+type = "string"
+description = "Beschriftung der drei Klassen."
+choices = ["S/M/L", "klein/mittel/gross", "A/B/C", "basis/plus/premium"]
+
+[code]
+parameters = """
+# Diese Zelle ist die Quelle der Parameterliste: Beim Speichern leitet die
+# Erweiterung die [[parameters]]-Bloecke der Datei daraus ab.
+return [
+    {
+        "name": "eigene_spalte",
+        "type": "own_column",
+        "description": "Numerische Spalte dieser Tabelle, die klassifiziert wird.",
+        "required": True,
+    },
+    {
+        "name": "grenze_1",
+        "type": "float",
+        "description": "Untere Schwelle: alles darunter faellt in die erste Klasse.",
+        "required": True,
+    },
+    {
+        "name": "grenze_2",
+        "type": "float",
+        "description": "Obere Schwelle: alles ab hier faellt in die dritte Klasse.",
+        "required": True,
+    },
+    {
+        "name": "bezeichner",
+        "type": "string",
+        "description": "Beschriftung der drei Klassen.",
+        "choices": ["S/M/L", "klein/mittel/gross", "A/B/C", "basis/plus/premium"],
+    },
+]
+"""
+generate = """
+werte = ctx.pd.to_numeric(ctx.pd.Series(ctx.column(params["eigene_spalte"])), errors="coerce").fillna(0)
+grenzen = ctx.np.array([params["grenze_1"], params["grenze_2"]])
+namen = ctx.np.array(params["bezeichner"].split("/"))
+
+# searchsorted liefert je Wert 0, 1 oder 2 - den Index der Klasse.
+return ctx.pd.Series(namen[ctx.np.searchsorted(grenzen, werte.values, side="right")])
+"""
+parse_params = """
+return {
+    **params,
+    "grenze_1": float((params.get("grenze_1") or "0").replace(",", ".")),
+    "grenze_2": float((params.get("grenze_2") or "0").replace(",", ".")),
+    "bezeichner": params.get("bezeichner") or "S/M/L",
+}
+"""
+display_value = """
+namen = (params.get("bezeichner") or "S/M/L").split("/")
+return f"{namen[0]} < {params.get('grenze_1', '?')} <= {namen[1]} < {params.get('grenze_2', '?')} <= {namen[-1]}"
+"""
+validate = """
+meldungen = []
+try:
+    erste = float((params.get("grenze_1") or "0").replace(",", "."))
+    zweite = float((params.get("grenze_2") or "0").replace(",", "."))
+    if erste >= zweite:
+        meldungen.append("grenze_1 muss kleiner als grenze_2 sein")
+except ValueError:
+    meldungen.append("die Grenzen muessen Zahlen sein")
+if len((params.get("bezeichner") or "S/M/L").split("/")) != 3:
+    meldungen.append("bezeichner muss genau drei durch / getrennte Namen enthalten")
+return meldungen
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {"eigene_spalte": "menge_gesamt", "grenze_1": "5", "grenze_2": "20", "bezeichner": "S/M/L"}
+n = 5
+"""

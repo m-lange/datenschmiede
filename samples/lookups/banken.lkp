@@ -1,0 +1,10 @@
+# Datenschmiede Nachschlageliste
+# name: banken
+# description: **Bankleitzahlen mit BIC und Institutsname** — Grundlage des eigenen Generators [`iban_de`](../generators/iban_de.tdgen), der daraus eine formal korrekte deutsche IBAN mit gültiger Prüfziffer baut.\n\nDas Beispiel zeigt, dass eine Nachschlageliste nicht nur von der **eingebauten** Lookup-Auswahl gezogen werden kann: Ein eigener Generator bekommt einen Parameter vom Typ `lookup` und liest die Liste mit `ctx.lookup_value(...)` — mit **derselben** Zeilenkonsistenz. `bank_name`, `bic` und die IBAN eines Kunden stammen dadurch immer vom selben Institut.\n\nVerwendet von `shop.core.kunden` (`bank_name`, `bic`, `iban`).
+"blz";"name";"bic";"weight"
+"37040044";"Commerzbank Köln";"COBADEFFXXX";"20"
+"50010517";"ING Frankfurt";"INGDDEFFXXX";"25"
+"10070024";"Deutsche Bank Berlin";"DEUTDEDBBER";"18"
+"70020270";"HypoVereinsbank München";"HYVEDEMMXXX";"15"
+"60050101";"LBBW Stuttgart";"SOLADEST600";"12"
+"20041133";"Comdirect Hamburg";"COBADEHDXXX";"10"

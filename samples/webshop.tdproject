@@ -1,0 +1,72 @@
+# Datenschmiede Testdatenprojekt
+name = "Webshop"
+description = """
+**Das relationale Beispiel**: ein kleiner Webshop mit sieben Tabellen in zwei
+Namensräumen, fünf Nachschlagelisten und sieben eigenen Generatoren. Hier
+geht es um **Beziehungen** — Fremdschlüssel, Kardinalitäten,
+Erzeugungsreihenfolge. Die Ausgabeformate zeigt das Schwesterprojekt
+[Exportformate](exporte.tdproject).
+
+**Datenmodell** (Pfeile = Fremdschlüssel)
+
+- `shop.core.kunden` — primär, feste Anzahl
+- `shop.core.warengruppen` — Anzahl aus der **führenden Nachschlageliste**
+- `shop.core.produkte` → warengruppen *(40..80 je Gruppe)*
+- `shop.core.adressen` — primär, Dateityp **temporäre Tabelle**: wird
+  erzeugt, aber nicht geschrieben
+- `shop.sales.bestellungen` → kunden *(1..5 je Kunde)*
+- `shop.sales.positionen` → bestellungen *(1..4 je Bestellung)*, → produkte
+- `shop.sales.lieferungen` → bestellungen *(genau 1)*
+
+Über die Kette ergeben 2.000 Kunden `2.000..10.000` Bestellungen und daraus
+`2.000..40.000` Positionen — die Übersicht **Generierte Dateien** rechnet
+das vorab aus und stellt es neben die Zahlen des letzten Laufs.
+
+**Was sich hier ausprobieren lässt**
+
+- der **Run-Knopf** in der Editor-Titelleiste (oder <kbd>Strg</kbd>+<kbd>F5</kbd>)
+  erzeugt alle Dateien im Ausgabeordner `output/webshop_{date}` — mit
+  Fortschrittsanzeige und abbrechbar
+- der Tab **ER-Diagramm** zeigt die Beziehungen spaltengenau, mit der
+  Kardinalität am Pfeil und der Datensatzanzahl im Kasten; ein Klick öffnet
+  die zugehörige `.td`-Datei
+- im Tab **Tabellen** lassen sich Tabellen ab- und zuwählen; über
+  FK-Ketten oder Generator-Parameter mitgenommene bleiben gesperrt — so
+  wird `shop.core.adressen` automatisch mitgezogen, weil ein Generator der
+  Bestellungen daraus liest
+- die **Datei-Vorschau** im Table Editor erzeugt 20 Datensätze und öffnet
+  die fertige Datei als ungespeicherten Editor — ganz ohne Projektlauf
+
+**Voraussetzungen**: ein verknüpfter Python-Interpreter (Übersicht-Tab) und
+die Pakete aus [`requirements.txt`](requirements.txt). Fehlt eines davon,
+bricht der Lauf vorher ab und bietet die Installation an.
+"""
+output_path = "output/webshop_{date}"
+requirements = "requirements.txt"
+
+[[tables]]
+path = "tables/core/kunden.td"
+records = 2000
+
+[[tables]]
+path = "tables/core/warengruppen.td"
+
+[[tables]]
+path = "tables/core/produkte.td"
+records = "40..80"
+
+[[tables]]
+path = "tables/core/adressen.td"
+records = 300
+
+[[tables]]
+path = "tables/sales/bestellungen.td"
+records = "1..5"
+
+[[tables]]
+path = "tables/sales/positionen.td"
+records = "1..4"
+
+[[tables]]
+path = "tables/sales/lieferungen.td"
+records = 1

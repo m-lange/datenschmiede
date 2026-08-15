@@ -1,0 +1,64 @@
+# Datenschmiede Generator
+name = "fremdwert"
+description = """
+Zieht **zufällige Werte aus einer Spalte einer anderen Tabelle** — ein
+Wertevorrat, kein Fremdschlüssel: die gezogene Zeile ist beliebig, es
+entsteht keine Beziehung und keine Kardinalität.
+
+Genau dafür gibt es den Dateityp **„Temporäre Tabelle“**: Die Quelltabelle
+[`shop.core.adressen`](../tables/core/adressen.td) wird erzeugt, damit hier
+etwas zu ziehen ist, aber **nicht geschrieben**.
+
+**Parameter**
+
+- `quelltabelle` *(Pflicht)* — Parametertyp `table`: alle Tabellen des
+  Workspace, gespeichert wird der logische Name `schema.name`
+- `quellspalte` *(Pflicht)* — Parametertyp `column`: die Auswahl folgt
+  automatisch der oben gewählten Tabelle
+
+**Was dieses Beispiel zeigt**
+
+- `ctx.table(tabelle, spalte)` als Zugriff auf die fertigen Werte einer
+  anderen Tabelle des Laufs
+- die referenzierte Tabelle wird im Projekt-Editor **automatisch
+  mitgewählt** (und dort gesperrt) und **vorher** erzeugt
+- der Unterschied zu `ctx.related(...)`: dort ist es der Wert **genau des**
+  referenzierten Datensatzes, hier ein beliebiger aus dem Vorrat
+"""
+
+[[parameters]]
+name = "quelltabelle"
+type = "table"
+description = "Tabelle, aus deren Werten gezogen wird."
+required = true
+
+[[parameters]]
+name = "quellspalte"
+type = "column"
+description = "Spalte dieser Tabelle, die den Wertevorrat bildet."
+required = true
+
+[code]
+generate = """
+werte = list(ctx.table(params["quelltabelle"], params["quellspalte"]))
+if not werte:
+    ctx.log("Wertevorrat ist leer - es werden leere Werte erzeugt")
+    return ctx.pd.Series([""] * n, dtype=object)
+
+vorrat = ctx.np.array(werte, dtype=object)
+return ctx.pd.Series(vorrat[ctx.rng.integers(0, len(vorrat), size=n)])
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"zufaellig aus {params.get('quelltabelle', '?')}.{params.get('quellspalte', '?')}"
+"""
+validate = """
+return []
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {"quelltabelle": "shop.core.adressen", "quellspalte": "stadt"}
+n = 5
+"""

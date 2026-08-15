@@ -1,7 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: co_ebene2_bez
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"Kreditgeschäft";"50"
-"Einlagengeschäft";"35"
-"Zahlungsverkehr und Kontoführung";"15"

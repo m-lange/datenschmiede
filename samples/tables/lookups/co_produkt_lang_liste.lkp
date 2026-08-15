@@ -1,9 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: co_produkt_lang_liste
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"Exportkredit";"35"
-"Aval / Auslandsgarantie";"30"
-"Devisentermingeschäft";"15"
-"Festgeld Ausland";"10"
-"Dokumentärer Zahlungsverkehr";"10"

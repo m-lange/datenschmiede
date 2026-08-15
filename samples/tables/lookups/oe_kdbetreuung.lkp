@@ -1,8 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: oe_kdbetreuung
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"OE-KDB-100";"40"
-"OE-KDB-200";"30"
-"OE-KDB-300";"20"
-"OE-KDB-400";"10"

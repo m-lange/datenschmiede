@@ -1,0 +1,63 @@
+# Datenschmiede Generator
+name = "elternwert"
+description = """
+Übernimmt einen Wert **genau des referenzierten Datensatzes** — ein echter
+Join über den Fremdschlüssel, kein Zufallszug. Für jeden Datensatz dieser
+Tabelle wird der Wert aus der Zeile geholt, auf die ihre FK-Spalte zeigt.
+
+Der Pfad darf über **mehrere Fremdschlüssel** führen, jeder weitere Teil ist
+eine FK-Spalte der zuvor erreichten Tabelle:
+
+- `artikel_nr` → das Produkt der Position
+- `bestell_nr.kunden_nr` → über die Bestellung hinweg zum Kunden
+
+**Parameter**
+
+- `fk_pfad` *(Pflicht)* — FK-Spalte dieser Tabelle, oder ein mit Punkten
+  verketteter Pfad über mehrere Tabellen
+- `spalte` *(Pflicht)* — Spalte der am Ende des Pfades erreichten Tabelle
+
+**Was dieses Beispiel zeigt**
+
+- `ctx.related(pfad, spalte)` als zeilengenauer Join über FK-Ketten — das
+  Gegenstück zum zufälligen `ctx.table(...)` in
+  [`fremdwert`](fremdwert.tdgen)
+- typische Anwendung: **denormalisierte** Felder, die in der Zieldatei
+  mitlaufen sollen (Listenpreis in der Position, Empfängername in der
+  Lieferung), ohne dass sie neu erfunden werden
+"""
+
+[[parameters]]
+name = "fk_pfad"
+type = "string"
+description = "FK-Spalte dieser Tabelle oder ein Pfad über mehrere, z. B. \"bestell_nr.kunden_nr\"."
+required = true
+
+[[parameters]]
+name = "spalte"
+type = "string"
+description = "Spalte der am Ende des Pfades erreichten Tabelle."
+required = true
+
+[code]
+generate = """
+return ctx.pd.Series(ctx.related(params["fk_pfad"], params["spalte"]))
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"{params.get('fk_pfad', '?')} → {params.get('spalte', '?')}"
+"""
+validate = """
+meldungen = []
+pfad = (params.get("fk_pfad") or "").strip()
+if pfad.startswith(".") or pfad.endswith(".") or ".." in pfad:
+    meldungen.append("fk_pfad ist keine gueltige Punktschreibweise")
+return meldungen
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {"fk_pfad": "bestell_nr.kunden_nr", "spalte": "nachname"}
+n = 5
+"""

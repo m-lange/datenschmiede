@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: zahlarten
+# description: **Zahlungsarten** des Shops mit der zugehörigen Gebühr. Rechnung und Lastschrift tragen zusammen über die Hälfte, Vorkasse ist die Ausnahme.\n\nDie Spalte `gebuehr` ist ein Beispiel für einen **numerischen Wert aus einer Liste**: Er wird nicht zufällig erzeugt, sondern gehört fest zur gewählten Zahlart — genau das leistet eine Nachschlageliste gegenüber einem Zufallsgenerator.\n\nVerwendet von `shop.sales.bestellungen` (`zahlart`, `zahlungsgebuehr`).
+"code";"bezeichnung";"gebuehr";"weight"
+"RECHNUNG";"Rechnung";"0.00";"30"
+"LASTSCHRIFT";"Lastschrift";"0.00";"25"
+"KREDITKARTE";"Kreditkarte";"1.50";"22"
+"PAYPAL";"PayPal";"0.99";"18"
+"VORKASSE";"Vorkasse";"0.00";"5"

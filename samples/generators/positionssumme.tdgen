@@ -1,0 +1,92 @@
+# Datenschmiede Generator
+name = "positionssumme"
+description = """
+**Aggregation über eine andere Tabelle**: summiert eine numerische Spalte
+einer anderen Tabelle, gruppiert nach einem Schlüssel — also
+`SUM(positionen.menge) GROUP BY bestell_nr`.
+
+**Parameter**
+
+- `quelltabelle` *(Pflicht)* — Tabelle, deren Zeilen summiert werden
+- `wertspalte` *(Pflicht)* — die zu summierende Spalte; die Auswahl folgt
+  automatisch der gewählten Tabelle
+- `gruppenspalte` *(Pflicht)* — Schlüsselspalte der Quelltabelle, nach der
+  gruppiert wird (dort meist deren FK-Spalte)
+- `eigene_spalte` *(Pflicht)* — Parametertyp `own_column`: Spalte **dieser**
+  Tabelle, deren Werte mit der Gruppenspalte verglichen werden
+
+**Was dieses Beispiel zeigt**
+
+- vektorisierte Aggregation mit pandas (`groupby(...).sum()` plus `map`) —
+  kein Schleifencode, auch bei Millionen Zeilen brauchbar
+- das Zusammenspiel von `ctx.table(...)` (fremde Tabelle) und
+  `ctx.column(...)` (eigene Spalte, dieselben Datensätze)
+- Schlüssel ohne Treffer ergeben `0` statt eines fehlenden Werts
+
+**Achtung Zyklus**: Die Spalte darf nicht in einer Tabelle liegen, die von
+der Quelltabelle selbst per Fremdschlüssel referenziert wird — eine
+Auftragssumme direkt in `bestellungen` über `positionen` wäre zirkulär und
+würde in der Problems-Ansicht gemeldet. Deshalb sitzt sie hier in
+`shop.sales.lieferungen`, das **nach** den Positionen erzeugt wird.
+"""
+
+[[parameters]]
+name = "quelltabelle"
+type = "table"
+description = "Tabelle, deren Zeilen summiert werden."
+required = true
+
+[[parameters]]
+name = "wertspalte"
+type = "column"
+description = "Zu summierende (numerische) Spalte der Quelltabelle."
+required = true
+
+[[parameters]]
+name = "gruppenspalte"
+type = "column"
+description = "Schlüsselspalte der Quelltabelle, nach der gruppiert wird."
+required = true
+
+[[parameters]]
+name = "eigene_spalte"
+type = "own_column"
+description = "Spalte dieser Tabelle, deren Werte mit der Gruppenspalte verglichen werden."
+required = true
+
+[code]
+generate = """
+werte = ctx.pd.Series(ctx.table(params["quelltabelle"], params["wertspalte"]))
+werte = ctx.pd.to_numeric(werte, errors="coerce").fillna(0)
+schluessel = ctx.pd.Series(ctx.table(params["quelltabelle"], params["gruppenspalte"]))
+
+summen = werte.groupby(schluessel.values).sum()
+eigene = ctx.pd.Series(ctx.column(params["eigene_spalte"]))
+ergebnis = eigene.map(summen).fillna(0)
+
+# Ganzzahlige Summen bleiben ganzzahlig - sonst stuende ueberall ".0".
+if (ergebnis % 1 == 0).all():
+    ergebnis = ergebnis.astype("int64")
+return ergebnis
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"SUM({params.get('wertspalte', '?')}) je {params.get('eigene_spalte', '?')}"
+"""
+validate = """
+if (params.get("gruppenspalte") or "") == (params.get("wertspalte") or ""):
+    return ["Gruppen- und Wertspalte sind identisch - das summiert den Schluessel"]
+return []
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {
+    "quelltabelle": "shop.sales.positionen",
+    "wertspalte": "menge",
+    "gruppenspalte": "bestell_nr",
+    "eigene_spalte": "bestell_nr",
+}
+n = 5
+"""

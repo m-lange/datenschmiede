@@ -1,7 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: co_ebene1_bez
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"Aktivgeschäft";"50"
-"Passivgeschäft";"35"
-"Dienstleistungsgeschäft";"15"

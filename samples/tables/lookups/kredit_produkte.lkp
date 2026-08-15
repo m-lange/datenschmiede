@@ -1,9 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: kredit_produkte
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"Investitionskredit";"4"
-"Betriebsmittelkredit";"3"
-"Avalkredit";"2"
-"Konsortialfinanzierung";"1"
-"Förderkredit";"2"

@@ -1,0 +1,82 @@
+# Datenschmiede Generator
+name = "laufende_nummer"
+description = """
+Erzeugt **fortlaufende, eindeutige Nummern** mit festem Präfix und führenden
+Nullen — `K-000001`, `A-001000`, `B-2026-00000042`. Gedacht für
+Primärschlüssel und fachliche Nummernkreise, deren Werte lesbar und
+sortierbar sein sollen (anders als zufällige UUIDs).
+
+**Parameter**
+
+- `prefix` *(Pflicht)* — fester Text vor der Nummer, z. B. `K-`
+- `start` — erster Zahlenwert des Nummernkreises, Standard `1`
+- `stellen` — Anzahl Stellen mit führenden Nullen; **feste Werteliste**
+  (`4`/`6`/`8`/`10`), im Table Editor also eine Auswahl statt freier Eingabe
+
+**Was dieses Beispiel zeigt**
+
+- `parse_params` wandelt die Zeichenketten aus dem Table Editor **einmal**
+  in `int` um, bevor `generate` läuft
+- `generate` arbeitet vektorisiert über `ctx.np.arange` — auch bei Millionen
+  Datensätzen schnell
+- `display_value` liefert die kompakte Zusammenfassung, die in der
+  Generator-Spalte, im Lauf-Protokoll und in der Vorschau steht
+- `validate` meldet unsinnige Eingaben (leerer Präfix, negativer Start) als
+  Warnung in der Problems-Ansicht — für **jede** Spalte, die diesen
+  Generator verwendet
+"""
+
+[[parameters]]
+name = "prefix"
+type = "string"
+description = "Fester Text vor der laufenden Nummer, z. B. \"K-\"."
+required = true
+
+[[parameters]]
+name = "start"
+type = "integer"
+description = "Erster Zahlenwert des Nummernkreises (Standard 1)."
+
+[[parameters]]
+name = "stellen"
+type = "string"
+description = "Anzahl Stellen mit führenden Nullen."
+choices = ["4", "6", "8", "10"]
+
+[code]
+generate = """
+prefix = params.get("prefix", "")
+start = params.get("start", 1)
+stellen = params.get("stellen", 6)
+nummern = ctx.np.arange(start, start + n)
+return ctx.pd.Series([f"{prefix}{wert:0{stellen}d}" for wert in nummern])
+"""
+parse_params = """
+# Alle Parameterwerte kommen als Zeichenkette an - hier einmal typisieren,
+# damit generate ohne Umwandlung auskommt.
+return {
+    "prefix": params.get("prefix", ""),
+    "start": int(params.get("start", "") or 1),
+    "stellen": int(params.get("stellen", "") or 6),
+}
+"""
+display_value = """
+prefix = params.get("prefix", "")
+start = int(params.get("start", "") or 1)
+stellen = int(params.get("stellen", "") or 6)
+return f"{prefix}{start:0{stellen}d} aufsteigend"
+"""
+validate = """
+meldungen = []
+if not (params.get("prefix") or "").strip():
+    meldungen.append("prefix darf nicht leer sein")
+start = (params.get("start") or "").strip()
+if start and (not start.isdigit()):
+    meldungen.append("start muss eine nicht negative ganze Zahl sein")
+return meldungen
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {"prefix": "K-", "start": "100000", "stellen": "6"}
+n = 5
+"""

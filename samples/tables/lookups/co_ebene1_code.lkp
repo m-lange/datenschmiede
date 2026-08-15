@@ -1,7 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: co_ebene1_code
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"AKTIV";"50"
-"PASSIV";"35"
-"DIENST";"15"

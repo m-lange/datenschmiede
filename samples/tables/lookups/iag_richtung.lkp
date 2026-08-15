@@ -1,6 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: iag_richtung
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"EXPORT";"60"
-"IMPORT";"40"

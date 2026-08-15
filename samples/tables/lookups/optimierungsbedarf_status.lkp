@@ -1,7 +1,0 @@
-# Datenschmiede Nachschlageliste
-# name: optimierungsbedarf_status
-# description: Von Gemini vorgeschlagene Werteliste (datenschmiede.py)
-"value";"weight"
-"Nein";"6"
-"Ja";"3"
-"Keine Angabe";"1"

@@ -1,0 +1,11 @@
+# Datenschmiede Nachschlageliste
+# name: laender
+# description: **Länder des Webshops** mit vier Wertespalten (`code`, `name`, `waehrung`, `ust_satz`) — beim Konfigurieren eines Lookup-Generators wird ausgewählt, *welche* Spalte gezogen wird.\n\nDie **Gewichte** steuern die Häufigkeit: Deutschland dominiert mit 55 %, der Rest teilt sich auf. Die Summe muss nicht exakt 100 ergeben — gezogen wird immer proportional; die Werkzeugleiste des Editors bietet trotzdem **„Gleichmäßig verteilen“** und **„Auf 100 % skalieren“** an.\n\nKernpunkt: Je Datensatz wird **eine Zeile** gezogen, und **alle** Spalten aus dieser Liste lesen dieselbe Zeile — auch über Fremdschlüssel hinweg. Zieht ein Kunde in `land` die Zeile „CH“, liefert `waehrung` derselben Zeile „CHF“, und seine Bestellungen erben genau diese Zeile.\n\nVerwendet von `shop.core.kunden` (`land`, `waehrung`), `shop.core.adressen`, `shop.sales.bestellungen` (`waehrung`) und den Export-Tabellen.
+"code";"name";"waehrung";"ust_satz";"weight"
+"DE";"Deutschland";"EUR";"19";"55"
+"AT";"Österreich";"EUR";"20";"12"
+"CH";"Schweiz";"CHF";"8.1";"10"
+"NL";"Niederlande";"EUR";"21";"8"
+"FR";"Frankreich";"EUR";"20";"7"
+"PL";"Polen";"PLN";"23";"5"
+"IT";"Italien";"EUR";"22";"3"

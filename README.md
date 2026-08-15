@@ -29,38 +29,41 @@ Problem (siehe unten).
 
 ## Beispielprojekt
 
-Unter [`samples/`](samples/) liegt das durchgängige Beispielprojekt
-**„Webshop Demo“** (nach Dateityp in `tables/`, `lookups/` und `generators/`
-gegliedert): fünf Tabellen in zwei Namensräumen (`shop.core` und
-`shop.sales`) mit FK-Ketten über drei Ebenen, drei Nachschlagelisten,
-sieben benutzerdefinierte Generatoren und ein fertig konfiguriertes
-Projekt — jede Datei mit ausführlicher Markdown-Beschreibung, welche
-Funktion sie demonstriert. Einstieg:
-[`samples/webshop-demo.tdproject`](samples/webshop-demo.tdproject).
+Unter [`samples/`](samples/) liegen **zwei Beispielprojekte**, die zusammen
+jede Funktion der Erweiterung zeigen — 14 Tabellen, 5 Nachschlagelisten, 7
+eigene Generatoren und 2 eigene Dateigeneratoren, jede Datei mit einer
+ausführlichen Markdown-Beschreibung, welche Funktion sie demonstriert.
 
-Dazu je eine eigenständige Tabelle für die übrigen Dateitypen — alle drei
-ohne Fremdschlüssel, also direkt über die **Vorschau** ausprobierbar:
+[`samples/webshop.tdproject`](samples/webshop.tdproject) — **die
+Beziehungen**: sieben Tabellen in zwei Namensräumen (`shop.core` und
+`shop.sales`), FK-Ketten über drei Ebenen, Kardinalitäten, führende
+Nachschlageliste, temporäre Tabelle als Wertevorrat.
 
-- [`samples/tables/sales_report.td`](samples/tables/sales_report.td) —
-  **Excel** mit eigenem Blattnamen, Startzelle `B3`, fixierter Kopfzeile
-  und Autofilter
-- [`samples/tables/customer_profiles.td`](samples/tables/customer_profiles.td)
-  — **JSON** mit verschachtelter Zielstruktur (Objekte, Array, Werttypen,
-  feste Texte)
-- [`samples/tables/order_messages.td`](samples/tables/order_messages.td) —
-  **XML** im EDI-Stil mit Attributen, verschachtelten Elementen,
-  wiederholtem Element und Deklaration
-- [`samples/tables/payment_records.td`](samples/tables/payment_records.td)
-  — **feste Satzlänge** im Stil einer Zahlungsdatei (121 Zeichen je Satz,
-  null- und leerzeichengefüllte Felder, CRLF)
-- [`samples/tables/business_partners.td`](samples/tables/business_partners.td)
-  — eine **führende Nachschlageliste**: ein Datensatz je Zeile von
-  [`business_partners.lkp`](samples/lookups/business_partners.lkp), jede
-  Zeile genau einmal
-- [`samples/tables/partner_export.td`](samples/tables/partner_export.td) mit
-  [`samples/filegen/csv_with_header_block.filegen`](samples/filegen/csv_with_header_block.filegen)
-  — ein **eigener Dateigenerator**: CSV mit fünf Informationszeilen davor,
+[`samples/exporte.tdproject`](samples/exporte.tdproject) — **die
+Ausgabeformate**: je eine eigenständige Tabelle pro Dateityp, alle ohne
+Fremdschlüssel und damit direkt über die **Vorschau** ausprobierbar:
+
+- [`vertriebsbericht.td`](samples/tables/export/vertriebsbericht.td) —
+  **Excel** mit Blattnamen aus Variablen, Startzelle `B3`, fixierter
+  Kopfzeile und Autofilter
+- [`kundenprofile.td`](samples/tables/export/kundenprofile.td) — **JSON**
+  mit verschachtelter Zielstruktur (Objekte, Array, Werttypen, feste Texte)
+- [`bestellnachricht.td`](samples/tables/export/bestellnachricht.td) —
+  **XML** mit Attributen, verschachtelten Elementen, wiederholten
+  gleichnamigen Elementen und Deklaration
+- [`zahlungsavis.td`](samples/tables/export/zahlungsavis.td) — **feste
+  Satzlänge** im Stil einer Zahlungsdatei (132 Zeichen je Satz, null- und
+  leerzeichengefüllte Felder, CRLF, eigene Kodierung)
+- [`ereignisstrom.td`](samples/tables/export/ereignisstrom.td) — **JSON
+  Lines**: ein Datensatz je Zeile, ASCII-Maskierung, ohne eigene Struktur
+- [`partnerexport.td`](samples/tables/export/partnerexport.td) mit
+  [`csv_mit_kopfblock.filegen`](samples/filegen/csv_mit_kopfblock.filegen) —
+  ein **eigener Dateigenerator**: CSV mit fünf Informationszeilen davor,
   Leerzeilen als Reserve und der Kopfzeile exakt in Zeile 20
+- [`api_lieferung.td`](samples/tables/export/api_lieferung.td) mit
+  [`json_umschlag.filegen`](samples/filegen/json_umschlag.filegen) — ein
+  eigener Dateigenerator **mit Zielstruktur**: die Nutzlast wird im Table
+  Editor gepflegt, der Generator legt nur den Umschlag darum
 
 ## Tabellen (`.td`)
 
@@ -172,29 +175,29 @@ echter Primärschlüssel.
 
 **Beispiel** — die drei Dateien zusammen zeigen das ganze Muster:
 
-1. [`samples/lookups/business_partners.lkp`](samples/lookups/business_partners.lkp)
-   gibt zwölf Geschäftspartner fest vor (`partner_id`, `partner_name`,
-   `segment`)
-2. [`samples/tables/business_partners.td`](samples/tables/business_partners.td)
-   wählt diese Liste als führend und bekommt dadurch **genau zwölf
-   Datensätze** — jede ID einmal, `partner_name` und `segment` immer aus
-   derselben Listenzeile
-3. [`samples/tables/partner_contracts.td`](samples/tables/partner_contracts.td)
+1. [`samples/lookups/warengruppen.lkp`](samples/lookups/warengruppen.lkp)
+   gibt acht Warengruppen fest vor (`gruppe_id`, `bezeichnung`,
+   `marge_prozent`)
+2. [`samples/tables/core/warengruppen.td`](samples/tables/core/warengruppen.td)
+   wählt diese Liste als führend und bekommt dadurch **genau acht
+   Datensätze** — jede ID einmal, `bezeichnung` und `marge_prozent` immer
+   aus derselben Listenzeile
+3. [`samples/tables/core/produkte.td`](samples/tables/core/produkte.td)
    hängt per Fremdschlüssel daran; im Projekt bekommt sie eine Kardinalität
-   *je Partner* (z. B. `1..3`) und erzeugt entsprechend viele Verträge pro ID
+   *je Gruppe* (`40..80`) und erzeugt entsprechend viele Produkte pro ID
 
 ```
-business_partners.csv          partner_contracts.csv  (Kardinalität 1..3)
-BP-1001  Nordwind Handels…     CTR-00001  BP-1001  Nordwind Handels…
-BP-1002  Südstern Logistik…    CTR-00002  BP-1001  Nordwind Handels…
-BP-1003  Ostsee Werften KG     CTR-00003  BP-1001  Nordwind Handels…
-…        (12 Zeilen)           CTR-00004  BP-1002  Südstern Logistik…
-                               …          (21 Zeilen)
+warengruppen.csv               produkte.csv  (Kardinalität 40..80)
+WG-10  Elektronik              A-001000  WG-10  4000010000009
+WG-20  Haushalt                A-001001  WG-10  4000010010008
+WG-30  Sport & Outdoor         A-001002  WG-10  4000010020007
+…      (8 Zeilen)              A-001003  WG-20  4000010030006
+                               …         (320..640 Zeilen)
 ```
 
-`partner_name` in den Verträgen kommt über den Generator `parent_value`
-(intern `ctx.related`) **zeilentreu** vom referenzierten Partner — er passt
-also immer zur `partner_id` daneben.
+`bezeichnung` und `einzelpreis` in den Bestellpositionen kommen über den
+Generator `elternwert` (intern `ctx.related`) **zeilentreu** vom
+referenzierten Produkt — sie passen also immer zur `artikel_nr` daneben.
 
 ### Zielstruktur (JSON / XML)
 
@@ -406,14 +409,15 @@ auch mehrstufig: `related("order_id.customer_id", "country")`),
 Listen-Zeile) und `log(...)` (schreibt ins Lauf-Protokoll).
 
 Beispiele unter [`samples/generators/`](samples/generators/):
-`sequential_id` (fortlaufende Kennungen wie `ORD-001000`, vektorisiert),
-`tracking_code` (Referenz auf eine andere Tabelle via `ctx.table`),
-`related_sum` (Aggregation `SUM(...) GROUP BY` über `ctx.related`),
-`value_category` (kategorisiert eine Spalte derselben Tabelle via
-`own_column`), `parent_value` (übernimmt zeilengenau einen Wert der
-führenden Tabelle), `iban` (gültige Prüfziffern nach ISO 7064, inkl.
-eigener `validate`-Prüfung) und `lei` (Legal Entity Identifier nach
-ISO 17442).
+`laufende_nummer` (fortlaufende Kennungen wie `K-100000`, vektorisiert, mit
+eigener `validate`-Prüfung), `ean13` (Prüfziffernrechnung über eine Spalte
+derselben Tabelle via `own_column`), `iban_de` (gültige Prüfziffern nach
+ISO 7064, Bankleitzahl zeilenkonsistent über `ctx.lookup_value`),
+`fremdwert` (zufälliger Zug aus einer anderen Tabelle via `ctx.table`),
+`elternwert` (zeilengenauer Join über eine FK-Kette via `ctx.related`, auch
+mehrstufig), `positionssumme` (Aggregation `SUM(...) GROUP BY`) und
+`wertklasse` (Klassifikation einer eigenen Spalte, mit selbst geschriebener
+`parameters()`-Zelle).
 
 ## Testdatenprojekte (`.tdproject`)
 

@@ -1,0 +1,63 @@
+# Datenschmiede Dateigenerator
+name = "json_umschlag"
+description = """
+Legt die Datensätze in einen **JSON-Umschlag**, wie ihn Schnittstellen
+üblicherweise erwarten: ein `meta`-Block mit Angaben zum Lauf, daneben die
+eigentliche Nutzlast unter `daten`.
+
+```json
+{
+  "meta": { "quelle": "…", "erzeugt": "…", "anzahl": 120, "schema_version": "1.2" },
+  "daten": [ … ]
+}
+```
+
+**Was dieses Beispiel zeigt**
+
+- `structure = "json"`: Tabellen mit diesem Dateityp bekommen den Tab
+  **„JSON-Struktur“** — die Zielstruktur wird also ganz normal im Table
+  Editor gepflegt, und `ctx.as_json(df)` liefert genau diese Struktur
+  fertig gerendert. Der Generator baut nur den Umschlag darum
+- die Nutzlast wird als Text eingesetzt und nicht erst zu Python-Objekten
+  geparst — das spart bei großen Läufen den kompletten zweiten Aufbau im
+  Speicher
+- `ctx.file_name` als Bestandteil der Metadaten: der bereits aufgelöste
+  Dateiname (ohne Endung), inklusive aller `{…}`-Variablen
+
+Verwendet von [`shop.export.api_lieferung`](../tables/export/api_lieferung.td).
+"""
+extension = "json"
+structure = "json"
+
+[code]
+write = """
+import json
+
+# Die Nutzlast kommt fertig aus dem Struktur-Tab der Tabelle. Sie bleibt
+# Text - erneutes Parsen wuerde bei grossen Laeufen nur Speicher kosten.
+nutzlast = ctx.as_json(df)
+
+# Zwei Leerzeichen Einrueckung fuer die Nutzlast, damit sie im Umschlag
+# buendig steht.
+nutzlast = "\\n".join("  " + zeile for zeile in nutzlast.split("\\n")).lstrip()
+
+meta = {
+    "quelle": ctx.label,
+    "datei": ctx.file_name,
+    "erzeugt": ctx.now.isoformat(timespec="seconds"),
+    "anzahl": ctx.records,
+    "schema_version": "1.2",
+}
+kopf = json.dumps(meta, ensure_ascii=False, indent=2)
+kopf = "\\n".join("  " + zeile for zeile in kopf.split("\\n")).lstrip()
+
+ctx.log(f"{ctx.records} Datensaetze in den Umschlag gelegt")
+
+return '{\\n  "meta": ' + kopf + ',\\n  "daten": ' + nutzlast + "\\n}\\n"
+"""
+scratch = """
+# Testwerte fuer die write-Zelle unten - anpassen und ausfuehren.
+import pandas as pd
+
+df = pd.DataFrame({"id": [1, 2, 3], "name": ["Anna", "Bert", "Cem"]})
+"""

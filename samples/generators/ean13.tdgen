@@ -1,0 +1,78 @@
+# Datenschmiede Generator
+name = "ean13"
+description = """
+Baut eine **EAN-13 mit gültiger Prüfziffer** aus den Werten einer *anderen
+Spalte derselben Tabelle*: Länderpräfix (3 Stellen) + Ziffern der
+Quellspalte (9 Stellen) + berechnete Prüfziffer.
+
+Weil die Nummer aus der Artikelnummer abgeleitet wird, ist sie **stabil und
+eindeutig**, solange die Quellspalte es ist — anders als eine zufällige
+13-stellige Zahl, die sich wiederholen kann.
+
+**Parameter**
+
+- `quell_spalte` *(Pflicht)* — Parametertyp `own_column`: die Auswahl bietet
+  die Spalten **dieser** Tabelle an. Gelesen werden ihre Werte für
+  **dieselben Datensätze**, und die Erweiterung stellt sicher, dass die
+  Quellspalte **vorher** erzeugt wird
+- `laendercode` — GS1-Präfix als **feste Werteliste** (`400`–`440`
+  Deutschland, `760` Schweiz, `900` Österreich)
+
+**Was dieses Beispiel zeigt**
+
+- `ctx.column("…")` als Zugriff auf die bereits erzeugten Werte einer
+  eigenen Spalte — die Erzeugungsreihenfolge ergibt sich automatisch aus
+  dem Parameter
+- eine **echte Prüfziffernrechnung** vollständig vektorisiert über numpy
+  statt in einer Python-Schleife
+- Zeichenketten-Verarbeitung mit den `str`-Methoden von pandas
+"""
+
+[[parameters]]
+name = "quell_spalte"
+type = "own_column"
+description = "Spalte dieser Tabelle, aus deren Ziffern die Nummer gebildet wird (z. B. die Artikelnummer)."
+required = true
+
+[[parameters]]
+name = "laendercode"
+type = "string"
+description = "GS1-Präfix der ersten drei Stellen."
+choices = ["400", "401", "760", "900"]
+
+[code]
+generate = """
+praefix = str(params.get("laendercode", "") or "400")[:3].zfill(3)
+
+# Werte der Quellspalte - dieselben Datensaetze, garantiert vorher erzeugt.
+quelle = ctx.pd.Series(ctx.column(params["quell_spalte"])).astype(str)
+
+# Nur die Ziffern behalten, auf neun Stellen bringen (rechts abschneiden,
+# links mit Nullen auffuellen).
+kern = quelle.str.replace(r"\\D", "", regex=True).str.zfill(9).str[-9:]
+zwoelf = praefix + kern
+
+# EAN-13-Pruefziffer: Stellen abwechselnd mit 1 und 3 gewichten, Summe auf
+# das naechste Vielfache von 10 ergaenzen. Vektorisiert ueber numpy.
+matrix = ctx.np.array([[int(z) for z in wert] for wert in zwoelf], dtype="int64")
+gewichte = ctx.np.tile([1, 3], 6)
+pruefziffer = (10 - (matrix * gewichte).sum(axis=1) % 10) % 10
+
+return zwoelf + ctx.pd.Series(pruefziffer).astype(str)
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"EAN-13 aus {params.get('quell_spalte', '?')} ({params.get('laendercode', '400')}…)"
+"""
+validate = """
+if not (params.get("quell_spalte") or "").strip():
+    return ["ohne Quellspalte kann keine Nummer gebildet werden"]
+return []
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {"quell_spalte": "artikel_nr", "laendercode": "400"}
+n = 5
+"""

@@ -2,6 +2,16 @@
 
 ## 0.10.0
 
+- **Beispiele komplett erneuert** (`samples/`): zwei Projekte statt einem —
+  [`webshop.tdproject`](samples/webshop.tdproject) für die Beziehungen
+  (sieben Tabellen, FK-Ketten über drei Ebenen, Kardinalitäten, führende
+  Nachschlageliste, temporäre Tabelle) und
+  [`exporte.tdproject`](samples/exporte.tdproject) für die Ausgabeformate
+  (je eine Tabelle für CSV, Excel, JSON, XML, JSON Lines, feste Satzlänge
+  und die beiden eigenen Dateigeneratoren). Dazu fünf Nachschlagelisten,
+  sieben eigene Generatoren, die zusammen jeden Parametertyp und jede
+  Code-Zelle abdecken, und eine `requirements.txt`. Jede Datei beschreibt in
+  ihrer Markdown-Beschreibung, welche Funktion sie zeigt.
 - In der Seitenleiste zeigt der **Tooltip jedes Eintrags seine Beschreibung
   als gerendertes Markdown** — Projekte, Tabellen, Nachschlagelisten und
   Generatoren. Hervorhebungen, Listen und `Code` lesen sich dort wie in den

@@ -1,0 +1,9 @@
+# Datenschmiede Nachschlageliste
+# name: bestellstatus
+# description: **Bearbeitungsstand einer Bestellung** — eine klassische Statusliste mit einer *schiefen* Verteilung: der Normalfall („Bezahlt“, „Versandt“) ist häufig, Stornierungen sind selten.\n\nDie Spalte `abgeschlossen` zeigt, wozu **mehrere Wertespalten** gut sind: Status-Code und das daraus abgeleitete Kennzeichen stammen garantiert aus derselben Zeile, statt in zwei unabhängigen Generatoren auseinanderzulaufen.\n\nVerwendet von `shop.sales.bestellungen` (`status`, `abgeschlossen`).
+"code";"bezeichnung";"abgeschlossen";"weight"
+"NEU";"Neu";"false";"10"
+"BEZAHLT";"Bezahlt";"false";"35"
+"VERSANDT";"Versandt";"false";"30"
+"GELIEFERT";"Geliefert";"true";"20"
+"STORNIERT";"Storniert";"true";"5"

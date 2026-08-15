@@ -1,0 +1,68 @@
+# Datenschmiede Testdatenprojekt
+name = "Exportformate"
+description = """
+**Das Format-Beispiel**: sieben unabhängige Tabellen, je eine pro
+Ausgabeform. Beziehungen spielen hier keine Rolle — jede Tabelle ist primär
+und hat eine feste Datensatzanzahl. Wer sich für Fremdschlüssel und
+Kardinalitäten interessiert, findet sie im Schwesterprojekt
+[Webshop](webshop.tdproject).
+
+**Ein Lauf schreibt sieben Dateien**
+
+| Tabelle | Dateityp | zeigt |
+| --- | --- | --- |
+| `vertriebsbericht` | Excel | Blattname mit Variablen, Startzelle, fixierte Kopfzeile, Autofilter |
+| `kundenprofile` | JSON | verschachtelte Zielstruktur mit Objekt, Array, Werttypen, festen Texten |
+| `bestellnachricht` | XML | Attribute, wiederholte Elemente, Array als wiederholtes Element |
+| `zahlungsavis` | feste Satzlänge | 132 Zeichen je Satz, CRLF, eigene Kodierung, Füllzeichen |
+| `ereignisstrom` | JSON Lines | ein Datensatz je Zeile, ASCII-Maskierung, leere Struktur |
+| `partnerexport` | eigener Dateigenerator | CSV hinter einem Kopfblock, Kopfzeile auf Zeile 20 |
+| `api_lieferung` | eigener Dateigenerator | JSON-Umschlag um eine im Editor gepflegte Nutzlast |
+
+**Was sich hier ausprobieren lässt**
+
+- die **Dokument-Vorschau** in den Struktur-Tabs zeigt das fertige JSON bzw.
+  XML, ohne dass ein Lauf nötig wäre
+- die **Datei-Vorschau** über den Play-Knopf im Table Editor erzeugt 20
+  Datensätze und öffnet die Datei als ungespeicherten Editor — für jeden
+  Dateityp außer Excel, das als Binärdatei nicht sinnvoll darstellbar ist
+- der Tab **Satzaufbau** von `zahlungsavis` rechnet Startpositionen und
+  Satzlänge aus den Feldbreiten aus
+- die beiden `.filegen`-Dateien öffnen sich als **Notebook** mit
+  persistentem Python-Prozess: Die Zelle mit den Testwerten ausführen, dann
+  `write` — und das Ergebnis steht sofort darunter
+
+**Voraussetzungen**: ein verknüpfter Python-Interpreter (Übersicht-Tab) und
+die Pakete aus [`requirements.txt`](requirements.txt) — für Excel wird
+`openpyxl` gebraucht.
+"""
+output_path = "output/exporte_{datetime}"
+requirements = "requirements.txt"
+
+[[tables]]
+path = "tables/export/vertriebsbericht.td"
+records = 250
+
+[[tables]]
+path = "tables/export/kundenprofile.td"
+records = 200
+
+[[tables]]
+path = "tables/export/bestellnachricht.td"
+records = 100
+
+[[tables]]
+path = "tables/export/zahlungsavis.td"
+records = 150
+
+[[tables]]
+path = "tables/export/ereignisstrom.td"
+records = 500
+
+[[tables]]
+path = "tables/export/partnerexport.td"
+records = 300
+
+[[tables]]
+path = "tables/export/api_lieferung.td"
+records = 120

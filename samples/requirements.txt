@@ -1,0 +1,20 @@
+# Zusaetzliche Python-Pakete der Beispielprojekte.
+#
+# Im Projekt-Editor ist diese Datei unter "Zusaetzliche Python-Pakete"
+# hinterlegt. Vor jedem Lauf prueft die Erweiterung den verknuepften
+# Interpreter offline dagegen; fehlt etwas, bricht der Lauf ab und bietet die
+# Installation in einem sichtbaren Terminal an.
+#
+# pandas und numpy sind immer noetig und werden ohnehin geprueft - hier stehen
+# nur die Pakete, die die BEISPIELE zusaetzlich brauchen.
+
+# Realistische Namen, Adressen und Telefonnummern (Generator "Faker" sowie
+# ctx.faker(locale) in eigenen Generatoren).
+faker>=24.0
+
+# Excel-Ausgabe (Dateityp "Excel", siehe tables/export/vertriebsbericht.td).
+openpyxl>=3.1
+
+# Optional: legt den Zwischenspeicher grosser Laeufe in eine temporaere
+# Datenbank statt in den Arbeitsspeicher - deutlich geringerer Speicherbedarf.
+duckdb>=1.0

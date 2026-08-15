@@ -1,0 +1,70 @@
+# Datenschmiede Generator
+name = "iban_de"
+description = """
+Erzeugt eine **formal gültige deutsche IBAN** (`DE` + Prüfziffer + 8-stellige
+Bankleitzahl + 10-stellige Kontonummer). Die Prüfziffer wird nach ISO 7064
+(Modulo 97-10) berechnet, die Nummer besteht also jede IBAN-Prüfung — sie
+gehört aber zu keinem echten Konto.
+
+**Parameter**
+
+- `bankliste` *(Pflicht)* — Parametertyp `lookup`: die Nachschlageliste mit
+  den Bankleitzahlen (hier [`banken`](../lookups/banken.lkp))
+- `blz_spalte` *(Pflicht)* — Parametertyp `column`: die Auswahl folgt
+  automatisch der oben gewählten Liste und bietet deren Spalten an
+
+**Was dieses Beispiel zeigt**
+
+- `ctx.lookup_value(liste, spalte)` zieht **genau wie der eingebaute
+  Lookup-Generator**: je Datensatz eine Zeile, und **alle** Spalten
+  derselben Liste lesen dieselbe Zeile. Deshalb passen `bank_name`, `bic`
+  und die BLZ *innerhalb* der IBAN eines Kunden immer zusammen
+- die Erweiterung nimmt die referenzierte Liste automatisch mit in den Lauf
+- Rechnen mit beliebig großen Ganzzahlen (die IBAN-Prüfung arbeitet auf
+  einer 24-stelligen Zahl) — Python kann das nativ
+"""
+
+[[parameters]]
+name = "bankliste"
+type = "lookup"
+description = "Nachschlageliste mit den Bankleitzahlen."
+required = true
+
+[[parameters]]
+name = "blz_spalte"
+type = "column"
+description = "Spalte dieser Liste, die die achtstellige Bankleitzahl enthält."
+required = true
+
+[code]
+generate = """
+# Zeilenkonsistenter Zug aus der Liste: dieselbe Zeile wie bank_name/bic.
+blz = ctx.pd.Series(ctx.lookup_value(params["bankliste"], params["blz_spalte"]))
+blz = blz.astype(str).str.replace(r"\\D", "", regex=True).str.zfill(8).str[-8:]
+
+konto = ctx.pd.Series(ctx.rng.integers(0, 10**10, size=n)).astype(str).str.zfill(10)
+bban = blz + konto
+
+# Pruefziffer nach ISO 7064: BBAN + Laenderkennung (D=13, E=14) + "00",
+# dann 98 minus Rest modulo 97.
+rest = (bban + "131400").map(int).map(lambda wert: wert % 97)
+pruefziffer = (98 - rest).map(lambda wert: f"{wert:02d}")
+
+return "DE" + pruefziffer + bban
+"""
+parse_params = """
+return params
+"""
+display_value = """
+return f"IBAN DE aus {params.get('bankliste', '?')}.{params.get('blz_spalte', '?')}"
+"""
+validate = """
+if not (params.get("bankliste") or "").strip():
+    return ["ohne Bankliste kann keine Bankleitzahl gezogen werden"]
+return []
+"""
+scratch = """
+# Testwerte fuer die Methoden-Zellen unten - anpassen und ausfuehren.
+params = {"bankliste": "banken", "blz_spalte": "blz"}
+n = 5
+"""

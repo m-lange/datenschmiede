@@ -1,0 +1,66 @@
+# Datenschmiede Dateigenerator
+name = "csv_mit_kopfblock"
+description = """
+Schreibt die Datensätze als gewöhnliches CSV, stellt ihnen aber einen
+**festen Kopfblock** voran, wie ihn viele Austauschformate verlangen:
+
+- **Zeilen 1–5** — Datei-Informationen: Kennung, Tabelle, Erzeugungszeitpunkt,
+  Datensatzanzahl, Feldliste
+- **Zeilen 6–19** — leer, als Reserve für spätere Ergänzungen
+- **Zeile 20** — die **Kopfzeile** des CSV, genau dort, wo der empfangende
+  Prozess sie erwartet
+- **ab Zeile 21** — die Datensätze
+
+Die Position der Kopfzeile steht als Konstante `KOPFZEILE` im Code und wird
+nicht von Hand ausgezählt: Der Generator füllt so viele Leerzeilen ein, dass
+sie exakt dort landet. Wächst der Infoblock später, stimmt es weiterhin.
+
+**Was dieses Beispiel zeigt**
+
+- `ctx.as_csv(df)` liefert die Datensätze fertig gerendert — die
+  CSV-Einstellungen der Tabelle (Trennzeichen, Anführungszeichen,
+  Dezimaltrenner, Datumsformat) gelten unverändert weiter; der Generator
+  kümmert sich nur um das Drumherum
+- `ctx.label`, `ctx.records`, `ctx.columns`, `ctx.now` als Auskunft über den
+  laufenden Erzeugungsvorgang
+- `ctx.log(...)` schreibt ins Lauf-Protokoll (Ausgabekanal
+  „Datenschmiede“) — `print()` ginge hier nicht, weil die Standardausgabe
+  dem Ereignisprotokoll gehört
+- `structure = "none"`: Tabellen mit diesem Dateityp bekommen **keinen**
+  Struktur-Tab, weil der Generator keine Zielstruktur braucht
+
+Verwendet von [`shop.export.partnerexport`](../tables/export/partnerexport.td).
+"""
+extension = "csv"
+structure = "none"
+
+[code]
+write = """
+# Die Kopfzeile muss auf genau dieser Zeile stehen. Der Leerblock darunter
+# wird daraus berechnet statt abgezaehlt, damit es auch dann noch stimmt,
+# wenn der Infoblock spaeter waechst oder schrumpft.
+KOPFZEILE = 20
+
+info = [
+    "#DATENSCHMIEDE-EXPORT V1",
+    f"#TABELLE={ctx.label}",
+    f"#ERZEUGT={ctx.now:%Y-%m-%d %H:%M:%S}",
+    f"#DATENSAETZE={ctx.records}",
+    "#FELDER=" + ",".join(ctx.columns),
+]
+
+# Die Datensaetze als CSV mit den Einstellungen der Tabelle - die erste
+# Zeile davon ist die Kopfzeile.
+daten = ctx.as_csv(df).replace("\\r\\n", "\\n").rstrip("\\n").split("\\n")
+
+fueller = [""] * max(0, KOPFZEILE - 1 - len(info))
+ctx.log(f"Kopfzeile steht auf Zeile {len(info) + len(fueller) + 1}")
+
+return "\\n".join(info + fueller + daten) + "\\n"
+"""
+scratch = """
+# Testwerte fuer die write-Zelle unten - anpassen und ausfuehren.
+import pandas as pd
+
+df = pd.DataFrame({"partner_nr": ["P-0001", "P-0002"], "name": ["Anna Weber", "Bert Klein"]})
+"""

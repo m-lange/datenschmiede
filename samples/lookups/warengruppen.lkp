@@ -1,0 +1,12 @@
+# Datenschmiede Nachschlageliste
+# name: warengruppen
+# description: **Warengruppen des Sortiments** — diese Liste ist die **führende Nachschlageliste** der Tabelle `shop.core.warengruppen` (Übersicht-Tab → „Führende Nachschlageliste“).\n\nDadurch entsteht **genau ein Datensatz je Zeile** dieser Liste, jede Zeile genau einmal und in Listenreihenfolge: die acht Zeilen ergeben acht Warengruppen. Die Anzahl kommt also aus der Liste, nicht aus dem Projekt — im Projekt-Editor braucht diese Tabelle deshalb kein Anzahl-Feld.\n\nSo wird aus einer gepflegten Schlüsselliste ein echter Stammdatensatz mit `gruppe_id` als Primärschlüssel, an den sich `shop.core.produkte` per Fremdschlüssel hängt.\n\nDie **Gewichte** bleiben trotzdem sinnvoll: Wer die Liste anderswo *zieht* statt sie zu führen, bekommt die hier hinterlegte Verteilung.
+"gruppe_id";"bezeichnung";"marge_prozent";"weight"
+"WG-10";"Elektronik";"18.5";"22"
+"WG-20";"Haushalt";"32.0";"15"
+"WG-30";"Sport & Outdoor";"27.5";"14"
+"WG-40";"Bücher & Medien";"12.0";"11"
+"WG-50";"Bekleidung";"45.0";"16"
+"WG-60";"Garten";"30.0";"8"
+"WG-70";"Spielwaren";"35.5";"9"
+"WG-80";"Drogerie";"22.0";"5"
