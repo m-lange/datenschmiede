@@ -27,7 +27,7 @@ Die übrigen Spalten (`credit_limit`, `created_at`) werden wie gewohnt
 zufällig erzeugt — die Liste bestimmt nur, *wie viele* Datensätze es gibt
 und welche Werte in den zugeordneten Spalten stehen.
 """
-driving_lookup = "business_partners"
+driving_lookup = "gp_nummern"
 
 [output]
 file_name = "business_partners"

@@ -21,10 +21,11 @@
   Interpreter offline dagegen geprüft; fehlt etwas, bricht der Lauf ab und
   bietet die Installation in einem sichtbaren Terminal an — installiert wird
   nichts von allein.
-- **Tastenkürzel <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>** für die
-  Play-Aktion: im Projekt-Editor startet es den Lauf, im Table Editor die
-  Datei-Vorschau — dasselbe Kürzel startet also immer das, worum es im
-  offenen Editor geht.
+- **Tastenkürzel <kbd>Strg</kbd>+<kbd>F5</kbd>** für die Play-Aktion: im
+  Projekt-Editor startet es den Lauf, im Table Editor die Datei-Vorschau —
+  dasselbe Kürzel startet also immer das, worum es im offenen Editor geht.
+  Es ist bewusst VS Codes gewohntes „Starten ohne Debugging“ und gilt nur,
+  solange einer dieser beiden Editoren im Vordergrund ist.
 - Die **führende Nachschlageliste** steht im Übersicht-Tab jetzt in einer
   eigenen Karte gleichen Namens statt zwischen den Beschreibungsfeldern,
   und der **Fremdschlüssel-Baum** trägt für Namensräume und Tabellen dieselben

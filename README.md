@@ -130,7 +130,7 @@ Lauf und beide mit 20 Datensätzen inklusive aller referenzierten Tabellen:
 - der **Vorschau-Knopf** in der Toolbar des Spalten-Tabs zeigt die **Werte**
   als Tabelle im Dialog
 - der **Play-Knopf in der Editor-Titelleiste** (Befehl **„Datenschmiede:
-  Datei-Vorschau“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>,
+  Datei-Vorschau“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>F5</kbd>,
   an derselben Stelle wie der Run-Knopf des Projekt-Editors) erzeugt die
   **fertige Datei** — für *jeden* Dateityp,
   auch CSV — und öffnet sie als **neuen, ungespeicherten Editor**. Damit
@@ -483,7 +483,7 @@ Interpretern zu suchen:
 
 Der **Run-Knopf** in der Editor-Titelleiste des Projekt-Editors (bzw. der
 Start-Knopf im Übersicht-Tab, Befehl **„Datenschmiede: Testdaten
-generieren“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>)
+generieren“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>F5</kbd>)
 startet die Generierung
 ([`python/generate.py`](python/generate.py)). Ohne offenen Projekt-Editor
 führt der Befehl **„Datenschmiede: Testdaten generieren (Projekt
@@ -504,10 +504,12 @@ Ablauf des Laufs:
    aufgelösten Ausgabeordner des Projekts — temporäre Tabellen werden
    erzeugt, aber nicht geschrieben
 
-Dasselbe Kürzel gilt in beiden Editoren — es startet immer das, worum es im
-gerade offenen Editor geht: im Projekt den Lauf, in einer Tabelle die
-Datei-Vorschau. Umbelegen lässt es sich wie jedes andere über
-**Datei → Einstellungen → Tastenkombinationen**.
+Dasselbe Kürzel gilt in beiden Editoren — es ist VS Codes gewohntes „Starten
+ohne Debugging“ und startet hier immer das, worum es im gerade offenen Editor
+geht: im Projekt den Lauf, in einer Tabelle die Datei-Vorschau. Es greift nur,
+solange einer dieser beiden Editoren im Vordergrund ist; überall sonst behält
+<kbd>Strg</kbd>+<kbd>F5</kbd> seine übliche Bedeutung. Umbelegen lässt es sich
+wie jedes andere über **Datei → Einstellungen → Tastenkombinationen**.
 
 Fertige Tabellen wandern dabei sofort aus dem Arbeitsspeicher in einen
 **Zwischenspeicher**: Nur die Tabelle, die gerade erzeugt wird, liegt

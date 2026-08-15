@@ -225,14 +225,12 @@
     "keybindings": [
       {
         "command": "datenschmiede.runGeneration",
-        "key": "ctrl+alt+r",
-        "mac": "cmd+alt+r",
+        "key": "ctrl+f5",
         "when": "activeCustomEditorId == datenschmiede.projectEditor"
       },
       {
         "command": "datenschmiede.previewFile",
-        "key": "ctrl+alt+r",
-        "mac": "cmd+alt+r",
+        "key": "ctrl+f5",
         "when": "activeCustomEditorId == datenschmiede.tableEditor"
       }
     ],
