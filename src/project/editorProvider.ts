@@ -6,7 +6,7 @@ import { buildProjectDiagram } from './diagram';
 import { getRunResult, onDidSaveRunResult, RunResult } from './runResults';
 import { parseProjectText, serializeProject } from './toml';
 import { ParseError } from '../tomlUtil';
-import { fullDocumentRange, getNonce } from '../util';
+import { fullDocumentRange, getNonce, openRelativeLink } from '../util';
 import { getProjectWebviewStrings } from './webviewStrings';
 import { tableLabel, computeRequiredClosure, buildRequiredEdges, closureOf, TableEntry } from '../table/repository';
 import { parseCardinality } from '../table/cardinality';
@@ -15,12 +15,17 @@ import { GeneratorBase } from '../generator/base';
 import { toGeneratorList } from '../generator/repository';
 import { WorkspaceIndex } from '../workspaceIndex';
 import { PythonLink } from './model';
+import { isTemporaryFormat, outputExtension } from '../table/model';
+import { customFormatName, isCustomFormat } from '../filegen/model';
+import { FileGeneratorEntry, toFileGeneratorOptions } from '../filegen/repository';
 
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
 	| { type: 'edit'; project: Project }
 	| { type: 'changePython' }
 	| { type: 'openTable'; path: string }
+	// A relative file link in the description (see openRelativeLink in util.ts).
+	| { type: 'openRelative'; target: string }
 	| { type: 'toggleTable'; path: string; checked: boolean }
 	| { type: 'selectTables'; paths: string[] }
 	| { type: 'deselectTables'; paths: string[] }
@@ -104,7 +109,16 @@ export interface ProjectPickerTableNode {
 	secondary: boolean;
 	/** Logical identity of the table referenced via the outgoing FK (only set when `secondary`). */
 	referencedTable?: string;
-	/** Only relevant when `checked` — mandatory for both kinds of table (see `secondary` for the meaning). */
+	/**
+	 * `true` when a leading lookup list decides the record count (one record per
+	 * list row): neither a fixed count nor a cardinality applies, so the webview
+	 * shows the list instead of an input — an empty value is correct here and
+	 * must not be reported as missing (the same rule as in buildTableRows).
+	 */
+	lookupDriven?: boolean;
+	/** Name of the leading lookup list (only set when `lookupDriven`). */
+	drivingLookup?: string;
+	/** Only relevant when `checked` and not `lookupDriven` — mandatory for both kinds of table (see `secondary` for the meaning). */
 	records?: string;
 }
 
@@ -123,7 +137,12 @@ export interface OutputFileRow {
 	label: string;
 	/** File name template with `{…}` variables (default `{schema}_{table}` when nothing is configured). */
 	fileName: string;
-	/** File extension including the dot, from the configured file type (".csv" for now). */
+	/**
+	 * File extension including the dot, exactly as the run writes it (see
+	 * outputExtension in table/model.ts): "fixed" writes ".txt", a custom file
+	 * generator whatever it declares — the file type is not the extension.
+	 * Empty for the temporary file type, which writes no file at all.
+	 */
 	ext: string;
 	/** Configured record count ("100", or "5"/"1..3" per referenced record). */
 	records?: string;
@@ -142,6 +161,27 @@ export interface OutputFileRow {
 	/** `true` for a referenced (secondary) table — `records` then applies per record of `referencedTable`. */
 	secondary: boolean;
 	referencedTable?: string;
+	/** `true` for the temporary file type: records are generated, but no file is written. */
+	temporary?: boolean;
+}
+
+/**
+ * The extension a table's file type really writes, including the leading dot —
+ * `.txt` for fixed length, the declared one for a custom file generator, and
+ * nothing at all for the temporary type. Mirrors what python/generate.py does
+ * with the same configuration.
+ */
+function outputRowExtension(format: string, fileGenerators: FileGeneratorEntry[]): string {
+	const value = (format || 'csv').trim();
+	if (isCustomFormat(value)) {
+		const name = customFormatName(value);
+		const generator = toFileGeneratorOptions(fileGenerators).find((option) => option.name === name);
+		// An unresolvable generator (renamed, deleted) has no known extension —
+		// showing none is honest, the reference itself is reported separately.
+		return generator ? `.${generator.extension}` : '';
+	}
+	const extension = outputExtension(value);
+	return extension ? `.${extension}` : '';
 }
 
 /** Builds the overview tab's output files list (one row per selected table). */
@@ -150,6 +190,7 @@ function buildOutputFiles(
 	entries: TableEntry[],
 	lookups: LookupEntry[] = [],
 	lastRun?: RunResult | null,
+	fileGenerators: FileGeneratorEntry[] = [],
 ): OutputFileRow[] {
 	// Row count per referenceable list name — a leading lookup list decides the
 	// record count of the table it leads (see Table.drivingLookup).
@@ -244,7 +285,8 @@ function buildOutputFiles(
 			// applies (see python/generate.py) — shown as a template so the
 			// overview displays the same variable tags as the table editor.
 			fileName: entry.table.output.fileName.trim() || '{schema}_{table}',
-			ext: `.${(entry.table.output.format || 'csv').toLowerCase()}`,
+			ext: outputRowExtension(entry.table.output.format, fileGenerators),
+			temporary: isTemporaryFormat(entry.table.output.format),
 			records: table.records,
 			estimatedMin: estimated?.min,
 			estimatedMax: estimated?.max,
@@ -283,6 +325,8 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 	/** Most recently determined generator list (built-in + `.tdgen` files), used by computeRequiredClosure. */
 	private cachedGenerators: GeneratorBase[] = [];
 	private cachedLookups: LookupEntry[] = [];
+	/** Most recent `.filegen` files — they declare the extension a `format = "custom:…"` table writes. */
+	private cachedFileGenerators: FileGeneratorEntry[] = [];
 	private readonly indexSub: vscode.Disposable;
 	private readonly runResultSub: vscode.Disposable;
 	/**
@@ -374,7 +418,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const lastRun = getRunResult(this.context, document.uri);
-				const outputFiles = buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun);
+				const outputFiles = buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun, this.cachedFileGenerators);
 				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles, lastRun);
 				const pythonStatus = state.project.python ? await this.resolvePythonStatus(state.project.python, false) : null;
 				void webviewPanel.webview.postMessage({
@@ -419,7 +463,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 						'project' in state ? buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators) : [];
 					const lastRun = getRunResult(this.context, document.uri);
 					const outputFiles =
-						'project' in state ? buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun) : [];
+						'project' in state ? buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun, this.cachedFileGenerators) : [];
 					const diagram =
 						'project' in state ? buildProjectDiagram(state.project, this.cachedEntries, outputFiles, lastRun) : null;
 					const pythonStatus =
@@ -463,6 +507,10 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 				}
 				case 'openTable': {
 					await this.openTableFile(message.path);
+					break;
+				}
+				case 'openRelative': {
+					await openRelativeLink(document.uri, message.target);
 					break;
 				}
 				case 'toggleTable': {
@@ -747,6 +795,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 		this.cachedEntries = snapshot.tables;
 		this.cachedGenerators = toGeneratorList(snapshot.generators);
 		this.cachedLookups = snapshot.lookups;
+		this.cachedFileGenerators = snapshot.fileGenerators;
 		return this.cachedEntries;
 	}
 
@@ -764,7 +813,7 @@ export class ProjectEditorProvider implements vscode.CustomTextEditorProvider, v
 			if ('project' in state) {
 				const pickerTree = buildPickerTree(state.project, this.cachedEntries, this.cachedGenerators);
 				const lastRun = getRunResult(this.context, document.uri);
-				const outputFiles = buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun);
+				const outputFiles = buildOutputFiles(state.project, this.cachedEntries, this.cachedLookups, lastRun, this.cachedFileGenerators);
 				const diagram = buildProjectDiagram(state.project, this.cachedEntries, outputFiles, lastRun);
 				void panel.webview.postMessage({
 					type: 'pickerTree',
@@ -906,6 +955,10 @@ function buildPickerTree(project: Project, entries: TableEntry[], generators: Ge
 		const outgoing = entry.table.columns.find(
 			(column) => column.fk && column.fkTable.trim() !== '' && column.fkTable.trim() !== label,
 		);
+		// A leading lookup list wins over an outgoing FK: the list length is the
+		// record count, so the table is neither primary nor referenced here (the
+		// same rule as in buildTableRows and in the run, see project/run.ts).
+		const drivingLookup = entry.table.drivingLookup.trim();
 
 		const base = {
 			kind: 'table' as const,
@@ -917,6 +970,9 @@ function buildPickerTree(project: Project, entries: TableEntry[], generators: Ge
 			records: existingRecords.get(entry.relativePath),
 		};
 
+		if (drivingLookup) {
+			return { ...base, secondary: false, lookupDriven: true, drivingLookup };
+		}
 		if (outgoing) {
 			return { ...base, secondary: true, referencedTable: outgoing.fkTable.trim() };
 		}

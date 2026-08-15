@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { Project } from './model';
-import { parseProjectText } from './toml';
-import { resolveLinkedInterpreter } from './python';
+import { parseProjectText, serializeProject } from './toml';
+import { pickPythonInterpreter, resolveLinkedInterpreter } from './python';
+import { fullDocumentRange } from '../util';
 import { parseCardinality } from '../table/cardinality';
 import { Table } from '../table/model';
 import { TableEntry, generatorsById, listTables, readFileText, tableLabel } from '../table/repository';
@@ -51,13 +52,16 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 	}
 
 	// Resolve the linked interpreter (Python 3.10+, see project/python.ts).
-	if (!project.python) {
-		void vscode.window.showErrorMessage(
-			vscode.l10n.t('This test data project has no linked Python interpreter yet. Select one now?'),
-		);
-		return;
+	let pythonLink = project.python;
+	if (!pythonLink) {
+		const linked = await linkInterpreterForRun(uri, project);
+		if (!linked?.python) {
+			return;
+		}
+		project = linked;
+		pythonLink = linked.python;
 	}
-	const pythonStatus = await resolveLinkedInterpreter(project.python);
+	const pythonStatus = await resolveLinkedInterpreter(pythonLink);
 	if (!pythonStatus.resolved || !pythonStatus.ok) {
 		void vscode.window.showErrorMessage(
 			vscode.l10n.t('The linked Python interpreter is not usable (missing or older than 3.10): {0}', pythonStatus.path),
@@ -101,11 +105,15 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 	channel.show(true);
 	log(`Run "${projectName}" — ${pythonStatus.path}`);
 	for (const table of plan.plan.tables) {
-		channel.appendLine(
-			`    ${table.label}: ${
-				typeof table.records === 'number' ? `${table.records} records` : `${table.records.min}..${table.records.max} per ${table.driving_fk?.table ?? '?'}`
-			}`,
-		);
+		// A leading lookup list carries `records: 0` in the plan (the runner
+		// ignores it, the list length decides) — printing that zero would claim
+		// the table generates nothing.
+		const records = table.driving_lookup
+			? `one record per row of lookup list "${table.driving_lookup}"`
+			: typeof table.records === 'number'
+				? `${table.records} records`
+				: `${table.records.min}..${table.records.max} per ${table.driving_fk?.table ?? '?'}`;
+		channel.appendLine(`    ${table.label}: ${records}`);
 	}
 	const startedAt = Date.now();
 
@@ -198,6 +206,40 @@ export async function runGenerationCommand(context: vscode.ExtensionContext, res
 			}
 		},
 	);
+}
+
+/**
+ * A run without a linked interpreter: asks the same question the project editor
+ * asks when opening such a project (see python.ts#ensurePythonLinked) — but
+ * here with the buttons that answer it, writes the choice into the project file
+ * and hands back the updated project so the run can carry on.
+ *
+ * @returns The project including the link, or `null` if the user declined.
+ */
+async function linkInterpreterForRun(uri: vscode.Uri, project: Project): Promise<Project | null> {
+	const selectLabel = vscode.l10n.t('Select Interpreter');
+	const choice = await vscode.window.showErrorMessage(
+		vscode.l10n.t('This test data project has no linked Python interpreter yet. Select one now?'),
+		selectLabel,
+		vscode.l10n.t('Cancel'),
+	);
+	if (choice !== selectLabel) {
+		return null;
+	}
+	const link = await pickPythonInterpreter();
+	if (!link) {
+		return null;
+	}
+
+	// Write it into the project file the same way the editor does — through the
+	// document, so an open custom editor picks the change up instead of being
+	// overwritten behind its back.
+	const updated: Project = { ...project, python: link };
+	const document = await vscode.workspace.openTextDocument(uri);
+	const edit = new vscode.WorkspaceEdit();
+	edit.replace(document.uri, fullDocumentRange(document), serializeProject(updated));
+	await vscode.workspace.applyEdit(edit);
+	return updated;
 }
 
 /** Project URI of the active editor tab, if a .tdproject is open there (invocation via the Command Palette). */

@@ -24,8 +24,8 @@ Kardinalitäten interessiert, findet sie im Schwesterprojekt
 - die **Dokument-Vorschau** in den Struktur-Tabs zeigt das fertige JSON bzw.
   XML, ohne dass ein Lauf nötig wäre
 - die **Datei-Vorschau** über den Play-Knopf im Table Editor erzeugt 20
-  Datensätze und öffnet die Datei als ungespeicherten Editor — für jeden
-  Dateityp außer Excel, das als Binärdatei nicht sinnvoll darstellbar ist
+  Datensätze und öffnet die Datei schreibgeschützt — für jeden Dateityp außer
+  Excel, das als Binärdatei nicht sinnvoll darstellbar ist
 - der Tab **Satzaufbau** von `zahlungsavis` rechnet Startpositionen und
   Satzlänge aus den Feldbreiten aus
 - die beiden `.filegen`-Dateien öffnen sich als **Notebook** mit

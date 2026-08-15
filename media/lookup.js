@@ -25,6 +25,7 @@
 		el,
 		bindText,
 		debounce,
+		keepTabScroll,
 		renderTextField: renderTextFieldCommon,
 		renderLabeledMarkdownField,
 		renderErrorState,
@@ -96,6 +97,9 @@
 	}
 
 	function render() {
+		// Before the rebuild: an update from the extension host must not throw
+		// the reader back to the top of a long list (see keepTabScroll).
+		const restoreScroll = keepTabScroll(app, activeTab);
 		app.innerHTML = '';
 		pendingColumnSizing = null;
 		if (!strings) {
@@ -112,6 +116,7 @@
 		app.appendChild(renderTabs());
 		content.appendChild(activeTab === 'overview' ? renderOverviewTab() : renderValuesTab());
 		app.appendChild(content);
+		restoreScroll(content);
 
 		// Only now (with the table in the real DOM) can the width actually
 		// needed per column be measured — see renderValuesTab.
@@ -190,6 +195,7 @@
 			},
 			postEditDebounced,
 			postEdit,
+			(target) => vscode.postMessage({ type: 'openRelative', target }),
 		);
 	}
 
@@ -668,11 +674,21 @@
 				}
 				render();
 				break;
-			case 'update':
+			case 'update': {
+				// Second line of defence against our own edit coming back (as in
+				// table.js): identical state means there is nothing to redraw —
+				// and tearing the grid down would cost the focused cell its
+				// cursor, which is exactly what happens right after "Add row".
+				const before = JSON.stringify(state);
+				const hadError = !!parseError;
 				parseError = null;
 				state = message.lookup;
+				if (!hadError && JSON.stringify(state) === before) {
+					break;
+				}
 				render();
 				break;
+			}
 			case 'parseError':
 				parseError = message.message;
 				render();

@@ -24,6 +24,8 @@
 		bindText,
 		debounce,
 		markdownToPlainText,
+		renderMarkdownText,
+		keepTabScroll,
 		renderMarkdownField,
 		renderTextField: renderTextFieldCommon,
 		renderLabeledMarkdownField,
@@ -343,6 +345,9 @@
 	);
 
 	function render() {
+		// Before the rebuild: an update from the extension host must not throw
+		// the reader back to the top of a long description (see keepTabScroll).
+		const restoreScroll = keepTabScroll(app, activeTab);
 		app.innerHTML = '';
 		deferredRender.clearPending();
 		pendingColumnSizing = null;
@@ -360,12 +365,23 @@
 		app.appendChild(renderTabs());
 		content.appendChild(renderActiveTab());
 		app.appendChild(content);
+		restoreScroll(content);
 
 		// Only now (with the table in the real DOM) can the width actually
 		// needed per column be measured — see renderColumnsTab.
 		if (pendingColumnSizing) {
 			pendingColumnSizing();
 		}
+	}
+
+	/**
+	 * Opens a file linked relatively from a description (see
+	 * renderMarkdownInline in common.js) — only the extension host can resolve
+	 * the path against this `.td` file and report a missing target.
+	 * @param {string} target
+	 */
+	function openRelativeLink(target) {
+		vscode.postMessage({ type: 'openRelative', target });
 	}
 
 	// ---------------------------------------------------------------------
@@ -471,6 +487,7 @@
 				},
 				postEditDebounced,
 				postEdit,
+				openRelativeLink,
 			),
 		);
 		stack.appendChild(section);
@@ -2080,7 +2097,7 @@
 		const thGen = el('th', { className: 'col-generator', text: strings.generatorColumnHeader });
 		headRow.appendChild(thGen);
 
-		headRow.appendChild(el('th', { className: 'col-actions col-actions-wide' }));
+		headRow.appendChild(el('th', { className: 'col-actions col-actions-wide col-actions-columns' }));
 		headRow.appendChild(el('th', { className: 'col-spacer' }));
 		thead.appendChild(headRow);
 		table.appendChild(thead);
@@ -2173,7 +2190,13 @@
 				},
 				postEditDebounced,
 				postEdit,
-				{ autoGrow: true, rows: 1, ariaLabel: strings.colHeaderDescription, gridCell: true },
+				{
+					autoGrow: true,
+					rows: 1,
+					ariaLabel: strings.colHeaderDescription,
+					gridCell: true,
+					onOpenLink: openRelativeLink,
+				},
 			),
 		);
 		row.appendChild(descTd);
@@ -2225,8 +2248,9 @@
 		row.appendChild(fkTd);
 		row.appendChild(genCell.element);
 
-		const actionsTd = el('td', { className: 'col-actions col-actions-wide' });
+		const actionsTd = el('td', { className: 'col-actions col-actions-wide col-actions-columns' });
 		const actions = el('div', { className: 'row-actions' });
+		actions.appendChild(genCell.pencil);
 		actions.appendChild(
 			renderRowActionButton('chevron-up', strings.moveColumnUpLabel, () => moveColumn(index, -1), {
 				disabled: index === 0,
@@ -2402,10 +2426,13 @@
 		});
 
 		wrap.appendChild(wrapSelectWithChevron(select));
-		wrap.appendChild(pencil);
 
 		rebuild();
-		return { element: td, refresh, rebuild };
+		// The pencil belongs to this cell in meaning, but is rendered with the
+		// row actions (see renderColumnRow): only that column sticks to the
+		// right edge of the grid, so the button stays reachable on wide tables
+		// instead of scrolling out of sight with the generator column.
+		return { element: td, pencil, refresh, rebuild };
 	}
 
 	/** Tears down an open parameter dialog (at most one at a time); `true` keeps the changes, otherwise they are discarded. @type {((keepChanges?: boolean) => void) | null} */
@@ -2471,7 +2498,10 @@
 		dialog.appendChild(titleRow);
 
 		if (option.description) {
-			dialog.appendChild(el('p', { className: 'hint param-dialog-desc', text: option.description }));
+			// A custom generator documents itself in markdown (the same text the
+			// picker shows as a tooltip) — rendered, not raw, so its paragraphs
+			// and lists stay readable instead of collapsing into one blob.
+			dialog.appendChild(renderMarkdownText('hint param-dialog-desc md-preview', option.description));
 		}
 
 		/** Refill callbacks of the `column` parameter selects, invoked when their bound parameter changes. @type {(() => void)[]} */
@@ -2496,7 +2526,7 @@
 			field.appendChild(label);
 			field.appendChild(renderParamControl(parameter));
 			if (parameter.description) {
-				field.appendChild(el('p', { className: 'hint param-hint', text: parameter.description }));
+				field.appendChild(renderMarkdownText('hint param-hint md-preview', parameter.description));
 			}
 			dialog.appendChild(field);
 		}

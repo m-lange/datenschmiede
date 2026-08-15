@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import { createEmptyTable } from '../model';
 import { serializeTable } from '../toml';
 import { TableEditorProvider } from '../editorProvider';
-import { fileExists, resolveTargetFolder } from '../../util';
-import { encodeUtf8 } from '../../encoding';
+import { fileExists, resolveTargetFolder, validateNewFileName, writeNewFile } from '../../util';
 
 /**
  * "New Table…" command: creates a new .td file containing an empty skeleton and
@@ -22,7 +21,7 @@ export async function newTableCommand(target?: vscode.Uri): Promise<void> {
 		title: vscode.l10n.t('New Table'),
 		prompt: vscode.l10n.t('Table name'),
 		placeHolder: 'customers',
-		validateInput: (value) => (value.trim() ? undefined : vscode.l10n.t('The name must not be empty.')),
+		validateInput: validateNewFileName,
 	});
 	if (!input) {
 		return;
@@ -38,7 +37,9 @@ export async function newTableCommand(target?: vscode.Uri): Promise<void> {
 
 	const tableName = fileName.replace(/\.td$/, '');
 	const content = serializeTable(createEmptyTable(tableName));
-	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
+	if (!(await writeNewFile(fileUri, content))) {
+		return;
+	}
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, TableEditorProvider.viewType);
 }

@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import { createEmptyProject } from '../model';
 import { serializeProject } from '../toml';
 import { ProjectEditorProvider } from '../editorProvider';
-import { fileExists, resolveTargetFolder } from '../../util';
-import { encodeUtf8 } from '../../encoding';
+import { fileExists, resolveTargetFolder, validateNewFileName, writeNewFile } from '../../util';
 
 /**
  * "New Test Data Project…" command: creates a new .tdproject file containing an
@@ -23,7 +22,7 @@ export async function newProjectCommand(target?: vscode.Uri): Promise<void> {
 		title: vscode.l10n.t('New Test Data Project'),
 		prompt: vscode.l10n.t('Project name'),
 		placeHolder: 'sales-reporting-demo',
-		validateInput: (value) => (value.trim() ? undefined : vscode.l10n.t('The name must not be empty.')),
+		validateInput: validateNewFileName,
 	});
 	if (!input) {
 		return;
@@ -39,7 +38,9 @@ export async function newProjectCommand(target?: vscode.Uri): Promise<void> {
 
 	const projectName = fileName.replace(/\.tdproject$/, '');
 	const content = serializeProject(createEmptyProject(projectName));
-	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
+	if (!(await writeNewFile(fileUri, content))) {
+		return;
+	}
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, ProjectEditorProvider.viewType);
 }

@@ -2,7 +2,10 @@ import * as vscode from 'vscode';
 import { parseTableText } from '../toml';
 import { runTablePreview } from '../preview';
 import { tableLabel } from '../repository';
-import { isCustomFormat } from '../../filegen/model';
+import { Table, outputExtension } from '../model';
+import { setPreviewContent } from '../previewDocument';
+import { customFormatName, isCustomFormat } from '../../filegen/model';
+import { toFileGeneratorOptions } from '../../filegen/repository';
 import { WorkspaceIndex } from '../../workspaceIndex';
 
 /**
@@ -63,11 +66,29 @@ export async function previewFileCommand(
 		return;
 	}
 
-	const preview = await vscode.workspace.openTextDocument({
-		content: result.text,
-		language: previewLanguage(format),
-	});
+	// A virtual, read-only document rather than an untitled one: a preview is
+	// throwaway, and an untitled editor would ask whether to save it on closing
+	// (see table/previewDocument.ts).
+	const table = parseTableText(document.getText());
+	const previewUri = setPreviewContent(await previewFileName(table, format, index), result.text);
+	const preview = await vscode.workspace.openTextDocument(previewUri);
+	await vscode.languages.setTextDocumentLanguage(preview, previewLanguage(format));
 	await vscode.window.showTextDocument(preview, { preview: false });
+}
+
+/**
+ * Name of the preview tab: the table's logical name plus the extension the run
+ * would really write (`.txt` for fixed length, the declared one for a custom
+ * file generator) — so the preview announces what it is a preview *of*.
+ */
+async function previewFileName(table: Table, format: string, index: WorkspaceIndex): Promise<string> {
+	const name = (table.schema.trim() ? `${table.schema.trim()}.` : '') + (table.name.trim() || 'preview');
+	let extension = outputExtension(format);
+	if (isCustomFormat(format)) {
+		const options = toFileGeneratorOptions((await index.snapshot()).fileGenerators);
+		extension = options.find((option) => option.name === customFormatName(format))?.extension ?? '';
+	}
+	return `${name}.${extension || 'txt'}`;
 }
 
 /** One entry of the table quick pick — carries the `.td` file it stands for. */

@@ -7,6 +7,7 @@ import { FileGeneratorNotebook } from './filegen/notebook';
 import { WorkspaceDiagnostics } from './diagnostics';
 import { newTableCommand } from './table/commands/newTable';
 import { previewFileCommand } from './table/commands/previewFile';
+import { registerPreviewDocuments } from './table/previewDocument';
 import { newProjectCommand } from './project/commands/newProject';
 import { newLookupCommand } from './lookup/commands/newLookup';
 import { newGeneratorCommand } from './generator/commands/newGenerator';
@@ -60,7 +61,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		),
 	);
 	// Play button in the table editor's title bar — mirrors the project
-	// editor's run button (see contributes.menus in package.json).
+	// editor's run button (see contributes.menus in package.json). Its result
+	// opens as a virtual, read-only document (see table/previewDocument.ts).
+	context.subscriptions.push(registerPreviewDocuments());
 	context.subscriptions.push(
 		vscode.commands.registerCommand('datenschmiede.previewFile', (resource?: vscode.Uri) =>
 			previewFileCommand(context, index, resource),

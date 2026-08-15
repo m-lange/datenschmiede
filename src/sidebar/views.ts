@@ -233,8 +233,22 @@ class SchemaView extends IndexView<SchemaNode> {
 			: vscode.l10n.t('No table definitions in this workspace.');
 	}
 
+	/**
+	 * The current node for an element handed back by the tree. Every build()
+	 * creates fresh node objects, but VS Code keeps the ones it was given for
+	 * already expanded rows and passes those back — reading label or children
+	 * off them would show the state from before the last refresh (a renamed
+	 * schema kept its old name, a whole namespace disappeared until it was
+	 * collapsed and expanded again). The id survives a rebuild, so it leads to
+	 * the current object.
+	 */
+	private current(element: SchemaNode): SchemaNode {
+		return this.nodes.get(element.id) ?? element;
+	}
+
 	protected childrenOf(element: SchemaNode): SchemaNode[] {
-		return element.kind === 'schema' ? element.children : [];
+		const node = this.current(element);
+		return node.kind === 'schema' ? node.children : [];
 	}
 
 	/**
@@ -298,20 +312,23 @@ class SchemaView extends IndexView<SchemaNode> {
 	}
 
 	public getTreeItem(element: SchemaNode): vscode.TreeItem {
-		if (element.kind === 'schema') {
-			const item = new vscode.TreeItem(element.segment, vscode.TreeItemCollapsibleState.Expanded);
+		// Always from the current node, never from the (possibly stale) element
+		// the tree handed back — see current().
+		const node = this.current(element);
+		if (node.kind === 'schema') {
+			const item = new vscode.TreeItem(node.segment, vscode.TreeItemCollapsibleState.Expanded);
 			item.iconPath = fileIcon(this.context, 'schema');
 			item.contextValue = 'datenschmiede.schema';
-			item.id = element.id;
+			item.id = node.id;
 			return item;
 		}
-		const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-		item.resourceUri = element.uri;
-		item.tooltip = tooltipFor(element.path, element.description);
-		item.command = openCommand(element.uri);
+		const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
+		item.resourceUri = node.uri;
+		item.tooltip = tooltipFor(node.path, node.description);
+		item.command = openCommand(node.uri);
 		item.contextValue = 'datenschmiede.table';
-		item.id = element.id;
-		item.iconPath = element.valid ? fileIcon(this.context, 'td') : invalidIcon();
+		item.id = node.id;
+		item.iconPath = node.valid ? fileIcon(this.context, 'td') : invalidIcon();
 		return item;
 	}
 

@@ -20,6 +20,7 @@
 		el,
 		bindText,
 		formatDateTime,
+		keepTabScroll,
 		renderSearchField,
 		renderAutoSizeColumnsButton,
 		debounce,
@@ -40,10 +41,10 @@
 	/** @typedef {{path:string,id?:string}} PythonLink */
 	/** @typedef {{name:string,description:string,python:PythonLink|null,outputPath:string,tables:ProjectTable[]}} Project */
 	/** @typedef {{kind:'group',segment:string,children:ProjectPickerNode[]}} ProjectPickerGroupNode */
-	/** @typedef {{kind:'table',path:string,label:string,found:boolean,checked:boolean,locked:boolean,secondary:boolean,referencedTable?:string,records?:string}} ProjectPickerTableNode */
+	/** @typedef {{kind:'table',path:string,label:string,found:boolean,checked:boolean,locked:boolean,secondary:boolean,lookupDriven?:boolean,drivingLookup?:string,referencedTable?:string,records?:string}} ProjectPickerTableNode */
 	/** @typedef {ProjectPickerGroupNode | ProjectPickerTableNode} ProjectPickerNode */
 	/** @typedef {{path:string,label:string,resolved:boolean,ok:boolean}} PythonStatus */
-	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,estimatedMin?:number,estimatedMax?:number,lastRunRecords?:number,found:boolean,secondary:boolean,referencedTable?:string}} OutputFileRow */
+	/** @typedef {{path:string,label:string,fileName:string,ext:string,records?:string,estimatedMin?:number,estimatedMax?:number,lastRunRecords?:number,found:boolean,secondary:boolean,temporary?:boolean,referencedTable?:string}} OutputFileRow */
 	/** @typedef {import('../src/project/diagram').ProjectDiagram} ProjectDiagram */
 	/** @typedef {import('../src/project/webviewStrings').ProjectWebviewStrings} ProjectWebviewStrings */
 
@@ -169,6 +170,9 @@
 	const deferredRender = createDeferredRenderer(() => render());
 
 	function render() {
+		// Before the rebuild: an update from the extension host (linking an
+		// interpreter, for instance) must not jump back to the top of the page.
+		const restoreScroll = keepTabScroll(app, activeTab);
 		app.innerHTML = '';
 		deferredRender.clearPending();
 		pendingColumnSizing = null;
@@ -188,6 +192,7 @@
 			activeTab === 'overview' ? renderOverviewTab() : activeTab === 'tables' ? renderTablesTab() : renderDiagramTab(),
 		);
 		app.appendChild(content);
+		restoreScroll(content);
 
 		// Only now (with the tree table in the real DOM) can the width actually
 		// needed per column be measured — see renderTablesTree.
@@ -519,10 +524,15 @@
 			tr.appendChild(el('td', { className: 'col-desc path-cell', text: row.path }));
 
 			const fileNameTd = el('td', { className: 'col-desc' });
-			if (row.found) {
-				fileNameTd.appendChild(renderFileNamePreview(row.fileName, row.ext));
-			} else {
+			if (!row.found) {
 				fileNameTd.appendChild(el('span', { className: 'missing-file-note', text: strings.tablesMissingFileText }));
+			} else if (row.temporary) {
+				// The temporary file type generates records for other tables to
+				// read, but writes nothing — a file name would be a promise the
+				// run does not keep.
+				fileNameTd.appendChild(el('span', { className: 'records-lookup-note', text: strings.outputFilesTemporaryText }));
+			} else {
+				fileNameTd.appendChild(renderFileNamePreview(row.fileName, row.ext));
 			}
 			tr.appendChild(fileNameTd);
 
@@ -613,6 +623,7 @@
 			},
 			postEditDebounced,
 			postEdit,
+			(target) => vscode.postMessage({ type: 'openRelative', target }),
 		);
 	}
 
@@ -1204,21 +1215,38 @@
 		} else if (!node.checked) {
 			// Noch nicht Teil des Projekts -> keine Datensatzanzahl relevant.
 		} else {
-			// The icon in front of the input marks the kind of table: primary (a
-			// fixed total) vs. referenced/secondary (a count per record of the
-			// referenced table, possibly a range — see renderRecordsInput).
-			const iconTitle = node.secondary
-				? strings.tablesReferencedIconTooltip.replace('{0}', node.referencedTable || '')
-				: strings.tablesPrimaryIconTooltip;
-			const icon = el('i', {
-				className: `codicon ${node.secondary ? 'codicon-references' : 'codicon-table'} records-type-icon`,
-			});
+			// The icon in front of the value marks the kind of table: primary (a
+			// fixed total), referenced/secondary (a count per record of the
+			// referenced table, possibly a range — see renderRecordsInput) or led
+			// by a lookup list (nothing to enter, the list decides).
+			const iconTitle = node.lookupDriven
+				? strings.tablesLookupIconTooltip.replace('{0}', node.drivingLookup || '')
+				: node.secondary
+					? strings.tablesReferencedIconTooltip.replace('{0}', node.referencedTable || '')
+					: strings.tablesPrimaryIconTooltip;
+			const iconName = node.lookupDriven
+				? 'codicon-list-selection'
+				: node.secondary
+					? 'codicon-references'
+					: 'codicon-table';
+			const icon = el('i', { className: `codicon ${iconName} records-type-icon` });
 			icon.title = iconTitle;
 			icon.setAttribute('role', 'img');
 			icon.setAttribute('aria-label', iconTitle);
 			const wrap = el('span', { className: 'records-cell-row' });
 			wrap.appendChild(icon);
-			wrap.appendChild(renderRecordsInput(node));
+			if (node.lookupDriven) {
+				// The list length is the record count — an input (let alone an
+				// empty-is-an-error one) would only pretend there was a choice.
+				const note = el('span', {
+					className: 'records-lookup-note',
+					text: strings.tablesLookupDrivenText.replace('{0}', node.drivingLookup || ''),
+				});
+				note.title = iconTitle;
+				wrap.appendChild(note);
+			} else {
+				wrap.appendChild(renderRecordsInput(node));
+			}
 			recordsTd.appendChild(wrap);
 		}
 		tr.appendChild(recordsTd);

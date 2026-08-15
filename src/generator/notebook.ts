@@ -84,6 +84,8 @@ interface Kernel {
 	pending: Map<number, (reply: KernelReply) => void>;
 	nextId: number;
 	buffer: string;
+	/** Cells executed in this kernel so far — the counter behind the `[n]` badge next to a cell. */
+	executions: number;
 }
 
 /** One reply line of the kernel protocol (see python/notebook_kernel.py). */
@@ -160,7 +162,7 @@ class GeneratorNotebookController implements vscode.Disposable {
 		}
 		const scriptPath = vscode.Uri.joinPath(this.context.extensionUri, 'python', 'notebook_kernel.py').fsPath;
 		const child = spawn(interpreter.path, [scriptPath], { env: pythonEnv() });
-		const kernel: Kernel = { child, pending: new Map(), nextId: 1, buffer: '' };
+		const kernel: Kernel = { child, pending: new Map(), nextId: 1, buffer: '', executions: 0 };
 		const decodeStdout = createStreamDecoder();
 
 		child.stdout.on('data', (chunk: Buffer) => {
@@ -205,7 +207,6 @@ class GeneratorNotebookController implements vscode.Disposable {
 	private async execute(cells: vscode.NotebookCell[], notebook: vscode.NotebookDocument): Promise<void> {
 		for (const cell of cells) {
 			const execution = this.controller.createNotebookCellExecution(cell);
-			execution.executionOrder = Date.now() % 100000;
 			execution.start(Date.now());
 			void execution.clearOutput();
 
@@ -222,6 +223,11 @@ class GeneratorNotebookController implements vscode.Disposable {
 				execution.end(false, Date.now());
 				continue;
 			}
+
+			// Counted per kernel, as in Jupyter: the badge next to the cell says
+			// in which order the cells ran, and a restarted kernel starts at 1
+			// again (its Python state is gone with it).
+			execution.executionOrder = ++kernel.executions;
 
 			const role = (cell.metadata?.[ROLE_KEY] as string | undefined) ?? 'extra';
 			const reply = await new Promise<KernelReply>((resolve) => {

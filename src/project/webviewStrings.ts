@@ -54,6 +54,8 @@ export interface ProjectWebviewStrings {
 	outputFilesColRecords: string;
 	/** Suffix after a referenced table's record count; `{0}` = referenced table. */
 	outputFilesPerRecordSuffix: string;
+	/** Shown instead of a file name for the temporary file type, which writes no file. */
+	outputFilesTemporaryText: string;
 	outputFilesEmptyText: string;
 
 	/** requirements.txt with the extra Python packages this project's generators need. */
@@ -101,6 +103,13 @@ export interface ProjectWebviewStrings {
 	 * replace.
 	 */
 	tablesReferencedIconTooltip: string;
+	/**
+	 * Tooltip of the icon in front of a lookup-driven table, whose record count
+	 * the leading list decides; `{0}` = list name.
+	 */
+	tablesLookupIconTooltip: string;
+	/** Shown instead of the records field for a lookup-driven table; `{0}` = list name. */
+	tablesLookupDrivenText: string;
 	tablesMissingFileText: string;
 	tablesInvalidTitle: string;
 	tablesOpenFileLabel: string;
@@ -161,6 +170,7 @@ const en: ProjectWebviewStrings = {
 	outputFilesColFileName: 'File name',
 	outputFilesColRecords: 'Records',
 	outputFilesPerRecordSuffix: 'per record of {0}',
+	outputFilesTemporaryText: 'no file — temporary table',
 	outputFilesEmptyText: 'No tables selected yet — pick tables in the Tables tab.',
 
 	requirementsLabel: 'Additional Python packages',
@@ -198,6 +208,9 @@ const en: ProjectWebviewStrings = {
 	tablesPrimaryIconTooltip: 'Primary table — enter the total number of records to generate.',
 	tablesReferencedIconTooltip:
 		'Referenced table — enter how many records to generate per record of {0}: a number (e.g. 5) or a range (e.g. 1..3).',
+	tablesLookupIconTooltip:
+		'Led by the lookup list {0} — it generates exactly one record per list row, so there is nothing to enter here.',
+	tablesLookupDrivenText: 'from the list {0}',
 	tablesMissingFileText: 'File not found — it may have been deleted, renamed, or moved.',
 	tablesInvalidTitle: 'This file contains invalid TOML and cannot be selected.',
 	tablesOpenFileLabel: 'Open file',
@@ -257,6 +270,7 @@ const de: ProjectWebviewStrings = {
 	outputFilesColFileName: 'Dateiname',
 	outputFilesColRecords: 'Datensätze',
 	outputFilesPerRecordSuffix: 'je Datensatz von {0}',
+	outputFilesTemporaryText: 'keine Datei — temporäre Tabelle',
 	outputFilesEmptyText: 'Noch keine Tabellen ausgewählt — Auswahl im Tabellen-Tab.',
 
 	requirementsLabel: 'Zusätzliche Python-Pakete',
@@ -294,6 +308,9 @@ const de: ProjectWebviewStrings = {
 	tablesPrimaryIconTooltip: 'Primäre Tabelle — Gesamtanzahl der zu erzeugenden Datensätze eingeben.',
 	tablesReferencedIconTooltip:
 		'Referenzierte Tabelle — Anzahl der zu erzeugenden Datensätze je Datensatz von {0} eingeben: Zahl (z. B. 5) oder Bereich (z. B. 1..3).',
+	tablesLookupIconTooltip:
+		'Wird von der Nachschlageliste {0} geführt — sie erzeugt genau einen Datensatz je Listenzeile, hier ist deshalb nichts einzugeben.',
+	tablesLookupDrivenText: 'aus der Liste {0}',
 	tablesMissingFileText: 'Datei nicht gefunden — sie wurde möglicherweise gelöscht, umbenannt oder verschoben.',
 	tablesInvalidTitle: 'Diese Datei enthält kein gültiges TOML und kann nicht ausgewählt werden.',
 	tablesOpenFileLabel: 'Datei öffnen',

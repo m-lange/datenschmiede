@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 import { LookupList } from './model';
 import { parseLookupText, serializeLookup } from './csv';
 import { ParseError } from '../tomlUtil';
-import { fullDocumentRange, getNonce } from '../util';
+import { fullDocumentRange, getNonce, openRelativeLink } from '../util';
 import { getLookupWebviewStrings } from './webviewStrings';
 
 type WebviewToExtensionMessage =
 	| { type: 'ready' }
 	| { type: 'edit'; lookup: LookupList }
+	// A relative file link in the description (see openRelativeLink in util.ts).
+	| { type: 'openRelative'; target: string }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { lookup: LookupList } | { error: unknown };
 
@@ -109,6 +111,10 @@ export class LookupEditorProvider implements vscode.CustomTextEditorProvider, vs
 						selfEditsPending = Math.max(0, selfEditsPending - 1);
 						lastQueuedText = null;
 					}
+					break;
+				}
+				case 'openRelative': {
+					await openRelativeLink(document.uri, message.target);
 					break;
 				}
 				case 'columnWidths': {

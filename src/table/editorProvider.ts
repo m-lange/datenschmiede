@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Table } from './model';
 import { parseTableText, serializeTable } from './toml';
 import { ParseError } from '../tomlUtil';
-import { fullDocumentRange, getNonce } from '../util';
+import { fullDocumentRange, getNonce, openRelativeLink } from '../util';
 import { getWebviewStrings } from './webviewStrings';
 import { TableOption, toTableOptions } from './repository';
 import { GeneratorBase } from '../generator/base';
@@ -22,6 +22,8 @@ type WebviewToExtensionMessage =
 	// `mode` decides which dialog the webview opens with the result: the value
 	// grid (columns tab) or the rendered JSON/XML document (mapping tab).
 	| { type: 'preview'; mode?: 'grid' | 'document' }
+	// A relative file link in a description (see openRelativeLink in util.ts).
+	| { type: 'openRelative'; target: string }
 	| { type: 'columnWidths'; columnWidths: Record<string, number> };
 type ParsedDocument = { table: Table } | { error: unknown };
 
@@ -254,6 +256,10 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					} else {
 						void webviewPanel.webview.postMessage({ type: 'previewDone', mode });
 					}
+					break;
+				}
+				case 'openRelative': {
+					await openRelativeLink(document.uri, message.target);
 					break;
 				}
 				case 'columnWidths': {

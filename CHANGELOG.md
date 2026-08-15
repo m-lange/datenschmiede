@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.1
+
+Eine Reihe von Korrekturen aus einem Durchlauf durch die gesamte Oberfläche:
+Die Übersicht „Generierte Dateien“ zeigt jetzt die Endung, die der Lauf
+wirklich schreibt (`.txt` statt `.fixed`, die des Dateigenerators statt
+`custom:…`, und bei einer temporären Tabelle den Hinweis, dass keine Datei
+entsteht); eine Tabelle mit führender Nachschlageliste nennt im Tab
+**Tabellen** die Liste, statt ihr leeres Anzahl-Feld rot als Fehler zu
+markieren; Beschreibungen rendern Markdown-Tabellen und relative Links auf
+Nachbardateien, die sich anklicken lassen; der Parameter-Dialog zeigt die
+Dokumentation eines Generators gerendert statt als Rohtext; ein Lauf ohne
+verknüpften Interpreter bietet die Auswahl direkt an, statt nur zu melden;
+die Zeilenaktionen (samt Stift für die Generator-Parameter) bleiben beim
+seitlichen Scrollen am rechten Rand stehen; die Datei-Vorschau öffnet
+schreibgeschützt und fragt beim Schließen nicht mehr nach dem Speichern; die
+Zellen eines Generator-Notebooks zählen wieder von 1 aufwärts; neue Dateien
+lehnen unzulässige Namen mit einer Meldung ab, statt am Dateisystem zu
+scheitern; die Schema-Ansicht zeigt nach einer Änderung von außen wieder den
+aktuellen Stand; und die Editoren behalten ihre Scrollposition, wenn eine
+Änderung von außen eintrifft.
+
 ## 0.11.0
 
 Generator-Parameter dürfen jetzt statt eines festen Werts andere Spalten

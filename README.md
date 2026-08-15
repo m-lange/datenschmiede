@@ -123,8 +123,8 @@ punktgetrennten Segmente des `schema`-Felds), darunter die Tabellen,
 darunter deren Spalten. Ausgewählt wird eine **Spalte**, womit Ziel-Tabelle
 und Ziel-Spalte in einem Schritt feststehen; die eigene Tabelle steht nicht
 zur Auswahl. Bricht man ab, ohne ein Ziel zu wählen, wird die Checkbox
-wieder abgewählt. Geändert wird die Beziehung später über den **Stift neben
-dem Spaltengenerator**, und der Fremdschlüssel-Generator zeigt das Ziel in
+wieder abgewählt. Geändert wird die Beziehung später über den **Stift in den
+Zeilenaktionen**, und der Fremdschlüssel-Generator zeigt das Ziel in
 seiner Anzeige (`Fremdschlüssel → shop.core.customers.id`).
 
 Es gibt zwei Vorschauen, beide über denselben Python-Läufer wie der echte
@@ -136,9 +136,10 @@ Lauf und beide mit 20 Datensätzen inklusive aller referenzierten Tabellen:
   Datei-Vorschau“**, Tastenkürzel <kbd>Strg</kbd>+<kbd>F5</kbd>,
   an derselben Stelle wie der Run-Knopf des Projekt-Editors) erzeugt die
   **fertige Datei** — für *jeden* Dateityp,
-  auch CSV — und öffnet sie als **neuen, ungespeicherten Editor**. Damit
-  lässt sich das Ergebnis lesen, durchsuchen und kopieren wie jede andere
-  Datei; geschrieben wird nichts. Excel entfällt hier, da eine Binärdatei
+  auch CSV — und öffnet sie als **schreibgeschützten Vorschau-Editor**,
+  benannt nach der Datei, die der Lauf schreiben würde. Damit lässt sich das
+  Ergebnis lesen, durchsuchen und kopieren wie jede andere Datei; geschrieben
+  wird nichts, und beim Schließen fragt nichts nach dem Speichern. Excel entfällt hier, da eine Binärdatei
   sich nicht als Text anzeigen lässt
 
 Derselbe Befehl funktioniert auch aus der Befehlspalette heraus, ohne dass
@@ -246,7 +247,7 @@ bzw. verwerfen eine flache Struktur mit einem Blatt je Spalte. Ohne
 festgelegte Struktur wird genau diese flache Form geschrieben — ein
 Wechsel auf JSON/XML liefert also sofort brauchbare Ausgabe. Die **Datei-Vorschau** (Play-Knopf in der
 Titelleiste) erzeugt 20 Datensätze und öffnet das fertige JSON- bzw.
-XML-Dokument als ungespeicherten Editor.
+XML-Dokument als schreibgeschützten Vorschau-Editor.
 
 Der Dateityp entscheidet, welche Struktur gilt: JSON und XML halten ihre
 eigene, sodass ein Wechsel zwischen beiden nichts überschreibt.
@@ -345,9 +346,11 @@ ihre Werte erzeugt. Eingebaut sind (je einer pro Datei unter
   Projekts die Datensatzanzahl
 
 Ohne Generator greift ein sinnvoller Standard je Datentyp (laufende Nummer,
-UUID4, Zufallsdatum, …). Der **Stift** neben der Auswahl öffnet einen
-Parameter-Dialog mit je Parametertyp passendem Eingabefeld; die Zelle zeigt
-danach den Anzeige-Text der Konfiguration (z. B. `Random Int: 1 … 100`).
+UUID4, Zufallsdatum, …). Der **Stift** in den Zeilenaktionen am rechten Rand
+öffnet einen Parameter-Dialog mit je Parametertyp passendem Eingabefeld; die
+Zelle zeigt danach den Anzeige-Text der Konfiguration (z. B.
+`Random Int: 1 … 100`). Die Aktionsspalte bleibt beim seitlichen Scrollen
+stehen, damit sie auch bei vielen Spalten erreichbar ist.
 
 ### Parameter aus anderen Spalten (`{spalte}`)
 

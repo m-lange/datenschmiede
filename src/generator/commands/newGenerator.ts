@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import { createEmptyGeneratorFile } from '../model';
 import { serializeGenerator } from '../toml';
 import { GENERATOR_NOTEBOOK_TYPE } from '../notebook';
-import { fileExists, resolveTargetFolder } from '../../util';
-import { encodeUtf8 } from '../../encoding';
+import { fileExists, resolveTargetFolder, validateNewFileName, writeNewFile } from '../../util';
 
 /**
  * "New Generator…" command: creates a new .tdgen file with a skeleton (example
@@ -23,7 +22,7 @@ export async function newGeneratorCommand(target?: vscode.Uri): Promise<void> {
 		title: vscode.l10n.t('New Generator'),
 		prompt: vscode.l10n.t('Generator name'),
 		placeHolder: 'my_generator',
-		validateInput: (value) => (value.trim() ? undefined : vscode.l10n.t('The name must not be empty.')),
+		validateInput: validateNewFileName,
 	});
 	if (!input) {
 		return;
@@ -39,7 +38,9 @@ export async function newGeneratorCommand(target?: vscode.Uri): Promise<void> {
 
 	const generatorName = fileName.replace(/\.tdgen$/, '');
 	const content = serializeGenerator(createEmptyGeneratorFile(generatorName));
-	await vscode.workspace.fs.writeFile(fileUri, encodeUtf8(content));
+	if (!(await writeNewFile(fileUri, content))) {
+		return;
+	}
 
 	await vscode.commands.executeCommand('vscode.openWith', fileUri, GENERATOR_NOTEBOOK_TYPE);
 }

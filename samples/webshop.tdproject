@@ -24,7 +24,7 @@ das vorab aus und stellt es neben die Zahlen des letzten Laufs.
 
 **Was sich hier ausprobieren lässt**
 
-- der **Run-Knopf** in der Editor-Titelleiste (oder <kbd>Strg</kbd>+<kbd>F5</kbd>)
+- der **Run-Knopf** in der Editor-Titelleiste (oder `Strg`+`F5`)
   erzeugt alle Dateien im Ausgabeordner `output/webshop_{date}` — mit
   Fortschrittsanzeige und abbrechbar
 - der Tab **ER-Diagramm** zeigt die Beziehungen spaltengenau, mit der
@@ -35,7 +35,7 @@ das vorab aus und stellt es neben die Zahlen des letzten Laufs.
   wird `shop.core.adressen` automatisch mitgezogen, weil ein Generator der
   Bestellungen daraus liest
 - die **Datei-Vorschau** im Table Editor erzeugt 20 Datensätze und öffnet
-  die fertige Datei als ungespeicherten Editor — ganz ohne Projektlauf
+  die fertige Datei schreibgeschützt — ganz ohne Projektlauf
 
 **Voraussetzungen**: ein verknüpfter Python-Interpreter (Übersicht-Tab) und
 die Pakete aus [`requirements.txt`](requirements.txt). Fehlt eines davon,

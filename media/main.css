@@ -316,6 +316,30 @@ select.has-chevron:disabled ~ .select-chevron {
 	color: var(--vscode-textLink-activeForeground);
 }
 
+/* Tabelle in einer Beschreibung (siehe renderMarkdownTable in common.js).
+   Bewusst kompakt und ohne Außenrahmen — sie steht im Fließtext einer
+   Beschreibung, nicht als eigenes Grid. */
+.md-preview .md-table {
+	border-collapse: collapse;
+	margin: 0.5em 0;
+	/* Eine breite Tabelle scrollt nicht selbst (sie steckt im Textfluss), sie
+	   bleibt aber innerhalb ihres Bereichs und sprengt ihn nicht. */
+	max-width: 100%;
+}
+
+.md-preview .md-table th,
+.md-preview .md-table td {
+	border: 1px solid var(--card-border);
+	padding: 3px 8px;
+	text-align: left;
+	vertical-align: top;
+}
+
+.md-preview .md-table th {
+	background-color: var(--vscode-keybindingTable-headerBackground, var(--vscode-editorWidget-background));
+	font-weight: 600;
+}
+
 textarea.md-editor {
 	/* Höhe wird per JS an den Inhalt angepasst (autoGrowCellTextarea) —
 	   ein manueller Ziehgriff würde damit kollidieren. */
@@ -564,11 +588,45 @@ body.col-resizing .col-resize-handle {
 	text-align: center;
 }
 
+/* Die Aktionsspalte klebt am rechten Rand des Grids: bei vielen oder breiten
+   Spalten (z. B. 21 Spalten mit Beschreibung) liegt sie sonst außerhalb des
+   sichtbaren Bereichs, und die Zeilenaktionen wären nur nach horizontalem
+   Scrollen erreichbar. Der Hintergrund muss deckend sein, damit der
+   darunter durchlaufende Inhalt nicht durchscheint. */
+.columns-table th.col-actions,
+.columns-table td.col-actions {
+	position: sticky;
+	right: 0;
+	z-index: 1;
+	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+.columns-table thead th.col-actions {
+	/* Über der Kopfzeile bleiben (die selbst schon sticky am oberen Rand ist). */
+	z-index: 2;
+	background-color: var(--vscode-keybindingTable-headerBackground, var(--vscode-editorWidget-background));
+}
+
+/* Die Zeilenmarkierung beim Überfahren muss auch in der klebenden Zelle
+   sichtbar sein — deren eigener Hintergrund würde sie sonst verdecken. Als
+   Bild-Ebene über dem deckenden Hintergrund, damit ein halbtransparentes
+   Hover-Theme nicht wieder den Inhalt darunter durchscheinen lässt. */
+.columns-table tbody tr:hover td.col-actions {
+	background-image: linear-gradient(var(--vscode-list-hoverBackground), var(--vscode-list-hoverBackground));
+}
+
 /* Aktionszelle mit mehreren Knöpfen (Table Editor: verschieben,
    aus-/einblenden, entfernen — siehe renderColumnRow in table.js). */
 .col-actions-wide {
 	width: 118px;
 	min-width: 118px;
+}
+
+/* Spalten-Grid: dort steht zusätzlich der Stift für die
+   Generator-Parameter in der Aktionsgruppe (siehe renderGeneratorCell). */
+.col-actions-columns {
+	width: 146px;
+	min-width: 146px;
 }
 
 .row-actions {
@@ -1047,6 +1105,16 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .fk-table .fk-icon {
 	flex: 0 0 auto;
 	font-size: 14px;
 	color: var(--vscode-descriptionForeground);
+}
+
+/* Statt eines Eingabefelds bei einer Tabelle mit führender Nachschlageliste:
+   die Liste bestimmt die Anzahl, hier gibt es nichts einzugeben. */
+.records-lookup-note {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .row-warning-icon {

@@ -104,8 +104,9 @@
 	 * @param {(value: string) => void} onChange
 	 * @param {() => void} commitDebounced
 	 * @param {() => void} commit
+	 * @param {(target: string) => void} [onOpenLink] Opens a relative file link of the description.
 	 */
-	function renderLabeledMarkdownField(labelText, placeholder, value, onChange, commitDebounced, commit) {
+	function renderLabeledMarkdownField(labelText, placeholder, value, onChange, commitDebounced, commit, onOpenLink) {
 		const field = el('div', { className: 'field' });
 		field.appendChild(el('label', { text: labelText }));
 		field.appendChild(
@@ -113,6 +114,7 @@
 				autoGrow: true,
 				rows: 5,
 				ariaLabel: labelText,
+				onOpenLink,
 			}),
 		);
 		return field;
@@ -181,6 +183,30 @@
 				active.tagName === 'SELECT' ||
 				/** @type {HTMLElement} */ (active).isContentEditable)
 		);
+	}
+
+	/**
+	 * Keeps the scroll position across a re-render: render() rebuilds the whole
+	 * app element, so the freshly created content area would start at the top
+	 * again — an update from the extension host (linking an interpreter, for
+	 * instance) would yank the reader back to the beginning of a long page.
+	 *
+	 * Call before emptying the app element; the returned function takes the new
+	 * content area. Only the same tab keeps its position — switching tabs is
+	 * meant to start at the top.
+	 * @param {HTMLElement} app
+	 * @param {string} activeTab
+	 * @returns {(content: HTMLElement) => void}
+	 */
+	function keepTabScroll(app, activeTab) {
+		const previous = app.querySelector('.tab-content');
+		const top = previous instanceof HTMLElement && previous.dataset.tab === activeTab ? previous.scrollTop : 0;
+		return (content) => {
+			content.dataset.tab = activeTab;
+			if (top > 0) {
+				content.scrollTop = top;
+			}
+		};
 	}
 
 	/**
@@ -261,7 +287,14 @@
 	}
 
 	/**
-	 * Inline markdown of one line: code, bold, italic and http(s)/mailto links.
+	 * Inline markdown of one line: code, bold, italic and links.
+	 *
+	 * Two kinds of link are rendered: an external one (http(s)/mailto) opens in
+	 * the browser as usual, while every other target counts as a workspace file
+	 * relative to the edited document — the descriptions of the sample files
+	 * link their neighbours that way (`[laender](../../lookups/laender.lkp)`).
+	 * A relative link has no usable href inside a webview, so it carries its
+	 * target in `data-open` and gets its click handler from bindMarkdownLinks.
 	 * @param {string} line
 	 */
 	function renderMarkdownInline(line) {
@@ -271,11 +304,36 @@
 		html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 		html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 		html = html.replace(/(^|[^\w])_([^_]+)_(?!\w)/g, '$1<em>$2</em>');
-		html = html.replace(
-			/\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^\s)]+)\)/g,
-			'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+		html = html.replace(/\[([^\]]+)\]\(([^\s)]+)\)/g, (_m, text, target) =>
+			/^(?:https?:\/\/|mailto:)/.test(target)
+				? `<a href="${target}" target="_blank" rel="noopener noreferrer">${text}</a>`
+				: `<a href="#" class="md-file-link" data-open="${target}">${text}</a>`,
 		);
 		return html;
+	}
+
+	/**
+	 * Gives the relative file links of a rendered description their behaviour:
+	 * a click asks the extension host to open the target (it alone can resolve
+	 * the path against the document and check that the file exists).
+	 * Must be called after every innerHTML assignment — the links are recreated
+	 * with the markup.
+	 * @param {HTMLElement} container
+	 * @param {(target: string) => void} onOpen
+	 */
+	function bindMarkdownLinks(container, onOpen) {
+		for (const link of container.querySelectorAll('a.md-file-link')) {
+			link.addEventListener('click', (event) => {
+				event.preventDefault();
+				// The preview of an editable description turns into its textarea
+				// on click — a link click means "open", not "edit".
+				event.stopPropagation();
+				const target = link.getAttribute('data-open');
+				if (target) {
+					onOpen(target);
+				}
+			});
+		}
 	}
 
 	/**
@@ -302,6 +360,10 @@
 		plain = plain.replace(/\[([^\]]+)\]\([^\s)]+\)/g, '$1');
 		plain = plain.replace(/^ {0,3}#{1,6}\s+/gm, '');
 		plain = plain.replace(/^ {0,3}>\s?/gm, '');
+		// Tables: the separator row carries no information without the layout,
+		// and the outer pipes only add noise — "a | b | c" stays readable.
+		plain = plain.replace(/^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$/gm, '');
+		plain = plain.replace(/^\s*\|(.*)\|\s*$/gm, '$1');
 		plain = plain.replace(/^(\s*)[-*+]\s+/gm, '$1• ');
 		plain = plain.replace(/\n{3,}/g, '\n\n');
 		plain = plain.trim();
@@ -326,6 +388,12 @@
 			return '';
 		}
 
+		// Table: at least a header and a separator row of dashes; the separator
+		// also carries the per-column alignment.
+		if (lines.length >= 2 && lines.every((line) => line.includes('|')) && /^[\s:|-]*-[\s:|-]*$/.test(lines[1])) {
+			return renderMarkdownTable(lines);
+		}
+
 		if (lines.every((line) => /^[-*]\s+/.test(line))) {
 			const items = lines.map((line) => `<li>${renderMarkdownInline(line.replace(/^[-*]\s+/, ''))}</li>`).join('');
 			return `<ul>${items}</ul>`;
@@ -336,6 +404,46 @@
 		}
 
 		return `<p>${lines.map((line) => renderMarkdownInline(line)).join('<br>')}</p>`;
+	}
+
+	/**
+	 * One markdown table: header row, separator row (`| --- | ---: |`, which
+	 * decides the alignment) and the value rows below it. Cells go through the
+	 * same inline rendering as every other text.
+	 * @param {string[]} lines
+	 */
+	function renderMarkdownTable(lines) {
+		/** Cells of one row, without the optional outer pipes. @param {string} line */
+		const cellsOf = (line) =>
+			line
+				.replace(/^\s*\|/, '')
+				.replace(/\|\s*$/, '')
+				.split('|')
+				.map((cell) => cell.trim());
+
+		const alignments = cellsOf(lines[1]).map((spec) => {
+			const left = spec.startsWith(':');
+			const right = spec.endsWith(':');
+			if (left && right) {
+				return 'center';
+			}
+			return right ? 'right' : '';
+		});
+		/** @param {string} tag @param {string[]} values */
+		const cellsHtml = (tag, values) =>
+			values
+				.map((value, index) => {
+					const align = alignments[index] ? ` style="text-align: ${alignments[index]}"` : '';
+					return `<${tag}${align}>${renderMarkdownInline(value)}</${tag}>`;
+				})
+				.join('');
+
+		const head = `<thead><tr>${cellsHtml('th', cellsOf(lines[0]))}</tr></thead>`;
+		const body = lines
+			.slice(2)
+			.map((line) => `<tr>${cellsHtml('td', cellsOf(line))}</tr>`)
+			.join('');
+		return `<table class="md-table">${head}<tbody>${body}</tbody></table>`;
 	}
 
 	/**
@@ -354,6 +462,24 @@
 	}
 
 	/**
+	 * Read-only block of rendered markdown — the counterpart to
+	 * renderMarkdownField for text that is only displayed (dialog descriptions,
+	 * parameter hints). A <div> rather than a <p>, because rendered markdown
+	 * brings its own block elements (paragraphs, lists, tables) along.
+	 * @param {string} className
+	 * @param {string} source
+	 * @param {(target: string) => void} [onOpenLink]
+	 */
+	function renderMarkdownText(className, source, onOpenLink) {
+		const block = el('div', { className });
+		block.innerHTML = renderMarkdown(source);
+		if (onOpenLink) {
+			bindMarkdownLinks(block, onOpenLink);
+		}
+		return block;
+	}
+
+	/**
 	 * Description field with markdown support: shown as rendered markdown by
 	 * default; a click (or Enter/Space) reveals a raw markdown textarea for
 	 * editing that disappears again on leaving (blur or Escape). With
@@ -367,7 +493,7 @@
 	 * @param {(value: string) => void} onChange
 	 * @param {() => void} commitDebounced
 	 * @param {() => void} commit
-	 * @param {{ autoGrow?: boolean, rows?: number, ariaLabel?: string, gridCell?: boolean }} [options]
+	 * @param {{ autoGrow?: boolean, rows?: number, ariaLabel?: string, gridCell?: boolean, onOpenLink?: (target: string) => void }} [options]
 	 */
 	function renderMarkdownField(initialValue, placeholder, onChange, commitDebounced, commit, options) {
 		const opts = options || {};
@@ -399,6 +525,9 @@
 			preview.classList.toggle('md-preview-empty', !trimmed);
 			if (trimmed) {
 				preview.innerHTML = renderMarkdown(currentValue);
+				if (opts.onOpenLink) {
+					bindMarkdownLinks(preview, opts.onOpenLink);
+				}
 			} else {
 				preview.textContent = placeholder;
 			}
@@ -1002,6 +1131,9 @@
 		autoGrowCellTextarea,
 		renderMarkdown,
 		markdownToPlainText,
+		bindMarkdownLinks,
+		keepTabScroll,
+		renderMarkdownText,
 		renderMarkdownField,
 		renderTextField,
 		renderLabeledMarkdownField,

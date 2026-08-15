@@ -1,6 +1,6 @@
 {
-	"extension.displayName": "Datenschmiede: Table Editor",
-	"extension.description": "Visueller Editor für .td-Tabellendefinitionen (TOML-basiert) als Grundlage für einen synthetischen Testdaten-Generator.",
+	"extension.displayName": "Datenschmiede",
+	"extension.description": "Synthetische Testdaten aus visuellen TOML-Definitionen: Editoren für Tabellen, Projekte, Nachschlagelisten und Generatoren samt Python-basiertem Erzeugungslauf.",
 	"language.td.alias": "Tabellendefinition",
 	"language.tdproject.alias": "Testdatenprojekt",
 	"language.lkp.alias": "Nachschlageliste",
