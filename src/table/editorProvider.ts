@@ -139,20 +139,48 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 		// found" before the first broadcast has run.
 		void this.refreshOptionsCache();
 
-		// A counter rather than a simple flag: how many self-initiated
-		// WorkspaceEdits are still "in flight", so their onDidChangeTextDocument
-		// is not echoed back to the webview (which already knows that state ->
-		// otherwise the form would be rebuilt and cursor/focus lost). A flag was
-		// not enough: when two edits overlap (e.g. the immediate commit of a
-		// select while a debounced commit is still running) it swallowed only
-		// the first event — the second replaced the webview state mid-edit, and
-		// follow-up input (in the parameter dialog, say) wrote into an orphaned
-		// object and was lost.
-		let selfEditsPending = 0;
-		/** Most recent self-initiated document text — the comparison base while edits are in flight. */
-		let lastQueuedText: string | null = null;
+		// The text the webview currently shows. Everything the document changes
+		// TO this text needs no message: the form already displays it, and
+		// rebuilding it would cost cursor, focus and any open parameter dialog.
+		//
+		// This replaces counting self-initiated edits, which assumed exactly one
+		// change event per applyEdit. That does not hold — VS Code may coalesce
+		// two overlapping edits (the immediate commit of a select while a
+		// debounced commit is still running) into one event, or report one as
+		// two. The counter then drifted, and the next edit was taken for an
+		// external change: the webview state was replaced mid-input and an open
+		// parameter dialog closed with it.
+		let webviewText = document.getText();
+		/**
+		 * Texts of our own edits that are still in flight. Needed on top of
+		 * `webviewText`: when two edits overlap, the intermediate state can
+		 * arrive as an event of its own, and that one is ours too even though it
+		 * is no longer what the webview shows.
+		 */
+		const pendingSelfTexts = new Set<string>();
+
+		/** `true` if the document arriving at `text` is our own doing. */
+		const isSelfChange = (text: string): boolean => {
+			if (text === webviewText) {
+				// The final state landed - anything queued before it is done.
+				pendingSelfTexts.clear();
+				return true;
+			}
+			if (!pendingSelfTexts.has(text)) {
+				return false;
+			}
+			// An intermediate state: it and everything queued before it are done.
+			for (const queued of pendingSelfTexts) {
+				pendingSelfTexts.delete(queued);
+				if (queued === text) {
+					break;
+				}
+			}
+			return true;
+		};
 
 		const postState = () => {
+			webviewText = document.getText();
 			const state = this.readState(document);
 			if ('table' in state) {
 				void webviewPanel.webview.postMessage({ type: 'update', table: state.table });
@@ -167,13 +195,11 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 			}
 			// The workspace index keeps the picker lists current (it also watches
 			// typing in open editors) — only our own state is handled here.
-			if (selfEditsPending > 0) {
-				selfEditsPending--;
-				if (selfEditsPending === 0) {
-					lastQueuedText = null;
-				}
+			if (isSelfChange(e.document.getText())) {
 				return;
 			}
+			// A genuine external change - whatever we still had queued is void.
+			pendingSelfTexts.clear();
 			postState();
 		});
 
@@ -204,15 +230,16 @@ export class TableEditorProvider implements vscode.CustomTextEditorProvider, vsc
 					const newText = serializeTable(message.table);
 					// Compare against the most recent self-initiated text while edits
 					// are in flight — document.getText() lags behind in that case.
-					if (newText === (lastQueuedText ?? document.getText())) {
+					if (newText === webviewText) {
 						break;
 					}
-					lastQueuedText = newText;
-					selfEditsPending++;
+					webviewText = newText;
+					pendingSelfTexts.add(newText);
 					const applied = await this.applyText(document, newText);
 					if (!applied) {
-						selfEditsPending = Math.max(0, selfEditsPending - 1);
-						lastQueuedText = null;
+						// Nothing was written - go back to what is really in the file.
+						pendingSelfTexts.delete(newText);
+						webviewText = document.getText();
 					}
 					break;
 				}

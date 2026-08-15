@@ -3254,18 +3254,29 @@
 				}
 				render();
 				break;
-			case 'update':
-				// External document change (undo, git, text editor): an open
-				// parameter dialog would then be editing a stale state -> close
-				// it without writing anything back.
-				if (abandonParamDialog) {
-					abandonParamDialog();
-				}
+			case 'update': {
+				// Second line of defence against our own edit coming back (the
+				// extension host already filters those out, see
+				// table/editorProvider.ts): if the new state is identical to what
+				// is on screen, there is nothing to redraw - and tearing the form
+				// down would close an open parameter dialog mid-input.
+				const hadError = !!parseError;
+				const before = JSON.stringify(state);
 				parseError = null;
 				state = message.table;
 				normalizeState();
+				if (!hadError && JSON.stringify(state) === before) {
+					break;
+				}
+				// A real external change (undo, git, text editor): an open
+				// parameter dialog would be editing a stale state -> close it
+				// without writing anything back.
+				if (abandonParamDialog) {
+					abandonParamDialog();
+				}
 				render();
 				break;
+			}
 			case 'parseError':
 				if (abandonParamDialog) {
 					abandonParamDialog();
