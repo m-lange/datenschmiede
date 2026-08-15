@@ -126,7 +126,9 @@ export async function runTablePreview(
 	log(`Preview "${targetLabel}" — ${interpreter.path}`);
 
 	return vscode.window.withProgress(
-		{ location: vscode.ProgressLocation.Window, title: vscode.l10n.t('Generating preview…') },
+		// Same notification style as a real generation run, so a preview that
+		// takes a moment is visible rather than hidden in the status bar.
+		{ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Generating preview…'), cancellable: false },
 		async () => {
 			let result: PreviewResult | null = null;
 

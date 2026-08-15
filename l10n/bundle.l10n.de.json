@@ -105,5 +105,5 @@
 	"This table is led by lookup list \"{0}\", which was not found. It may have been deleted or renamed.": "Diese Tabelle wird von der Nachschlageliste „{0}“ geführt, die nicht gefunden wurde. Sie wurde möglicherweise gelöscht oder umbenannt.",
 	"Open a table definition (.td) first.": "Zuerst eine Tabellendefinition (.td) öffnen.",
 	"This table is temporary — it generates records but writes no file.": "Diese Tabelle ist temporär — sie erzeugt Datensätze, schreibt aber keine Datei.",
-	"\"{0}\" writes a binary file, which cannot be shown as text.": "„{0}“ schreibt eine Binärdatei, die sich nicht als Text anzeigen lässt."
+	"\"{0}\" writes a binary file, which cannot be previewed as text.": "„{0}“ schreibt eine Binärdatei, die sich nicht als Text anzeigen lässt."
 }

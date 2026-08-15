@@ -219,7 +219,7 @@
         "command": "datenschmiede.previewFile",
         "title": "%command.previewFile.title%",
         "category": "Datenschmiede",
-        "icon": "$(play)"
+        "icon": "$(eye)"
       }
     ],
     "menus": {

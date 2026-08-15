@@ -57,6 +57,17 @@ export interface WebviewStrings {
 	fkColumnLabel: string;
 	fkColumnEmptyOption: string;
 	fkColumnNotFoundSuffix: string;
+	/** Picker dialog for the referenced table and column (opened by the FK checkbox / the pencil). */
+	fkPickerTitle: string;
+	fkPickerSearchPlaceholder: string;
+	fkPickerHint: string;
+	fkPickerNoTables: string;
+	fkPickerNoMatches: string;
+	fkPickerCurrent: string;
+	fkPickerClear: string;
+	/** Display text of the foreign key generator; `{0}` = table, `{1}` = column. */
+	fkGeneratorDisplay: string;
+	fkGeneratorUnset: string;
 	fkTableRequiredError: string;
 	fkTableNotFoundError: string;
 	fkTableSelfReferenceError: string;
@@ -278,6 +289,15 @@ const en: WebviewStrings = {
 	fkColumnLabel: 'Referenced column',
 	fkColumnEmptyOption: '— select column —',
 	fkColumnNotFoundSuffix: ' (not found)',
+	fkPickerTitle: 'Referenced table and column',
+	fkPickerSearchPlaceholder: 'Search table or column…',
+	fkPickerHint: 'Pick the column this foreign key points at. Type to filter; the tree groups tables by their schema.',
+	fkPickerNoTables: 'There is no other table in this workspace to reference yet.',
+	fkPickerNoMatches: 'No table or column matches the search.',
+	fkPickerCurrent: 'Currently referenced',
+	fkPickerClear: 'Remove reference',
+	fkGeneratorDisplay: 'Foreign key → {0}.{1}',
+	fkGeneratorUnset: 'Foreign key → not set',
 	fkTableRequiredError: 'Select a referenced table.',
 	fkTableNotFoundError: 'This table was not found. It may have been deleted, renamed, or moved.',
 	fkTableSelfReferenceError: 'A table cannot reference itself.',
@@ -490,6 +510,16 @@ const de: WebviewStrings = {
 	fkColumnLabel: 'Referenzierte Spalte',
 	fkColumnEmptyOption: '— Spalte wählen —',
 	fkColumnNotFoundSuffix: ' (nicht gefunden)',
+	fkPickerTitle: 'Referenzierte Tabelle und Spalte',
+	fkPickerSearchPlaceholder: 'Tabelle oder Spalte suchen…',
+	fkPickerHint:
+		'Die Spalte auswählen, auf die dieser Fremdschlüssel zeigt. Tippen filtert; der Baum gruppiert die Tabellen nach ihrem Schema.',
+	fkPickerNoTables: 'In diesem Workspace gibt es noch keine andere Tabelle zum Referenzieren.',
+	fkPickerNoMatches: 'Keine Tabelle und keine Spalte passt zur Suche.',
+	fkPickerCurrent: 'Aktuell referenziert',
+	fkPickerClear: 'Referenz entfernen',
+	fkGeneratorDisplay: 'Fremdschlüssel → {0}.{1}',
+	fkGeneratorUnset: 'Fremdschlüssel → nicht gesetzt',
 	fkTableRequiredError: 'Tabelle auswählen.',
 	fkTableNotFoundError: 'Diese Tabelle wurde nicht gefunden. Sie wurde möglicherweise gelöscht, umbenannt oder verschoben.',
 	fkTableSelfReferenceError: 'Eine Tabelle kann nicht sich selbst referenzieren.',

@@ -2,6 +2,22 @@
 
 ## 0.10.0
 
+- **Fremdschlüssel-Ziel wird jetzt in einem Dialog ausgewählt.** Die beiden
+  Grid-Spalten „Referenzierte Tabelle“ und „Referenzierte Spalte“ sind weg;
+  ein Klick auf die **FK-Checkbox** öffnet stattdessen einen Dialog mit
+  **Live-Suche** und dem **Schema-Baum** des Workspace: Namensräume, darunter
+  die Tabellen, darunter deren Spalten — ausgewählt wird die Spalte, womit
+  Tabelle *und* Spalte in einem Schritt feststehen. Bricht man ab, ohne ein
+  Ziel zu wählen, wird die Checkbox wieder abgewählt. Zum Ändern dient der
+  **Stift neben dem Spaltengenerator**; der Fremdschlüssel-Generator zeigt in
+  seiner Anzeige jetzt das Ziel (`Fremdschlüssel → shop.core.customers.id`),
+  und fehlende oder ungültige Ziele erscheinen als Warnung an dieser Zelle.
+- Die **Datei-Vorschau** trägt jetzt ein **Auge-Symbol** statt des
+  Play-Symbols (in der Titelleiste wie im Spalten-Tab), meldet sich bei
+  Excel und temporären Tabellen als **Warnung** statt als Hinweis und zeigt
+  während der Erzeugung eine **Fortschritts-Benachrichtigung** wie ein
+  echter Lauf statt nur eines Hinweises in der Statusleiste.
+
 - **Deutlich weniger Speicherbedarf bei großen Läufen.** Bisher hielt der
   Lauf *jede* erzeugte Tabelle bis zum Ende im Arbeitsspeicher — der
   Spitzenbedarf war damit die Summe aller Tabellen, nicht die größte

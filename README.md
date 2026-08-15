@@ -108,12 +108,21 @@ bearbeitet. Dazu die Karte **„Ausgabe“**:
 
 **Spalten**: ein Grid mit einer Zeile je Spalte — Name, Datentyp (`string`,
 `integer`, `uuid`, `email`, …), Beschreibung (Markdown, einzeilig mit
-Ellipsis), **PK**/**FK**-Checkboxen, **Referenzierte Tabelle** und
-**Referenzierte Spalte** (Auswahl aus dem Workspace, angezeigt als
-`schema.name`; nur aktiv bei FK; Selbst-Referenzen sind gesperrt) sowie der
-**Spaltengenerator** (siehe unten). Zeilen lassen sich hinzufügen,
-verschieben und entfernen; Spaltenbreiten passen sich dem Inhalt an und
-sind per Ziehgriff einstellbar (geräteweit gemerkt).
+Ellipsis), **PK**/**FK**-Checkboxen sowie der **Spaltengenerator** (siehe
+unten). Zeilen lassen sich hinzufügen, verschieben und entfernen;
+Spaltenbreiten passen sich dem Inhalt an und sind per Ziehgriff einstellbar
+(geräteweit gemerkt).
+
+Ein Klick auf die **FK-Checkbox** öffnet den Dialog **„Referenzierte Tabelle
+und Spalte“**: eine **Live-Suche** über alle Tabellen und Spalten des
+Workspace und darunter der **Schema-Baum** — Namensräume (die
+punktgetrennten Segmente des `schema`-Felds), darunter die Tabellen,
+darunter deren Spalten. Ausgewählt wird eine **Spalte**, womit Ziel-Tabelle
+und Ziel-Spalte in einem Schritt feststehen; die eigene Tabelle steht nicht
+zur Auswahl. Bricht man ab, ohne ein Ziel zu wählen, wird die Checkbox
+wieder abgewählt. Geändert wird die Beziehung später über den **Stift neben
+dem Spaltengenerator**, und der Fremdschlüssel-Generator zeigt das Ziel in
+seiner Anzeige (`Fremdschlüssel → shop.core.customers.id`).
 
 Es gibt zwei Vorschauen, beide über denselben Python-Läufer wie der echte
 Lauf und beide mit 20 Datensätzen inklusive aller referenzierten Tabellen:

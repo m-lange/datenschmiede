@@ -32,7 +32,7 @@ export async function previewFileCommand(context: vscode.ExtensionContext, resou
 
 	if (format === 'temp') {
 		// A temporary table writes no file, so there is nothing to preview.
-		void vscode.window.showInformationMessage(
+		void vscode.window.showWarningMessage(
 			vscode.l10n.t('This table is temporary — it generates records but writes no file.'),
 		);
 		return;
@@ -46,8 +46,8 @@ export async function previewFileCommand(context: vscode.ExtensionContext, resou
 	if (typeof result.text !== 'string') {
 		// Binary formats (Excel, a file generator returning bytes) have nothing
 		// readable to put in a text editor.
-		void vscode.window.showInformationMessage(
-			vscode.l10n.t('"{0}" writes a binary file, which cannot be shown as text.', format.toUpperCase()),
+		void vscode.window.showWarningMessage(
+			vscode.l10n.t('"{0}" writes a binary file, which cannot be previewed as text.', format.toUpperCase()),
 		);
 		return;
 	}

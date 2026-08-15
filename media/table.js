@@ -130,8 +130,6 @@
 		{ key: 'name', minWidth: 140 },
 		{ key: 'type', minWidth: 120 },
 		{ key: 'desc', minWidth: 180 },
-		{ key: 'refTable', minWidth: 170 },
-		{ key: 'refColumn', minWidth: 150 },
 		{ key: 'gen', minWidth: 385 },
 	];
 
@@ -312,7 +310,7 @@
 	 * just `name` without a schema) — empty while it has no name yet. A small
 	 * counterpart to `logicalTableName` in src/table/model.ts, used to detect a
 	 * self-reference in the FK "referenced table" select (see
-	 * populateTableOptions, refreshTableError in renderColumnRow).
+	 * buildFkTree in openFkPicker, and generatorWarning).
 	 */
 	function ownTableLabel() {
 		const name = (state.name || '').trim();
@@ -338,7 +336,7 @@
 
 	const deferredRender = createDeferredRenderer(
 		() => render(),
-		() => !!closeParamDialog,
+		() => !!closeParamDialog || !!closeFkPicker,
 	);
 
 	function render() {
@@ -1773,13 +1771,16 @@
 	/** Anzeige-Text der Generator-Konfiguration einer Spalte (leer ohne Generator). @param {Column} column */
 	function generatorDisplayString(column) {
 		const config = column.generator;
-		// FK columns simply show the generator name ("Foreign Key") — which
-		// table/column is referenced is already stated in the FK columns next to
-		// it. This also applies without a stored generator (older files): the
-		// foreign key generator then applies implicitly.
+		// FK columns show WHAT they reference — the grid has no reference columns
+		// any more, so this is the only place the target is visible. Applies
+		// without a stored generator too (older files): the foreign key generator
+		// then applies implicitly.
 		if ((config && config.id === 'foreign-key') || (!config?.id && column.fk)) {
-			const fkOption = findGeneratorOption('foreign-key');
-			return fkOption ? fkOption.label : 'Foreign Key';
+			const table = column.fkTable.trim();
+			const target = column.fkColumn.trim();
+			return table && target
+				? strings.fkGeneratorDisplay.replace('{0}', table).replace('{1}', target)
+				: strings.fkGeneratorUnset;
 		}
 		if (!config || !config.id) {
 			return '';
@@ -1834,6 +1835,30 @@
 	 * @param {Column} column
 	 */
 	function generatorWarning(column) {
+		if (column.fk) {
+			// The reference used to be checked on its own two selects; with those
+			// gone the generator cell carries the message (the same rules produce
+			// the Problems view entry, see src/table/validation.ts).
+			const table = column.fkTable.trim();
+			const ownLabel = ownTableLabel();
+			if (!table) {
+				return strings.fkTableRequiredError;
+			}
+			if (ownLabel && table === ownLabel) {
+				return strings.fkTableSelfReferenceError;
+			}
+			const known = tableOptions.find((t) => t.label === table);
+			if (!known) {
+				return strings.fkTableNotFoundError;
+			}
+			const target = column.fkColumn.trim();
+			if (!target) {
+				return strings.fkColumnRequiredError;
+			}
+			if (known.columns.length > 0 && !known.columns.includes(target)) {
+				return strings.fkColumnNotFoundError;
+			}
+		}
 		const config = column.generator;
 		if (!config || !config.id) {
 			// Every column is expected to have a generator selected and
@@ -1951,7 +1976,7 @@
 	// ---------------------------------------------------------------------
 
 	/** Fixed column order of the grid, for buildColGroup (see common.js). */
-	const COLUMN_ORDER = ['num', 'name', 'type', 'desc', 'pk', 'fk', 'refTable', 'refColumn', 'gen', 'actions'];
+	const COLUMN_ORDER = ['num', 'name', 'type', 'desc', 'pk', 'fk', 'gen', 'actions'];
 
 	function renderColumnsTab() {
 		const section = el('section', { className: 'tab-panel columns-section' });
@@ -1998,11 +2023,6 @@
 		headRow.appendChild(el('th', { className: 'col-flag', text: strings.colHeaderPk }));
 		headRow.appendChild(el('th', { className: 'col-flag', text: strings.colHeaderFk }));
 
-		const thRefTable = el('th', { className: 'col-ref-table', text: strings.fkTableLabel });
-		const thRefColumn = el('th', { className: 'col-ref-column', text: strings.fkColumnLabel });
-		headRow.appendChild(thRefTable);
-		headRow.appendChild(thRefColumn);
-
 		const thGen = el('th', { className: 'col-generator', text: strings.generatorColumnHeader });
 		headRow.appendChild(thGen);
 
@@ -2015,8 +2035,6 @@
 			name: thName,
 			type: thType,
 			desc: thDesc,
-			refTable: thRefTable,
-			refColumn: thRefColumn,
 			gen: thGen,
 		};
 		for (const { key, minWidth } of RESIZABLE_COLUMNS) {
@@ -2110,99 +2128,47 @@
 		pkTd.appendChild(renderFlagCheckbox(column, 'pk', strings.primaryKeyLabel));
 		row.appendChild(pkTd);
 
-		// The referenced table/column controls are built here already (but only
-		// attached to the row further below), so the FK checkbox handler can
-		// enable/disable them directly instead of re-rendering the whole row.
-		const refTableTd = el('td', { className: 'col-ref-table' });
-		const tableSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
-		populateTableOptions(tableSelect, column.fkTable);
-		tableSelect.disabled = !column.fk;
-		// Mirrors the check in src/table/validation.ts: empty -> "select a
-		// table", equals the own table -> "self-reference", set but no longer
-		// present in tableOptions (e.g. the file was deleted or renamed) -> "not
-		// found". The same message additionally lands as a diagnostic in the
-		// Problems view.
-		const refreshTableError = () => {
-			const value = tableSelect.value.trim();
-			const ownLabel = ownTableLabel();
-			const isSelf = !!value && !!ownLabel && value === ownLabel;
-			const notFound = !!value && !isSelf && !tableOptions.some((t) => t.label === value);
-			const errorText = isSelf
-				? strings.fkTableSelfReferenceError
-				: value
-					? strings.fkTableNotFoundError
-					: strings.fkTableRequiredError;
-			updateFieldError(tableSelect, errorText, column.fk && (!value || isSelf || notFound));
-		};
-		refTableTd.appendChild(wrapSelectWithChevron(tableSelect));
-		refreshTableError();
-
-		// Which columns are on offer depends on the referenced table selected.
-		const refColumnTd = el('td', { className: 'col-ref-column' });
-		const columnSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
-		populateColumnOptions(columnSelect, column.fkTable, column.fkColumn);
-		columnSelect.disabled = !column.fk;
-		const refreshColumnError = () => {
-			const value = columnSelect.value.trim();
-			const table = tableOptions.find((t) => t.label === column.fkTable.trim());
-			// Only checked when the referenced table itself was found —
-			// otherwise this would merely follow from the table error above.
-			const notFound = !!value && !!table && !table.columns.includes(value);
-			updateFieldError(
-				columnSelect,
-				value ? strings.fkColumnNotFoundError : strings.fkColumnRequiredError,
-				column.fk && (!value || notFound),
-			);
-		};
-		refColumnTd.appendChild(wrapSelectWithChevron(columnSelect));
-		refreshColumnError();
-
-		// Build the generator cell here already, so FK toggles and reference
-		// changes can refresh its display directly.
+		// Build the generator cell first: the FK picker and the FK checkbox both
+		// refresh it, since the reference is shown as the generator's display
+		// text (there are no reference columns in the grid any more).
 		const genCell = renderGeneratorCell(column);
-
-		columnSelect.addEventListener('change', () => {
-			column.fkColumn = columnSelect.value;
-			postEdit();
-			refreshColumnError();
-			genCell.refresh();
-		});
-
-		tableSelect.addEventListener('change', () => {
-			column.fkTable = tableSelect.value;
-			postEdit();
-			refreshTableError();
-			// Adapt the column list to the newly selected table; a previous value
-			// is preserved (possibly shown as "not found") instead of being
-			// discarded automatically.
-			populateColumnOptions(columnSelect, column.fkTable, column.fkColumn);
-			refreshColumnError();
-			genCell.refresh();
-		});
 
 		const fkTd = el('td', { className: 'col-flag' });
 		fkTd.appendChild(
 			renderFlagCheckbox(column, 'fk', strings.foreignKeyLabel, () => {
-				tableSelect.disabled = !column.fk;
-				columnSelect.disabled = !column.fk;
-				refreshTableError();
-				refreshColumnError();
-				// Ticking FK automatically (and permanently) assigns the foreign
-				// key generator — the generator picker is locked for FK columns;
-				// unticking removes it again.
 				if (column.fk) {
+					// Ticking FK automatically (and permanently) assigns the foreign
+					// key generator — the generator picker is locked for FK columns.
 					column.generator = { id: 'foreign-key', params: {} };
 					postEdit();
-				} else if (column.generator && column.generator.id === 'foreign-key') {
-					delete column.generator;
-					postEdit();
+					genCell.rebuild();
+					// …and asks straight away what it points at; cancelling without
+					// a target unticks again, so the click simply had no effect.
+					openFkPicker(
+						column,
+						() => genCell.rebuild(),
+						() => {
+							if (!column.fkTable.trim()) {
+								column.fk = false;
+								delete column.generator;
+								postEdit();
+								render();
+							}
+						},
+					);
+					return;
 				}
+				// Unticking drops both the generator and the (now meaningless) target.
+				if (column.generator && column.generator.id === 'foreign-key') {
+					delete column.generator;
+				}
+				column.fkTable = '';
+				column.fkColumn = '';
+				postEdit();
 				genCell.rebuild();
 			}),
 		);
 		row.appendChild(fkTd);
-		row.appendChild(refTableTd);
-		row.appendChild(refColumnTd);
 		row.appendChild(genCell.element);
 
 		const actionsTd = el('td', { className: 'col-actions col-actions-wide' });
@@ -2323,7 +2289,11 @@
 					opt.textContent = optOption.label;
 				}
 			}
-			pencil.disabled = !option || option.parameters.length === 0;
+			// On an FK column the pencil edits the REFERENCE (the picker); for any
+			// other generator it opens the parameter dialog, and is disabled when
+			// there is nothing to configure.
+			pencil.disabled = column.fk ? false : !option || option.parameters.length === 0;
+			pencil.title = column.fk ? strings.fkPickerTitle : strings.generatorEditParamsLabel;
 			const warning = generatorWarning(column);
 			wrap.classList.toggle('has-warning-cell', !!warning);
 			select.classList.toggle('has-warning', !!warning);
@@ -2358,6 +2328,10 @@
 		});
 
 		pencil.addEventListener('click', () => {
+			if (column.fk) {
+				openFkPicker(column, refresh);
+				return;
+			}
 			const config = column.generator;
 			const option = config ? findGeneratorOption(config.id) : null;
 			if (option) {
@@ -2660,49 +2634,274 @@
 		return checkbox;
 	}
 
+	// ---------------------------------------------------------------------
+	// Foreign key picker: the referenced table AND column are chosen together
+	// in one dialog, opened by the FK checkbox (and re-opened by the pencil of
+	// the generator cell). The grid therefore no longer carries two reference
+	// columns — the target is shown as the foreign key generator's display text.
+	//
+	// The tree groups the workspace's tables by the dot-separated segments of
+	// their schema (`shop.core.customers` -> shop > core > customers), the same
+	// grouping the project editor's table picker uses; below each table sit its
+	// columns, and picking one completes the reference.
+	// ---------------------------------------------------------------------
+
+	/** Tears down an open FK picker (at most one at a time). @type {((picked: boolean) => void) | null} */
+	let closeFkPicker = null;
+
 	/**
-	 * Fills the "referenced table" select with the workspace's tables. The own
-	 * table stays visible (e.g. if it was hand-written into the TOML as
-	 * `fk_table` — the error display in refreshTableError then kicks in) but
-	 * cannot be selected anew through the select.
-	 * @param {HTMLSelectElement} select
-	 * @param {string} currentValue
+	 * Builds the namespace tree of all referenceable tables.
+	 * @param {string} exclude Label of the own table (a table cannot reference itself).
+	 * @returns {{segment:string, path:string, groups:any[], tables:{label:string,name:string,columns:string[]}[]}}
 	 */
-	function populateTableOptions(select, currentValue) {
-		populateSelectOptions(
-			select,
-			tableOptions.map((t) => t.label),
-			currentValue,
-			strings.fkTableEmptyOption,
-			strings.fkTableNotFoundSuffix,
-		);
-		const ownLabel = ownTableLabel();
-		if (ownLabel) {
-			for (const option of select.options) {
-				if (option.value === ownLabel) {
-					option.disabled = true;
-				}
+	function buildFkTree(exclude) {
+		const root = { segment: '', path: '', groups: [], tables: [] };
+		for (const option of tableOptions) {
+			if (option.label === exclude) {
+				continue;
 			}
+			const parts = option.label.split('.');
+			const name = parts.pop() || option.label;
+			let node = root;
+			for (const segment of parts) {
+				let child = node.groups.find((g) => g.segment === segment);
+				if (!child) {
+					child = { segment, path: node.path ? `${node.path}.${segment}` : segment, groups: [], tables: [] };
+					node.groups.push(child);
+				}
+				node = child;
+			}
+			node.tables.push({ label: option.label, name, columns: option.columns });
 		}
+		return root;
 	}
 
 	/**
-	 * Fills the "referenced column" select with the columns of the currently
-	 * selected referenced table (empty while no table, or an unknown one, is
-	 * selected).
-	 * @param {HTMLSelectElement} select
-	 * @param {string} tableLabel
-	 * @param {string} currentValue
+	 * Opens the picker for one column.
+	 * @param {Column} column
+	 * @param {() => void} onChanged Refreshes the row (generator display + warning).
+	 * @param {() => void} [onCancelled] Runs when the dialog closes without a pick.
 	 */
-	function populateColumnOptions(select, tableLabel, currentValue) {
-		const table = tableOptions.find((t) => t.label === tableLabel);
-		populateSelectOptions(
-			select,
-			table ? table.columns : [],
-			currentValue,
-			strings.fkColumnEmptyOption,
-			strings.fkColumnNotFoundSuffix,
-		);
+	function openFkPicker(column, onChanged, onCancelled) {
+		if (closeFkPicker) {
+			closeFkPicker(false);
+		}
+
+		const overlay = el('div', { className: 'dialog-overlay' });
+		const dialog = el('div', { className: 'param-dialog fk-dialog card' });
+		dialog.setAttribute('role', 'dialog');
+		dialog.setAttribute('aria-label', strings.fkPickerTitle);
+
+		const titleRow = el('div', { className: 'param-dialog-title' });
+		const heading = el('h3');
+		heading.appendChild(el('i', { className: 'codicon codicon-references param-dialog-icon' }));
+		heading.appendChild(document.createTextNode(strings.fkPickerTitle));
+		titleRow.appendChild(heading);
+		const closeBtn = el('button', { className: 'icon-button param-dialog-close' });
+		closeBtn.type = 'button';
+		closeBtn.title = strings.generatorCancelLabel;
+		closeBtn.setAttribute('aria-label', strings.generatorCancelLabel);
+		closeBtn.appendChild(el('i', { className: 'codicon codicon-close' }));
+		closeBtn.addEventListener('click', () => closeFkPicker && closeFkPicker(false));
+		titleRow.appendChild(closeBtn);
+		dialog.appendChild(titleRow);
+
+		dialog.appendChild(el('p', { className: 'hint param-dialog-desc', text: strings.fkPickerHint }));
+
+		// Current reference, so re-opening the picker shows what is set today.
+		const current = column.fkTable.trim();
+		if (current) {
+			const badge = el('p', { className: 'fk-current' });
+			badge.appendChild(el('span', { className: 'fk-current-label', text: `${strings.fkPickerCurrent}: ` }));
+			badge.appendChild(
+				el('code', { text: column.fkColumn.trim() ? `${current}.${column.fkColumn.trim()}` : current }),
+			);
+			const clear = el('button', { className: 'link-button', text: strings.fkPickerClear });
+			clear.type = 'button';
+			clear.addEventListener('click', () => {
+				column.fkTable = '';
+				column.fkColumn = '';
+				postEdit();
+				if (closeFkPicker) {
+					closeFkPicker(true);
+				}
+				onChanged();
+			});
+			badge.appendChild(clear);
+			dialog.appendChild(badge);
+		}
+
+		const search = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input fk-search' }));
+		search.type = 'text';
+		search.placeholder = strings.fkPickerSearchPlaceholder;
+		search.setAttribute('aria-label', strings.fkPickerSearchPlaceholder);
+		dialog.appendChild(search);
+
+		const treeWrap = el('div', { className: 'fk-tree' });
+		dialog.appendChild(treeWrap);
+
+		/** Groups collapsed by the user; everything starts expanded so the tree is scannable. */
+		const collapsed = new Set();
+
+		/** Applies the reference and closes. */
+		const pick = (label, columnName) => {
+			column.fkTable = label;
+			column.fkColumn = columnName;
+			postEdit();
+			if (closeFkPicker) {
+				closeFkPicker(true);
+			}
+			onChanged();
+		};
+
+		function renderTree() {
+			treeWrap.innerHTML = '';
+			const query = search.value.trim().toLowerCase();
+			const root = buildFkTree(ownTableLabel());
+
+			if (root.groups.length === 0 && root.tables.length === 0) {
+				treeWrap.appendChild(el('p', { className: 'hint', text: strings.fkPickerNoTables }));
+				return;
+			}
+
+			let shown = 0;
+
+			/**
+			 * @param {any} node
+			 * @param {HTMLElement} parent
+			 * @param {number} depth
+			 */
+			const renderGroup = (node, parent, depth) => {
+				for (const group of node.groups) {
+					// A group survives the filter when anything inside it does.
+					const holder = el('div');
+					const before = shown;
+					renderGroup(group, holder, depth + 1);
+					renderTables(group, holder, depth + 1);
+					if (shown === before) {
+						continue;
+					}
+					const row = el('div', { className: 'fk-node fk-group' });
+					row.style.paddingLeft = `${depth * 16}px`;
+					const isCollapsed = collapsed.has(group.path) && !query;
+					const twisty = el('i', {
+						className: `codicon codicon-chevron-${isCollapsed ? 'right' : 'down'} fk-twisty`,
+					});
+					row.appendChild(twisty);
+					row.appendChild(el('i', { className: 'codicon codicon-symbol-namespace fk-icon' }));
+					row.appendChild(el('span', { text: group.segment }));
+					row.tabIndex = 0;
+					const toggle = () => {
+						if (collapsed.has(group.path)) {
+							collapsed.delete(group.path);
+						} else {
+							collapsed.add(group.path);
+						}
+						renderTree();
+					};
+					row.addEventListener('click', toggle);
+					row.addEventListener('keydown', (event) => {
+						if (event.key === 'Enter' || event.key === ' ') {
+							event.preventDefault();
+							toggle();
+						}
+					});
+					parent.appendChild(row);
+					if (!isCollapsed) {
+						parent.appendChild(holder);
+					}
+				}
+			};
+
+			/**
+			 * @param {any} node
+			 * @param {HTMLElement} parent
+			 * @param {number} depth
+			 */
+			const renderTables = (node, parent, depth) => {
+				for (const table of node.tables) {
+					const tableMatches = !query || table.label.toLowerCase().includes(query);
+					const columns = table.columns.filter(
+						(name) => tableMatches || name.toLowerCase().includes(query),
+					);
+					if (!tableMatches && columns.length === 0) {
+						continue;
+					}
+					shown++;
+
+					const tableRow = el('div', { className: 'fk-node fk-table' });
+					tableRow.style.paddingLeft = `${depth * 16}px`;
+					tableRow.appendChild(el('i', { className: 'codicon codicon-table fk-icon' }));
+					tableRow.appendChild(el('span', { text: table.name }));
+					if (table.columns.length === 0) {
+						// Nothing to reference — shown, but not selectable.
+						tableRow.appendChild(el('span', { className: 'fk-empty', text: strings.fkColumnEmptyOption }));
+					}
+					parent.appendChild(tableRow);
+
+					for (const name of columns) {
+						const isCurrent = table.label === column.fkTable.trim() && name === column.fkColumn.trim();
+						const columnRow = el('div', {
+							className: `fk-node fk-column${isCurrent ? ' fk-selected' : ''}`,
+						});
+						columnRow.style.paddingLeft = `${(depth + 1) * 16}px`;
+						columnRow.tabIndex = 0;
+						columnRow.setAttribute('role', 'button');
+						columnRow.appendChild(el('i', { className: 'codicon codicon-symbol-field fk-icon' }));
+						columnRow.appendChild(el('span', { text: name }));
+						columnRow.addEventListener('click', () => pick(table.label, name));
+						columnRow.addEventListener('keydown', (event) => {
+							if (event.key === 'Enter' || event.key === ' ') {
+								event.preventDefault();
+								pick(table.label, name);
+							}
+						});
+						parent.appendChild(columnRow);
+					}
+				}
+			};
+
+			const body = el('div');
+			renderGroup(root, body, 0);
+			renderTables(root, body, 0);
+			if (shown === 0) {
+				treeWrap.appendChild(el('p', { className: 'hint', text: strings.fkPickerNoMatches }));
+				return;
+			}
+			treeWrap.appendChild(body);
+		}
+
+		search.addEventListener('input', renderTree);
+		renderTree();
+
+		overlay.appendChild(dialog);
+		document.body.appendChild(overlay);
+
+		overlay.addEventListener('mousedown', (event) => {
+			if (event.target === overlay && closeFkPicker) {
+				closeFkPicker(false);
+			}
+		});
+		/** @param {KeyboardEvent} event */
+		const onKeyDown = (event) => {
+			if (event.key === 'Escape' && closeFkPicker) {
+				event.stopPropagation();
+				closeFkPicker(false);
+			}
+		};
+		document.addEventListener('keydown', onKeyDown, true);
+
+		closeFkPicker = (picked) => {
+			closeFkPicker = null;
+			document.removeEventListener('keydown', onKeyDown, true);
+			overlay.remove();
+			if (!picked && onCancelled) {
+				onCancelled();
+			}
+			deferredRender.flushIfIdle();
+		};
+
+		search.focus();
 	}
 
 	// ---------------------------------------------------------------------
@@ -2724,7 +2923,7 @@
 	function renderPreviewButton() {
 		const btn = /** @type {HTMLButtonElement} */ (el('button', { className: 'toolbar-btn' }));
 		btn.type = 'button';
-		btn.appendChild(el('i', { className: 'codicon codicon-play' }));
+		btn.appendChild(el('i', { className: 'codicon codicon-eye' }));
 		btn.appendChild(document.createTextNode(strings.previewButton));
 		btn.addEventListener('click', () => {
 			if (previewRunning) {
@@ -2746,7 +2945,7 @@
 		previewButton.disabled = previewRunning;
 		const icon = previewButton.querySelector('.codicon');
 		if (icon) {
-			icon.className = previewRunning ? 'codicon codicon-loading codicon-modifier-spin' : 'codicon codicon-play';
+			icon.className = previewRunning ? 'codicon codicon-loading codicon-modifier-spin' : 'codicon codicon-eye';
 		}
 	}
 
