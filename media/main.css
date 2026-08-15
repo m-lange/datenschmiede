@@ -1874,7 +1874,7 @@ body.vscode-high-contrast-light .chart-bar {
    (width:1px + nowrap ist unter table-layout:auto die uebliche Schrumpf-
    Anweisung), die letzte Spalte bekommt den Rest. Dadurch fuellt die Tabelle
    die volle Breite, ohne den Platz gleichmaessig auf alle Spalten zu verteilen.
-   20 px Abstand zwischen den Spalten (rechts angetragen, damit die erste
+   35 px Abstand zwischen den Spalten (rechts angetragen, damit die erste
    Spalte buendig am Kartenrand beginnt) - hier wird nur gelesen, nicht
    editiert, also braucht es keinen Innenabstand fuer Eingabefelder. */
 .output-files-table th,
@@ -1882,7 +1882,7 @@ body.vscode-high-contrast-light .chart-bar {
 	width: 1px;
 	white-space: nowrap;
 	padding-left: 0;
-	padding-right: 20px;
+	padding-right: 35px;
 }
 
 /* Die letzte Spalte traegt den Balken bis an den rechten Rand. */
@@ -1910,7 +1910,7 @@ body.vscode-high-contrast-light .chart-bar {
    keinen Lauf gab - dann wirkt sie wie der Spacer der anderen Tabellen. */
 .output-files-table .col-bar {
 	width: auto;
-	min-width: 60px;
+	min-width: 100px;
 }
 
 /* Inline-Balken wie im Verteilungsdiagramm einer Nachschlageliste: Laenge
