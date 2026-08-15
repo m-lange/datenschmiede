@@ -2,6 +2,10 @@ import { parse, TomlError } from 'smol-toml';
 import {
 	Column,
 	CsvOptions,
+	FIXED_ALIGNMENTS,
+	FixedAlignment,
+	FixedField,
+	FixedOptions,
 	JsonOptions,
 	OutputConfig,
 	STRUCTURE_NODE_KINDS,
@@ -13,6 +17,7 @@ import {
 	Table,
 	XlsxOptions,
 	XmlOptions,
+	createDefaultFixedOptions,
 	createDefaultJsonOptions,
 	createDefaultOutput,
 	createDefaultXlsxOptions,
@@ -93,7 +98,35 @@ function toOutput(raw: unknown): OutputConfig {
 	output.xlsx = toXlsx(subTable(o.xlsx));
 	output.json = toJson(subTable(o.json));
 	output.xml = toXml(subTable(o.xml));
+	output.fixed = toFixed(subTable(o.fixed));
 	return output;
+}
+
+/** Reads the `[output.fixed]` block including its `[[output.fixed.fields]]` layout. */
+function toFixed(raw: Record<string, unknown>): FixedOptions {
+	const defaults = createDefaultFixedOptions();
+	const rawFields = Array.isArray(raw.fields) ? raw.fields : [];
+	return {
+		includeHeader: toBool(raw.include_header, defaults.includeHeader),
+		truncate: toBool(raw.truncate, defaults.truncate),
+		lineEnding: toStr(raw.line_ending).toLowerCase() === 'crlf' ? 'crlf' : 'lf',
+		dateFormat: toStr(raw.date_format) || defaults.dateFormat,
+		datetimeFormat: toStr(raw.datetime_format) || defaults.datetimeFormat,
+		decimal: toStr(raw.decimal) || defaults.decimal,
+		encoding: toStr(raw.encoding) || defaults.encoding,
+		fields: rawFields.map((entry): FixedField => {
+			const field = subTable(entry);
+			const align = toStr(field.align) as FixedAlignment;
+			return {
+				column: toStr(field.column),
+				width: toInt(field.width, 0),
+				align: FIXED_ALIGNMENTS.includes(align) ? align : 'left',
+				// A pad character written as an empty string in the file would
+				// silently shrink every field — fall back to a space.
+				pad: toStr(field.pad).slice(0, 1) || ' ',
+			};
+		}),
+	};
 }
 
 /** Reads the `[output.xlsx]` block. */
@@ -307,6 +340,33 @@ function serializeOutput(output: OutputConfig): string[] {
 	}
 	if (format === 'xml' || !isDefaultOptions(output.xml, createDefaultXmlOptions())) {
 		lines.push(...serializeXml(output.xml));
+	}
+	if (format === 'fixed' || !isDefaultOptions(output.fixed, createDefaultFixedOptions())) {
+		lines.push(...serializeFixed(output.fixed));
+	}
+	return lines;
+}
+
+/** Writes the `[output.fixed]` block plus its layout as `[[output.fixed.fields]]` tables. */
+function serializeFixed(fixed: FixedOptions): string[] {
+	const lines = [
+		'',
+		'[output.fixed]',
+		`include_header = ${fixed.includeHeader ? 'true' : 'false'}`,
+		`truncate = ${fixed.truncate ? 'true' : 'false'}`,
+		`line_ending = ${tomlString(fixed.lineEnding || 'lf')}`,
+		`date_format = ${tomlString(fixed.dateFormat)}`,
+		`datetime_format = ${tomlString(fixed.datetimeFormat)}`,
+		`decimal = ${tomlString(fixed.decimal)}`,
+		`encoding = ${tomlString(fixed.encoding)}`,
+	];
+	for (const field of fixed.fields) {
+		lines.push('');
+		lines.push('[[output.fixed.fields]]');
+		lines.push(`column = ${tomlString(field.column)}`);
+		lines.push(`width = ${Math.max(0, Math.trunc(field.width))}`);
+		lines.push(`align = ${tomlString(field.align || 'left')}`);
+		lines.push(`pad = ${tomlString(field.pad || ' ')}`);
 	}
 	return lines;
 }

@@ -12,6 +12,8 @@ export interface WebviewStrings {
 	tabColumns: string;
 	/** Only shown for the JSON/XML file types; `{0}` = the file type ("JSON"/"XML"). */
 	tabStructure: string;
+	/** Only shown for the fixed-length file type. */
+	tabFixedLayout: string;
 
 	fieldNameLabel: string;
 	fieldNamePlaceholder: string;
@@ -172,6 +174,35 @@ export interface WebviewStrings {
 	schemaMoveNodeUpLabel: string;
 	schemaMoveNodeDownLabel: string;
 
+	/** Fixed-length settings + the record layout grid. */
+	outputFixedSectionLabel: string;
+	fixedIncludeHeaderLabel: string;
+	fixedTruncateLabel: string;
+	fixedLineEndingLabel: string;
+	fixedLineEndingLf: string;
+	fixedLineEndingCrlf: string;
+	fixedLayoutHint: string;
+	/** `{0}` = total record length in characters. */
+	fixedRecordLengthLabel: string;
+	fixedAddFieldButton: string;
+	fixedFromColumnsButton: string;
+	fixedClearButton: string;
+	fixedEmptyText: string;
+	fixedEmptyAction: string;
+	fixedColHeaderColumn: string;
+	fixedColHeaderStart: string;
+	fixedColHeaderWidth: string;
+	fixedColHeaderAlign: string;
+	fixedColHeaderPad: string;
+	fixedAlignLeft: string;
+	fixedAlignRight: string;
+	fixedPadSpace: string;
+	fixedPadZero: string;
+	fixedWidthInvalidError: string;
+	fixedRemoveFieldLabel: string;
+	fixedMoveFieldUpLabel: string;
+	fixedMoveFieldDownLabel: string;
+
 	/** Mapping columns of the structure grid (which value fills a leaf). */
 	mappingColHeaderSourceKind: string;
 	mappingColHeaderSource: string;
@@ -195,6 +226,7 @@ const en: WebviewStrings = {
 	tabOverview: 'Overview',
 	tabColumns: 'Columns',
 	tabStructure: '{0} structure',
+	tabFixedLayout: 'Record layout',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'e.g. customers',
@@ -346,6 +378,34 @@ const en: WebviewStrings = {
 	schemaMoveNodeUpLabel: 'Move node up',
 	schemaMoveNodeDownLabel: 'Move node down',
 
+	outputFixedSectionLabel: 'Fixed-length settings',
+	fixedIncludeHeaderLabel: 'Write header line (column names, padded the same way)',
+	fixedTruncateLabel: 'Cut values that do not fit their field',
+	fixedLineEndingLabel: 'Line ending',
+	fixedLineEndingLf: 'LF (Unix)',
+	fixedLineEndingCrlf: 'CRLF (Windows)',
+	fixedLayoutHint:
+		'The fields sit next to each other without a separator, so order and width alone decide where a value starts and ends.',
+	fixedRecordLengthLabel: 'Record length: {0} characters',
+	fixedAddFieldButton: 'Add field',
+	fixedFromColumnsButton: 'Derive from columns',
+	fixedClearButton: 'Clear layout',
+	fixedEmptyText: 'No layout defined — every column is written as a 20 character field.',
+	fixedEmptyAction: 'Derive layout from the columns',
+	fixedColHeaderColumn: 'Column',
+	fixedColHeaderStart: 'From',
+	fixedColHeaderWidth: 'Width',
+	fixedColHeaderAlign: 'Alignment',
+	fixedColHeaderPad: 'Padding',
+	fixedAlignLeft: 'Left',
+	fixedAlignRight: 'Right',
+	fixedPadSpace: 'Space',
+	fixedPadZero: 'Zero',
+	fixedWidthInvalidError: 'Give this field a width of at least one character.',
+	fixedRemoveFieldLabel: 'Remove field',
+	fixedMoveFieldUpLabel: 'Move field up',
+	fixedMoveFieldDownLabel: 'Move field down',
+
 	mappingColHeaderSourceKind: 'Filled from',
 	mappingColHeaderSource: 'Value',
 	mappingSourceKindColumn: 'Column',
@@ -368,6 +428,7 @@ const de: WebviewStrings = {
 	tabOverview: 'Übersicht',
 	tabColumns: 'Spalten',
 	tabStructure: '{0}-Struktur',
+	tabFixedLayout: 'Satzaufbau',
 
 	fieldNameLabel: 'Name',
 	fieldNamePlaceholder: 'z. B. customers',
@@ -519,6 +580,34 @@ const de: WebviewStrings = {
 	schemaRemoveNodeLabel: 'Knoten entfernen',
 	schemaMoveNodeUpLabel: 'Knoten nach oben verschieben',
 	schemaMoveNodeDownLabel: 'Knoten nach unten verschieben',
+
+	outputFixedSectionLabel: 'Einstellungen für feste Satzlänge',
+	fixedIncludeHeaderLabel: 'Kopfzeile schreiben (Spaltennamen, gleich aufgefüllt)',
+	fixedTruncateLabel: 'Werte abschneiden, die nicht ins Feld passen',
+	fixedLineEndingLabel: 'Zeilenende',
+	fixedLineEndingLf: 'LF (Unix)',
+	fixedLineEndingCrlf: 'CRLF (Windows)',
+	fixedLayoutHint:
+		'Die Felder stehen ohne Trennzeichen nebeneinander — allein Reihenfolge und Breite bestimmen, wo ein Wert beginnt und endet.',
+	fixedRecordLengthLabel: 'Satzlänge: {0} Zeichen',
+	fixedAddFieldButton: 'Feld hinzufügen',
+	fixedFromColumnsButton: 'Aus Spalten erzeugen',
+	fixedClearButton: 'Aufbau leeren',
+	fixedEmptyText: 'Kein Aufbau festgelegt — jede Spalte wird als 20 Zeichen breites Feld geschrieben.',
+	fixedEmptyAction: 'Aufbau aus den Spalten erzeugen',
+	fixedColHeaderColumn: 'Spalte',
+	fixedColHeaderStart: 'Ab',
+	fixedColHeaderWidth: 'Breite',
+	fixedColHeaderAlign: 'Ausrichtung',
+	fixedColHeaderPad: 'Auffüllen',
+	fixedAlignLeft: 'Links',
+	fixedAlignRight: 'Rechts',
+	fixedPadSpace: 'Leerzeichen',
+	fixedPadZero: 'Null',
+	fixedWidthInvalidError: 'Diesem Feld eine Breite von mindestens einem Zeichen geben.',
+	fixedRemoveFieldLabel: 'Feld entfernen',
+	fixedMoveFieldUpLabel: 'Feld nach oben verschieben',
+	fixedMoveFieldDownLabel: 'Feld nach unten verschieben',
 
 	mappingColHeaderSourceKind: 'Gefüllt aus',
 	mappingColHeaderSource: 'Wert',

@@ -34,7 +34,13 @@ export type IssueKind =
  * block rather than to a single column, and are marked with
  * `columnIndex === OUTPUT_ISSUE_INDEX`.
  */
-export type OutputIssueKind = 'output-node-unnamed' | 'output-mapping-missing' | 'output-mapping-column-not-found';
+export type OutputIssueKind =
+	| 'output-node-unnamed'
+	| 'output-mapping-missing'
+	| 'output-mapping-column-not-found'
+	| 'output-field-width'
+	| 'output-field-column-missing'
+	| 'output-field-column-not-found';
 
 /** `Issue.columnIndex` of a problem that concerns the output configuration, not a column. */
 export const OUTPUT_ISSUE_INDEX = -1;
@@ -259,6 +265,12 @@ export function validateTable(
  */
 export function validateOutputStructure(table: Table): Issue[] {
 	const format = (table.output.format || 'csv').trim().toLowerCase();
+	const ownColumns = new Set(table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0));
+
+	if (format === 'fixed') {
+		return validateFixedLayout(table, ownColumns);
+	}
+
 	let nodes: StructureNode[];
 	if (format === 'json') {
 		nodes = table.output.json.nodes;
@@ -268,7 +280,6 @@ export function validateOutputStructure(table: Table): Issue[] {
 		return [];
 	}
 
-	const ownColumns = new Set(table.columns.map((c) => c.name.trim()).filter((c) => c.length > 0));
 	const issues: Issue[] = [];
 	walkStructure(nodes, (node, path) => {
 		const nodePath = path.join('.');
@@ -287,6 +298,32 @@ export function validateOutputStructure(table: Table): Issue[] {
 			issues.push({ ...base, kind: 'output-mapping-missing' });
 		} else if (!ownColumns.has(source)) {
 			issues.push({ ...base, kind: 'output-mapping-column-not-found', detail: source });
+		}
+	});
+	return issues;
+}
+
+/**
+ * Checks the fixed-length layout: every field needs a positive width (a
+ * zero-width field writes nothing and only confuses the offsets) and a column
+ * that still exists — a renamed column would otherwise leave a silently blank,
+ * still correctly padded field.
+ */
+function validateFixedLayout(table: Table, ownColumns: Set<string>): Issue[] {
+	const issues: Issue[] = [];
+	table.output.fixed.fields.forEach((field, index) => {
+		// The field is identified by its position: several fields may point at
+		// the same column, and an unnamed one has nothing else to go by.
+		const label = field.column.trim() || String(index + 1);
+		const base = { columnIndex: OUTPUT_ISSUE_INDEX, columnName: '', nodePath: label, warning: true } as const;
+		if (!Number.isFinite(field.width) || field.width <= 0) {
+			issues.push({ ...base, kind: 'output-field-width', detail: String(field.width) });
+		}
+		const column = field.column.trim();
+		if (!column) {
+			issues.push({ ...base, kind: 'output-field-column-missing' });
+		} else if (!ownColumns.has(column)) {
+			issues.push({ ...base, kind: 'output-field-column-not-found', detail: column });
 		}
 	});
 	return issues;

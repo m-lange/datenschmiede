@@ -77,7 +77,14 @@
 	 */
 	/** @typedef {{rootName:string,indent:number,jsonLines:boolean,asciiOnly:boolean,dateFormat:string,datetimeFormat:string,encoding:string,nodes:StructureNode[]}} JsonOptions */
 	/** @typedef {{rootElement:string,recordElement:string,indent:number,declaration:boolean,dateFormat:string,datetimeFormat:string,encoding:string,nodes:StructureNode[]}} XmlOptions */
-	/** @typedef {{fileName:string,format:string,csv:CsvOptions,xlsx:XlsxOptions,json:JsonOptions,xml:XmlOptions}} OutputConfig */
+	/**
+	 * One field of a fixed-length record — the counterpart to FixedField in
+	 * src/table/model.ts. The fields sit next to each other without a
+	 * separator, so order and width alone decide where a value starts.
+	 * @typedef {{column:string,width:number,align:'left'|'right',pad:string}} FixedField
+	 */
+	/** @typedef {{includeHeader:boolean,truncate:boolean,lineEnding:string,dateFormat:string,datetimeFormat:string,decimal:string,encoding:string,fields:FixedField[]}} FixedOptions */
+	/** @typedef {{fileName:string,format:string,csv:CsvOptions,xlsx:XlsxOptions,json:JsonOptions,xml:XmlOptions,fixed:FixedOptions}} OutputConfig */
 	/** @typedef {{schema:string,name:string,description:string,columns:Column[],output:OutputConfig}} Table */
 	/** @typedef {{label:string,columns:string[]}} TableOption */
 	/** @typedef {{name:string,type:string,description:string,choices?:string[],required?:boolean,placeholder?:string}} GeneratorParameter */
@@ -91,7 +98,7 @@
 	let state = { schema: '', name: '', description: '', columns: [], output: defaultOutput() };
 	/** @type {string | null} */
 	let parseError = null;
-	/** @type {'overview' | 'columns' | 'structure'} 'structure' only exists for the JSON/XML file types */
+	/** @type {'overview' | 'columns' | 'structure' | 'fixed'} the last two only exist for their file type */
 	let activeTab = 'columns';
 	/** @type {TableOption[]} Tables in the workspace (label + column names), for FK and generator references */
 	let tableOptions = [];
@@ -129,7 +136,14 @@
 		{ value: 'xlsx', label: 'Excel (XLSX)' },
 		{ value: 'json', label: 'JSON' },
 		{ value: 'xml', label: 'XML' },
+		{ value: 'fixed', label: 'Fixed length' },
 	];
+
+	/** File extension per format (counterpart to outputExtension in src/table/model.ts). */
+	const OUTPUT_EXTENSIONS = { csv: 'csv', xlsx: 'xlsx', json: 'json', xml: 'xml', fixed: 'txt' };
+
+	/** Default width of a derived fixed-length field (see FIXED_DEFAULT_WIDTH in src/table/model.ts). */
+	const FIXED_DEFAULT_WIDTH = 20;
 
 	/** @returns {OutputConfig} Default output until the extension host sends the real state (counterpart to createDefaultOutput in src/table/model.ts). */
 	function defaultOutput() {
@@ -175,6 +189,16 @@
 				encoding: 'utf-8',
 				nodes: [],
 			},
+			fixed: {
+				includeHeader: false,
+				truncate: true,
+				lineEnding: 'lf',
+				dateFormat: '%Y%m%d',
+				datetimeFormat: '%Y%m%d%H%M%S',
+				decimal: '.',
+				encoding: 'utf-8',
+				fields: [],
+			},
 		};
 	}
 
@@ -184,10 +208,15 @@
 		return OUTPUT_FORMATS.some((f) => f.value === format) ? format : 'csv';
 	}
 
-	/** `true` for the two structured file types, which get the schema and mapping tabs. */
+	/** `true` for the two record-shaped file types, which get the structure tab. */
 	function isStructuredFormat() {
 		const format = currentFormat();
 		return format === 'json' || format === 'xml';
+	}
+
+	/** File extension the selected format writes. */
+	function currentExtension() {
+		return OUTPUT_EXTENSIONS[currentFormat()] || 'csv';
 	}
 
 	/**
@@ -203,11 +232,15 @@
 		state.output.xlsx = Object.assign(defaults.xlsx, state.output.xlsx || {});
 		state.output.json = Object.assign(defaults.json, state.output.json || {});
 		state.output.xml = Object.assign(defaults.xml, state.output.xml || {});
+		state.output.fixed = Object.assign(defaults.fixed, state.output.fixed || {});
 		if (!Array.isArray(state.output.json.nodes)) {
 			state.output.json.nodes = [];
 		}
 		if (!Array.isArray(state.output.xml.nodes)) {
 			state.output.xml.nodes = [];
+		}
+		if (!Array.isArray(state.output.fixed.fields)) {
+			state.output.fixed.fields = [];
 		}
 		if (!Array.isArray(state.columns)) {
 			state.columns = [];
@@ -305,6 +338,8 @@
 			bar.appendChild(
 				renderTabButton('structure', strings.tabStructure.replace('{0}', currentFormat().toUpperCase())),
 			);
+		} else if (currentFormat() === 'fixed') {
+			bar.appendChild(renderTabButton('fixed', strings.tabFixedLayout));
 		}
 		return bar;
 	}
@@ -314,17 +349,22 @@
 		if (activeTab === 'structure' && !isStructuredFormat()) {
 			activeTab = 'columns';
 		}
+		if (activeTab === 'fixed' && currentFormat() !== 'fixed') {
+			activeTab = 'columns';
+		}
 		switch (activeTab) {
 			case 'overview':
 				return renderOverviewTab();
 			case 'structure':
 				return renderStructureTab();
+			case 'fixed':
+				return renderFixedLayoutTab();
 			default:
 				return renderColumnsTab();
 		}
 	}
 
-	/** @param {'overview'|'columns'|'structure'} tab */
+	/** @param {'overview'|'columns'|'structure'|'fixed'} tab */
 	function renderTabButton(tab, label) {
 		const btn = el('button', { className: 'tab' + (activeTab === tab ? ' active' : ''), text: label });
 		btn.type = 'button';
@@ -423,7 +463,7 @@
 			},
 		});
 		row.appendChild(tagField.element);
-		row.appendChild(el('span', { className: 'filename-ext', text: `.${currentFormat()}` }));
+		row.appendChild(el('span', { className: 'filename-ext', text: `.${currentExtension()}` }));
 		nameField.appendChild(row);
 
 		// "Insert dynamic value" on its own line below the field (the same
@@ -481,6 +521,8 @@
 				return renderJsonSettings();
 			case 'xml':
 				return renderXmlSettings();
+			case 'fixed':
+				return renderFixedSettings();
 			default:
 				return renderCsvSettings();
 		}
@@ -707,6 +749,53 @@
 		section.appendChild(
 			renderCsvCheckbox(strings.xmlDeclarationLabel, xml.declaration, (v) => {
 				xml.declaration = v;
+			}),
+		);
+		return section;
+	}
+
+	function renderFixedSettings() {
+		const fixed = state.output.fixed;
+		const { section, grid } = renderSettingsSection(strings.outputFixedSectionLabel);
+
+		grid.appendChild(
+			renderCsvSelect(strings.fixedLineEndingLabel, fixed.lineEnding, [
+				{ value: 'lf', label: strings.fixedLineEndingLf },
+				{ value: 'crlf', label: strings.fixedLineEndingCrlf },
+			], (v) => {
+				fixed.lineEnding = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvSelect(strings.csvDecimalLabel, fixed.decimal, [
+				{ value: '.', label: '.' },
+				{ value: ',', label: ',' },
+			], (v) => {
+				fixed.decimal = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDateFormatLabel, fixed.dateFormat, '%Y%m%d', (v) => {
+				fixed.dateFormat = v;
+			}),
+		);
+		grid.appendChild(
+			renderCsvTextInput(strings.formatDatetimeFormatLabel, fixed.datetimeFormat, '%Y%m%d%H%M%S', (v) => {
+				fixed.datetimeFormat = v;
+			}),
+		);
+		grid.appendChild(renderEncodingSelect(fixed.encoding, (v) => {
+			fixed.encoding = v;
+		}));
+
+		section.appendChild(
+			renderCsvCheckbox(strings.fixedIncludeHeaderLabel, fixed.includeHeader, (v) => {
+				fixed.includeHeader = v;
+			}),
+		);
+		section.appendChild(
+			renderCsvCheckbox(strings.fixedTruncateLabel, fixed.truncate, (v) => {
+				fixed.truncate = v;
 			}),
 		);
 		return section;
@@ -1239,6 +1328,276 @@
 		});
 		refreshError();
 		return wrapSelectWithChevron(select);
+	}
+
+	// ---------------------------------------------------------------------
+	// "Record layout" tab: the fixed-length field list. The fields sit next to
+	// each other without a separator, so their order and widths alone decide
+	// where a value starts and ends — which is why the grid also shows each
+	// field's start offset and the resulting record length.
+	// ---------------------------------------------------------------------
+
+	/** Fixed column widths (px) of the layout grid — see STRUCTURE_COLUMN_WIDTHS. */
+	const FIXED_COLUMN_WIDTHS = { column: 260, start: 80, width: 110, align: 130, pad: 140, actions: 118 };
+
+	/** @returns {FixedField} A blank field (counterpart to createFixedField in src/table/model.ts). */
+	function createFixedField(column) {
+		return { column: column || '', width: FIXED_DEFAULT_WIDTH, align: 'left', pad: ' ' };
+	}
+
+	/** Layout with one field per written column (see fixedFieldsFromColumns in src/table/model.ts). */
+	function fixedFieldsFromColumns() {
+		return state.columns
+			.filter((column) => !column.hidden && (column.name || '').trim() !== '')
+			.map((column) => createFixedField(column.name.trim()));
+	}
+
+	/** Total record length in characters. */
+	function fixedRecordLength(fields) {
+		return fields.reduce((total, field) => total + Math.max(0, Math.trunc(field.width) || 0), 0);
+	}
+
+	function renderFixedLayoutTab() {
+		const section = el('section', { className: 'tab-panel columns-section' });
+		const fixed = state.output.fixed;
+
+		const toolbar = el('div', { className: 'toolbar' });
+		toolbar.appendChild(
+			renderToolbarButton('add', strings.fixedAddFieldButton, () => {
+				fixed.fields.push(createFixedField(''));
+				postEdit();
+				render();
+				const inputs = app.querySelectorAll('select[data-role="fixed-column"]');
+				const last = inputs[inputs.length - 1];
+				if (last instanceof HTMLSelectElement) {
+					last.focus();
+				}
+			}),
+		);
+		toolbar.appendChild(
+			renderToolbarButton('list-tree', strings.fixedFromColumnsButton, () => {
+				fixed.fields = fixedFieldsFromColumns();
+				postEdit();
+				render();
+			}),
+		);
+		if (fixed.fields.length > 0) {
+			toolbar.appendChild(
+				renderToolbarButton('clear-all', strings.fixedClearButton, () => {
+					fixed.fields = [];
+					postEdit();
+					render();
+				}),
+			);
+			toolbar.appendChild(renderDocumentPreviewButton());
+		}
+		section.appendChild(toolbar);
+		section.appendChild(el('p', { className: 'hint', text: strings.fixedLayoutHint }));
+
+		if (fixed.fields.length === 0) {
+			section.appendChild(
+				renderStructureEmptyState('symbol-ruler', strings.fixedEmptyText, strings.fixedEmptyAction, () => {
+					fixed.fields = fixedFieldsFromColumns();
+					postEdit();
+					render();
+				}),
+			);
+			return section;
+		}
+
+		const wrap = el('div', { className: 'columns-table-wrap' });
+		const table = el('table', { className: 'columns-table structure-table' });
+		table.appendChild(
+			buildColGroup(['num', 'column', 'start', 'width', 'align', 'pad', 'actions'], FIXED_COLUMN_WIDTHS).colgroup,
+		);
+
+		const thead = el('thead');
+		const headRow = el('tr');
+		headRow.appendChild(el('th', { className: 'col-num' }));
+		headRow.appendChild(el('th', { text: strings.fixedColHeaderColumn }));
+		headRow.appendChild(el('th', { className: 'col-num-value', text: strings.fixedColHeaderStart }));
+		headRow.appendChild(el('th', { text: strings.fixedColHeaderWidth }));
+		headRow.appendChild(el('th', { text: strings.fixedColHeaderAlign }));
+		headRow.appendChild(el('th', { text: strings.fixedColHeaderPad }));
+		headRow.appendChild(el('th', { className: 'col-actions col-actions-wide' }));
+		headRow.appendChild(el('th', { className: 'col-spacer' }));
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+
+		const tbody = el('tbody');
+		let offset = 0;
+		fixed.fields.forEach((field, index) => {
+			tbody.appendChild(renderFixedFieldRow(field, index, offset));
+			offset += Math.max(0, Math.trunc(field.width) || 0);
+		});
+		table.appendChild(tbody);
+
+		wrap.appendChild(table);
+		section.appendChild(wrap);
+		section.appendChild(
+			el('p', {
+				className: 'hint record-length',
+				text: strings.fixedRecordLengthLabel.replace('{0}', String(fixedRecordLength(fixed.fields))),
+			}),
+		);
+		return section;
+	}
+
+	/**
+	 * One row of the layout grid.
+	 * @param {FixedField} field
+	 * @param {number} index
+	 * @param {number} offset 0-based start position of this field in the line.
+	 */
+	function renderFixedFieldRow(field, index, offset) {
+		const fields = state.output.fixed.fields;
+		const row = el('tr');
+		row.appendChild(el('td', { className: 'col-num', text: String(index + 1) }));
+
+		// --- Column ---
+		const columnTd = el('td');
+		const columnSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		columnSelect.setAttribute('data-role', 'fixed-column');
+		const columnNames = state.columns.map((c) => (c.name || '').trim()).filter((name) => name !== '');
+		populateSelectOptions(
+			columnSelect,
+			columnNames,
+			(field.column || '').trim(),
+			strings.mappingColumnEmptyOption,
+			strings.mappingColumnNotFoundSuffix,
+		);
+		const refreshColumnError = () => {
+			const value = columnSelect.value.trim();
+			const notFound = !!value && !columnNames.includes(value);
+			updateFieldError(
+				columnSelect,
+				value ? strings.mappingColumnNotFoundError : strings.mappingColumnRequiredError,
+				!value || notFound,
+			);
+		};
+		columnSelect.addEventListener('change', () => {
+			field.column = columnSelect.value;
+			postEdit();
+			refreshColumnError();
+		});
+		refreshColumnError();
+		columnTd.appendChild(wrapSelectWithChevron(columnSelect));
+		row.appendChild(columnTd);
+
+		// --- Start offset (derived from the widths before this field) ---
+		// 1-based, because that is how fixed-length layouts are always
+		// documented ("positions 1-10").
+		row.appendChild(el('td', { className: 'col-num-value', text: String(offset + 1) }));
+
+		// --- Width ---
+		const widthTd = el('td');
+		const widthInput = /** @type {HTMLInputElement} */ (el('input', { className: 'text-input cell-input' }));
+		widthInput.type = 'text';
+		widthInput.inputMode = 'numeric';
+		widthInput.value = String(field.width);
+		const refreshWidthError = () =>
+			updateFieldError(widthInput, strings.fixedWidthInvalidError, !(Number(widthInput.value) > 0));
+		bindText(
+			widthInput,
+			(v) => {
+				// Keep whatever was typed as a number; the validation marks a
+				// zero or unparseable width rather than silently correcting it.
+				field.width = Math.max(0, Math.trunc(Number(v)) || 0);
+				refreshWidthError();
+			},
+			// A width change moves every following field, so the whole grid is
+			// rebuilt on commit rather than only this row.
+			postEditDebounced,
+			() => {
+				postEdit();
+				render();
+			},
+		);
+		refreshWidthError();
+		widthTd.appendChild(widthInput);
+		row.appendChild(widthTd);
+
+		// --- Alignment ---
+		const alignTd = el('td');
+		const alignSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		for (const option of [
+			{ value: 'left', label: strings.fixedAlignLeft },
+			{ value: 'right', label: strings.fixedAlignRight },
+		]) {
+			const opt = /** @type {HTMLOptionElement} */ (el('option', { text: option.label }));
+			opt.value = option.value;
+			alignSelect.appendChild(opt);
+		}
+		alignSelect.value = field.align === 'right' ? 'right' : 'left';
+		alignSelect.addEventListener('change', () => {
+			field.align = /** @type {FixedField['align']} */ (alignSelect.value);
+			postEdit();
+		});
+		alignTd.appendChild(wrapSelectWithChevron(alignSelect));
+		row.appendChild(alignTd);
+
+		// --- Padding character ---
+		const padTd = el('td');
+		const padSelect = /** @type {HTMLSelectElement} */ (el('select', { className: 'text-input cell-input' }));
+		const padOptions = [
+			{ value: ' ', label: strings.fixedPadSpace },
+			{ value: '0', label: strings.fixedPadZero },
+		];
+		// A character hand-written into the TOML that is not on offer here is
+		// still shown, instead of being silently replaced.
+		if (field.pad && !padOptions.some((o) => o.value === field.pad)) {
+			padOptions.push({ value: field.pad, label: field.pad });
+		}
+		for (const option of padOptions) {
+			const opt = /** @type {HTMLOptionElement} */ (el('option', { text: option.label }));
+			opt.value = option.value;
+			padSelect.appendChild(opt);
+		}
+		padSelect.value = field.pad || ' ';
+		padSelect.addEventListener('change', () => {
+			field.pad = padSelect.value;
+			postEdit();
+		});
+		padTd.appendChild(wrapSelectWithChevron(padSelect));
+		row.appendChild(padTd);
+
+		// --- Actions ---
+		const actionsTd = el('td', { className: 'col-actions col-actions-wide' });
+		const actions = el('div', { className: 'row-actions' });
+		actions.appendChild(
+			renderRowActionButton('chevron-up', strings.fixedMoveFieldUpLabel, () => moveFixedField(index, -1), {
+				disabled: index === 0,
+			}),
+		);
+		actions.appendChild(
+			renderRowActionButton('chevron-down', strings.fixedMoveFieldDownLabel, () => moveFixedField(index, 1), {
+				disabled: index === fields.length - 1,
+			}),
+		);
+		actions.appendChild(
+			renderRowActionButton('trash', strings.fixedRemoveFieldLabel, () => {
+				fields.splice(index, 1);
+				postEdit();
+				render();
+			}, { danger: true }),
+		);
+		actionsTd.appendChild(actions);
+		row.appendChild(actionsTd);
+		row.appendChild(el('td', { className: 'col-spacer' }));
+		return row;
+	}
+
+	/** Moves a field one position up (-1) or down (+1) — this shifts every offset behind it. */
+	function moveFixedField(index, delta) {
+		const fields = state.output.fixed.fields;
+		const target = index + delta;
+		if (target < 0 || target >= fields.length) {
+			return;
+		}
+		const [field] = fields.splice(index, 1);
+		fields.splice(target, 0, field);
+		postEdit();
+		render();
 	}
 
 	/** Fixed-text input of a leaf. @param {StructureNode} node */

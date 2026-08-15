@@ -53,14 +53,22 @@ export interface Column {
 }
 
 /** Output file types a table can be written as (see python/generate.py). */
-export const OUTPUT_FORMATS = ['csv', 'xlsx', 'json', 'xml'] as const;
+export const OUTPUT_FORMATS = ['csv', 'xlsx', 'json', 'xml', 'fixed'] as const;
 
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
+/** File extension per format — only "fixed" (fixed length) differs from its own name. */
+const OUTPUT_EXTENSIONS: Record<string, string> = {
+	csv: 'csv',
+	xlsx: 'xlsx',
+	json: 'json',
+	xml: 'xml',
+	fixed: 'txt',
+};
+
 /** File extension a format writes (also drives the `.xyz` hint next to the file name field). */
 export function outputExtension(format: string): string {
-	const normalized = (format || '').trim().toLowerCase();
-	return (OUTPUT_FORMATS as readonly string[]).includes(normalized) ? normalized : 'csv';
+	return OUTPUT_EXTENSIONS[(format || '').trim().toLowerCase()] ?? 'csv';
 }
 
 /** CSV output settings of a table (see python/generate.py for the counterpart). */
@@ -184,6 +192,50 @@ export interface XmlOptions {
 	nodes: StructureNode[];
 }
 
+/** Horizontal alignment of a value inside its fixed-length field. */
+export const FIXED_ALIGNMENTS = ['left', 'right'] as const;
+
+export type FixedAlignment = (typeof FIXED_ALIGNMENTS)[number];
+
+/**
+ * One field of a fixed-length record: a column padded to an exact width. The
+ * fields sit next to each other without a separator, so their order and widths
+ * alone determine where a value starts and ends in the line.
+ */
+export interface FixedField {
+	/** Name of the column whose value fills the field (empty writes only padding). */
+	column: string;
+	/** Width in characters — the field always occupies exactly this many. */
+	width: number;
+	/** Where the value sits when it is shorter than the field. */
+	align: FixedAlignment;
+	/** Character the remaining room is filled with (first character is used; empty -> space). */
+	pad: string;
+}
+
+/** Fixed-length (flat file) output settings of a table. */
+export interface FixedOptions {
+	/** Write a header line, its column names padded into the same fields. */
+	includeHeader: boolean;
+	/**
+	 * Cut values that do not fit their field. Off, an over-long value pushes
+	 * everything behind it out of position — which is why this is on by default.
+	 */
+	truncate: boolean;
+	/** Line ending: "lf" or "crlf" (fixed-length files often go to systems that insist on CRLF). */
+	lineEnding: string;
+	/** Date format (Python strftime). */
+	dateFormat: string;
+	/** Timestamp format (Python strftime). */
+	datetimeFormat: string;
+	/** Decimal separator for numeric values, "." or ",". */
+	decimal: string;
+	/** File encoding, e.g. "utf-8". */
+	encoding: string;
+	/** The fields in writing order — empty falls back to one field per visible column. */
+	fields: FixedField[];
+}
+
 /** Output settings of a table: file name (with `{…}` variables) and file-type configuration. */
 export interface OutputConfig {
 	/**
@@ -199,6 +251,7 @@ export interface OutputConfig {
 	xlsx: XlsxOptions;
 	json: JsonOptions;
 	xml: XmlOptions;
+	fixed: FixedOptions;
 }
 
 /** Built-in file name variables (`{…}`) that a generator run resolves while writing. */
@@ -221,7 +274,57 @@ export function createDefaultOutput(): OutputConfig {
 		xlsx: createDefaultXlsxOptions(),
 		json: createDefaultJsonOptions(),
 		xml: createDefaultXmlOptions(),
+		fixed: createDefaultFixedOptions(),
 	};
+}
+
+/** Fixed-length defaults — space-padded, left-aligned, LF line endings. */
+export function createDefaultFixedOptions(): FixedOptions {
+	return {
+		includeHeader: false,
+		truncate: true,
+		lineEnding: 'lf',
+		dateFormat: '%Y%m%d',
+		datetimeFormat: '%Y%m%d%H%M%S',
+		decimal: '.',
+		encoding: 'utf-8',
+		fields: [],
+	};
+}
+
+/** Width a derived fixed-length field gets — a starting point the user adjusts per field. */
+export const FIXED_DEFAULT_WIDTH = 20;
+
+/** A blank fixed-length field (used by the layout tab's "add field"). */
+export function createFixedField(column = ''): FixedField {
+	return { column, width: FIXED_DEFAULT_WIDTH, align: 'left', pad: ' ' };
+}
+
+/**
+ * Default layout: one field per column that is written to the output file, in
+ * column order. Used both by the layout tab's "derive from columns" button and
+ * — in python/generate.py — whenever a table has no layout of its own.
+ */
+export function fixedFieldsFromColumns(columns: Column[]): FixedField[] {
+	return columns
+		.filter((column) => !column.hidden && column.name.trim() !== '')
+		.map((column) => createFixedField(column.name.trim()));
+}
+
+/** Start offset (0-based) of every field, derived from the widths before it. */
+export function fixedFieldOffsets(fields: FixedField[]): number[] {
+	const offsets: number[] = [];
+	let position = 0;
+	for (const field of fields) {
+		offsets.push(position);
+		position += Math.max(0, Math.trunc(field.width));
+	}
+	return offsets;
+}
+
+/** Total record length of a fixed-length layout. */
+export function fixedRecordLength(fields: FixedField[]): number {
+	return fields.reduce((total, field) => total + Math.max(0, Math.trunc(field.width)), 0);
 }
 
 /** Excel defaults — the table starts at A1 with a frozen, filterable header row. */

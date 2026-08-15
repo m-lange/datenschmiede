@@ -350,6 +350,39 @@ def xml_text(value):
     return str(value)
 
 
+def fixed_text(value, decimal="."):
+    """Renders one value as the text that goes into a fixed-length field."""
+    if value is None or (isinstance(value, float) and value != value):
+        return ""
+    if hasattr(value, "item"):
+        value = value.item()
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    text = str(value)
+    if decimal and decimal != "." and isinstance(value, float):
+        text = text.replace(".", decimal)
+    return text
+
+
+def pad_fixed(text, field, truncate):
+    """
+    Pads (or cuts) one value to its field width. An over-long value is cut by
+    default: leaving it would push every following field out of position, which
+    is exactly what a fixed-length reader cannot cope with.
+    """
+    width = max(0, int(field.get("width") or 0))
+    if width == 0:
+        return ""
+    pad = (str(field.get("pad") or " ") or " ")[0]
+    if len(text) > width and truncate:
+        # Right-aligned fields (typically numbers) keep their LAST characters —
+        # cutting the low-order digits off a number would be far worse.
+        text = text[-width:] if field.get("align") == "right" else text[:width]
+    if field.get("align") == "right":
+        return text.rjust(width, pad)
+    return text.ljust(width, pad)
+
+
 def xml_render_node(node, row, depth, step, newline, index=0):
     """Renders ONE structure node (object/array/value) of one record as XML text parts."""
     name = sanitize_xml_name(node.get("name") or f"field_{index + 1}")
@@ -904,6 +937,8 @@ class Runner:
             return self.write_json(table, df, n)
         if fmt == "xml":
             return self.write_xml(table, df, n)
+        if fmt == "fixed":
+            return self.write_fixed(table, df, n)
         return self.write_csv(table, df, n)
 
     def output_path(self, table, n, out, extension):
@@ -1003,6 +1038,57 @@ class Runner:
             handle.write(text)
         return path
 
+    def write_fixed(self, table, df, n):
+        """Writes one table as a fixed-length (flat) file per its field layout."""
+        cfg = table["output"].get("fixed", {})
+        out = self.format_dataframe(table, df, cfg)
+        path = self.output_path(table, n, out, "txt")
+        text = self.render_fixed(table, out)
+        # newline="" keeps the line ending exactly as rendered — otherwise
+        # Python would translate "\n" to the platform default and a file meant
+        # to be LF would silently become CRLF on Windows.
+        with open(path, "w", encoding=cfg.get("encoding") or "utf-8", newline="") as handle:
+            handle.write(text)
+        return path
+
+    # ------------------------------------------------------------------
+    # Fixed length: field layout
+    # ------------------------------------------------------------------
+
+    def fixed_fields(self, table, cfg):
+        """
+        The configured field layout — or, while none has been set up, one field
+        per written column with the default width (the counterpart of
+        fixedFieldsFromColumns in src/table/model.ts).
+        """
+        fields = cfg.get("fields") or []
+        if fields:
+            return fields
+        return [
+            {"column": c["name"], "width": 20, "align": "left", "pad": " "}
+            for c in table["columns"]
+            if not c.get("hidden") and str(c.get("name") or "").strip()
+        ]
+
+    def render_fixed(self, table, out):
+        """Renders the (already formatted) records as fixed-length lines."""
+        cfg = table["output"].get("fixed", {})
+        fields = self.fixed_fields(table, cfg)
+        truncate = bool(cfg.get("truncate", True))
+        newline = "\r\n" if str(cfg.get("line_ending") or "lf").lower() == "crlf" else "\n"
+        decimal = cfg.get("decimal") or "."
+
+        lines = []
+        if cfg.get("include_header"):
+            # The header carries the column names through exactly the same
+            # padding, so it lines up with the data below it.
+            lines.append("".join(pad_fixed(str(f.get("column") or ""), f, truncate) for f in fields))
+        for row in out.to_dict("records"):
+            lines.append(
+                "".join(pad_fixed(fixed_text(row.get(str(f.get("column") or "")), decimal), f, truncate) for f in fields)
+            )
+        return "".join(line + newline for line in lines)
+
     # ------------------------------------------------------------------
     # JSON/XML: target structure + mapping
     # ------------------------------------------------------------------
@@ -1064,15 +1150,18 @@ class Runner:
 
     def render_preview_text(self, table, df):
         """
-        The preview records as the configured file type would write them — only
-        for JSON/XML, where the document itself is what needs checking; `None`
-        for CSV/Excel, whose preview is the value grid.
+        The preview records as the configured file type would write them — for
+        JSON/XML and fixed length, where the document itself (or the column
+        alignment) is what needs checking; `None` for CSV/Excel, whose preview
+        is the value grid.
         """
         fmt = (table["output"].get("format") or "csv").strip().lower()
         if fmt == "json":
             return self.render_json(table, self.format_dataframe(table, df, table["output"].get("json", {})))
         if fmt == "xml":
             return self.render_xml(table, self.format_dataframe(table, df, table["output"].get("xml", {})))
+        if fmt == "fixed":
+            return self.render_fixed(table, self.format_dataframe(table, df, table["output"].get("fixed", {})))
         return None
 
     def run(self):

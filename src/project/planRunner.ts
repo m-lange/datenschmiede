@@ -16,7 +16,7 @@ import { createStreamDecoder, encodeUtf8, pythonEnv } from '../encoding';
 
 /** A table's output configuration in plan format (counterpart to Table.output, snake_case for Python). */
 export function toPlanOutput(table: Table): PlanOutput {
-	const { csv, xlsx, json, xml } = table.output;
+	const { csv, xlsx, json, xml, fixed } = table.output;
 	return {
 		file_name: table.output.fileName,
 		format: table.output.format || 'csv',
@@ -58,6 +58,21 @@ export function toPlanOutput(table: Table): PlanOutput {
 			datetime_format: xml.datetimeFormat,
 			encoding: xml.encoding,
 			nodes: toPlanStructureNodes(xml.nodes),
+		},
+		fixed: {
+			include_header: fixed.includeHeader,
+			truncate: fixed.truncate,
+			line_ending: fixed.lineEnding,
+			date_format: fixed.dateFormat,
+			datetime_format: fixed.datetimeFormat,
+			decimal: fixed.decimal,
+			encoding: fixed.encoding,
+			fields: fixed.fields.map((field) => ({
+				column: field.column.trim(),
+				width: Math.max(0, Math.trunc(field.width)),
+				align: field.align || 'left',
+				pad: field.pad || ' ',
+			})),
 		},
 	};
 }

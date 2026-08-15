@@ -276,6 +276,16 @@ export interface PlanOutput {
 		encoding: string;
 		nodes: PlanStructureNode[];
 	};
+	fixed: {
+		include_header: boolean;
+		truncate: boolean;
+		line_ending: string;
+		date_format: string;
+		datetime_format: string;
+		decimal: string;
+		encoding: string;
+		fields: { column: string; width: number; align: string; pad: string }[];
+	};
 }
 
 /** The complete job handed to the Python runner on stdin. */

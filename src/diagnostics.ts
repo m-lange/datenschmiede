@@ -355,6 +355,16 @@ export class WorkspaceDiagnostics implements vscode.Disposable {
 					path,
 					issue.detail ?? '',
 				);
+			case 'output-field-width':
+				return vscode.l10n.t('Fixed-length field "{0}" has no width — every field needs at least one character.', path);
+			case 'output-field-column-missing':
+				return vscode.l10n.t('Fixed-length field "{0}" has no column selected.', path);
+			case 'output-field-column-not-found':
+				return vscode.l10n.t(
+					'Fixed-length field "{0}" uses column "{1}", which does not exist in this table. It may have been renamed or removed.',
+					path,
+					issue.detail ?? '',
+				);
 			default:
 				return issue.kind;
 		}

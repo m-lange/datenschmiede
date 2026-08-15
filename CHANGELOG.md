@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0
+
+- **Neuer Dateityp „Feste Satzlänge“**: schreibt eine Textdatei (`.txt`),
+  in der die Felder ohne Trennzeichen nebeneinander stehen. Der neue Tab
+  **„Satzaufbau“** listet je Feld die Spalte, die (abgeleitete)
+  Startposition, die Breite, die Ausrichtung und das Füllzeichen und zeigt
+  darunter die resultierende Satzlänge; zu lange Werte werden
+  standardmäßig abgeschnitten (bei rechtsbündigen Feldern von vorn, damit
+  einer Zahl nicht die niedrigen Stellen fehlen). Dazu Zeilenende (LF/CRLF),
+  Dezimaltrenner, optionale Kopfzeile, Datums-/Zeitstempelformat und
+  Encoding. Die **Dokument-Vorschau** zeigt auch hier 20 Sätze so, wie der
+  Lauf sie schreiben würde. Beispiel:
+  `samples/tables/payment_records.td`.
+
 ## 0.7.1
 
 - **Arrays schreiben in XML jetzt ein wiederholtes Element**: jedes Kind

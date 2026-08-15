@@ -594,6 +594,23 @@ body.col-resizing .col-resize-handle {
 	table-layout: fixed;
 }
 
+/* Abgeleitete Zahlenspalte (Startposition im Satzaufbau): reine Anzeige,
+   rechtsbündig mit Tabellenziffern, damit die Positionen untereinander
+   vergleichbar bleiben. */
+.columns-table td.col-num-value,
+.columns-table th.col-num-value {
+	text-align: right;
+	padding-right: 16px;
+	font-variant-numeric: tabular-nums;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Satzlänge unter dem Aufbau-Grid. */
+.record-length {
+	margin-top: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
 /* „Ausgeblendete“ Spalte (Auge-Umschalter, rein visueller Merkzustand ohne
    weitere Funktion): Zeileninhalt gedimmt, die Aktionen bleiben voll
    sichtbar/bedienbar. */

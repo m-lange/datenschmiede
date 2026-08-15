@@ -3,8 +3,8 @@
 Eine VS-Code-Extension für **synthetische Testdaten**: Tabellen visuell
 definieren, Spalten mit Generatoren belegen, Tabellen zu Projekten bündeln
 und die Daten vektorisiert über **pandas/numpy** erzeugen — als **CSV,
-Excel, JSON oder XML**, mit konsistenten Fremdschlüssel-Beziehungen über
-beliebig viele Ebenen.
+Excel, JSON, XML oder mit fester Satzlänge**, mit konsistenten
+Fremdschlüssel-Beziehungen über beliebig viele Ebenen.
 
 Alle Dateitypen sind unter der Haube normale Klartext-Dateien (TOML bzw.
 CSV) und damit git-freundlich; die Extension stellt dafür grafische Custom
@@ -46,14 +46,18 @@ ohne Fremdschlüssel, also direkt über die **Vorschau** ausprobierbar:
   — **JSON** mit verschachtelter Zielstruktur (Objekte, Array, Werttypen,
   feste Texte)
 - [`samples/tables/order_messages.td`](samples/tables/order_messages.td) —
-  **XML** im EDI-Stil mit Attributen, verschachtelten Elementen und
-  Deklaration
+  **XML** im EDI-Stil mit Attributen, verschachtelten Elementen,
+  wiederholtem Element und Deklaration
+- [`samples/tables/payment_records.td`](samples/tables/payment_records.td)
+  — **feste Satzlänge** im Stil einer Zahlungsdatei (121 Zeichen je Satz,
+  null- und leerzeichengefüllte Felder, CRLF)
 
 ## Tabellen (`.td`)
 
 Jede `.td`-Datei beschreibt **eine Tabelle** und öffnet als Editor mit zwei
-Tabs — bei den Dateitypen JSON und XML kommen zwei weitere hinzu (siehe
-[Zielstruktur](#zielstruktur-json--xml)).
+Tabs; die Dateitypen JSON, XML und feste Satzlänge bringen je einen dritten
+mit (siehe [Zielstruktur](#zielstruktur-json--xml) und
+[Satzaufbau](#satzaufbau-feste-satzlänge)).
 
 **Übersicht**: **Schema**, **Name** und **Beschreibung** — Beschreibungen
 unterstützen überall in der Extension Markdown (fett, kursiv, Code, Links,
@@ -65,9 +69,9 @@ bearbeitet. Dazu die Karte **„Ausgabe“**:
   Zeitstempel, Schema, Tabellenname, Datensatzanzahl oder der Wert einer
   Spalte aus dem ersten generierten Datensatz (Menü **„Dynamischen Wert
   einfügen“**; Klick auf ein Tag entfernt es). Leer ergibt `schema_tabelle`
-- **Dateityp** — **CSV**, **Excel (XLSX)**, **JSON** oder **XML**, je mit
-  eigenen Einstellungen (die Dateiendung neben dem Dateinamen folgt der
-  Auswahl):
+- **Dateityp** — **CSV**, **Excel (XLSX)**, **JSON**, **XML** oder
+  **feste Satzlänge**, je mit eigenen Einstellungen (die Dateiendung neben
+  dem Dateinamen folgt der Auswahl):
   - **CSV**: Spaltentrenner, „jeden Wert in doppelte Anführungszeichen“,
     Dezimaltrenner, Datums-/Zeitstempelformat, Kopfzeile, Encoding
   - **Excel**: **Blattname** (mit denselben `{…}`-Variablen wie der
@@ -79,6 +83,9 @@ bearbeitet. Dazu die Karte **„Ausgabe“**:
     Encoding
   - **XML**: Wurzel- und Datensatz-Element, Einrückung,
     `<?xml …?>`-Deklaration, Datums-/Zeitstempelformat, Encoding
+  - **Feste Satzlänge**: Zeilenende (LF/CRLF), Dezimaltrenner, Kopfzeile,
+    „zu lange Werte abschneiden“, Datums-/Zeitstempelformat, Encoding —
+    der Satzaufbau selbst steht im eigenen Tab (siehe unten)
 
 **Spalten**: ein Grid mit einer Zeile je Spalte — Name, Datentyp (`string`,
 `integer`, `uuid`, `email`, …), Beschreibung (Markdown, einzeilig mit
@@ -150,6 +157,30 @@ Kopier-Knopf.
 
 Der Dateityp entscheidet, welche Struktur gilt: JSON und XML halten ihre
 eigene, sodass ein Wechsel zwischen beiden nichts überschreibt.
+
+### Satzaufbau (feste Satzlänge)
+
+Der Dateityp **Feste Satzlänge** schreibt eine Textdatei (`.txt`), in der
+die Felder **ohne Trennzeichen** nebeneinander stehen — allein Reihenfolge
+und Breite bestimmen, wo ein Wert beginnt und endet. Dafür erscheint der Tab
+**„Satzaufbau“** mit einer Zeile je Feld:
+
+- **Spalte** — welche Spalte das Feld füllt
+- **Ab** — die Startposition (1-basiert, wie in Feldbeschreibungen üblich);
+  sie ergibt sich aus den Breiten davor und wird nur angezeigt
+- **Breite** — die feste Zeichenzahl des Felds
+- **Ausrichtung** — links oder rechts (Beträge und Zähler typischerweise
+  rechts)
+- **Auffüllen** — Leerzeichen oder Null
+
+Unter dem Grid steht die resultierende **Satzlänge**. Werte, die nicht in
+ihr Feld passen, werden standardmäßig abgeschnitten (abschaltbar) —
+andernfalls verschöbe ein zu langer Wert alle folgenden Felder, was ein
+Fixed-Length-Leser gerade nicht verkraftet; bei rechtsbündigen Feldern
+bleiben dabei die *hinteren* Zeichen stehen, damit einer Zahl nicht die
+niedrigen Stellen fehlen. Auch hier zeigt **„Dokument-Vorschau“** 20 Sätze
+genau so, wie der Lauf sie schreiben würde — die beste Kontrolle dafür, ob
+die Spalten wirklich untereinander stehen.
 
 ### Validierung (Problems-Ansicht)
 
@@ -333,7 +364,8 @@ Ablauf des Laufs:
    Tabellen entstehen über die Kardinalität je Datensatz der
    referenzierten Tabelle, die treibende FK-Spalte gleich mit
 3. **Schreiben**: eine Datei je Tabelle im konfigurierten Dateityp (CSV,
-   Excel, JSON oder XML) in den aufgelösten Ausgabeordner des Projekts
+   Excel, JSON, XML oder feste Satzlänge) in den aufgelösten Ausgabeordner
+   des Projekts
 
 Der Fortschritt erscheint als abbrechbare Benachrichtigung mit
 Fortschrittsbalken; das vollständige Protokoll (Tabellen, Spalten,
@@ -381,7 +413,8 @@ Parameter einer Spalte stehen als `generator = "…"` plus
 Editoren in einem festen, git-diff-freundlichen Layout geschrieben.
 
 Die Einstellungen eines Dateityps stehen in einem eigenen Block
-(`[output.csv]`, `[output.xlsx]`, `[output.json]`, `[output.xml]`).
+(`[output.csv]`, `[output.xlsx]`, `[output.json]`, `[output.xml]`,
+`[output.fixed]`).
 `[output.csv]` wird immer geschrieben; die übrigen nur, wenn der Dateityp
 ausgewählt ist oder vom Standard abweicht — eine reine CSV-Tabelle bleibt
 also so schlank wie bisher. Die JSON-/XML-Zielstruktur liegt als **flache**
