@@ -279,6 +279,41 @@
 	}
 
 	/**
+	 * Markdown as readable plain text — for the places where only plain text is
+	 * possible. The `title` of an `<option>`, for instance, is drawn by the
+	 * browser/OS in the native dropdown: no markup gets through, so the raw
+	 * source would show its asterisks and backticks.
+	 *
+	 * The syntax is removed, the structure kept: bullets become "•", paragraphs
+	 * stay separated by a blank line.
+	 * @param {string} text
+	 * @param {number} [maxLength] Cuts off after this many characters (at a word boundary).
+	 */
+	function markdownToPlainText(text, maxLength) {
+		let plain = String(text || '').replace(/\r\n/g, '\n');
+		// Fenced code: keep the code, drop the fences.
+		plain = plain.replace(/^ {0,3}```[^\n]*\n?/gm, '');
+		plain = plain.replace(/`([^`]+)`/g, '$1');
+		plain = plain.replace(/\*\*([^*]+)\*\*/g, '$1');
+		plain = plain.replace(/__([^_]+)__/g, '$1');
+		plain = plain.replace(/\*([^*]+)\*/g, '$1');
+		plain = plain.replace(/(^|[^\w])_([^_]+)_(?!\w)/g, '$1$2');
+		// Links: the text says what it is, the URL only clutters a tooltip.
+		plain = plain.replace(/\[([^\]]+)\]\([^\s)]+\)/g, '$1');
+		plain = plain.replace(/^ {0,3}#{1,6}\s+/gm, '');
+		plain = plain.replace(/^ {0,3}>\s?/gm, '');
+		plain = plain.replace(/^(\s*)[-*+]\s+/gm, '$1• ');
+		plain = plain.replace(/\n{3,}/g, '\n\n');
+		plain = plain.trim();
+		if (maxLength && plain.length > maxLength) {
+			const cut = plain.slice(0, maxLength);
+			const lastSpace = cut.lastIndexOf(' ');
+			plain = (lastSpace > maxLength * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…';
+		}
+		return plain;
+	}
+
+	/**
 	 * One paragraph-level block: a bullet list, a numbered list or a paragraph.
 	 * @param {string} block
 	 */
@@ -966,6 +1001,7 @@
 		debounce,
 		autoGrowCellTextarea,
 		renderMarkdown,
+		markdownToPlainText,
 		renderMarkdownField,
 		renderTextField,
 		renderLabeledMarkdownField,

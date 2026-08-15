@@ -2,10 +2,16 @@
 
 ## 0.10.0
 
-- In der Seitenleiste zeigt der **Tooltip eines Generators seine Beschreibung
-  als gerendertes Markdown** — Hervorhebungen, Listen und `Code` lesen sich
-  dort wie in den Editoren, statt als Rohtext mit Sternchen. Der Pfad steht
-  darunter, abgetrennt durch eine Linie.
+- In der Seitenleiste zeigt der **Tooltip jedes Eintrags seine Beschreibung
+  als gerendertes Markdown** — Projekte, Tabellen, Nachschlagelisten und
+  Generatoren. Hervorhebungen, Listen und `Code` lesen sich dort wie in den
+  Editoren statt als Rohtext mit Sternchen; der Pfad steht darunter,
+  abgetrennt durch eine Linie.
+- Die **Auswahllisten im Table Editor** (Generator einer Spalte, Dateityp)
+  zeigen die Beschreibung im Tooltip jetzt als aufgeräumten Klartext. Ihr
+  Aufklappmenü zeichnet das Betriebssystem, dort kommt kein Markup an — statt
+  Sternchen und Backticks steht nun der lesbare Text, nach 600 Zeichen an
+  einer Wortgrenze gekürzt.
 - **Doppelte Tabellen werden gemeldet**: Definieren zwei `.td`-Dateien
   dasselbe `schema.name`, steht in **beiden** ein Fehler, der jeweils die
   andere Datei nennt. Verweise — Fremdschlüssel, `ctx.table(...)`, die Auswahl

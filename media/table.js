@@ -23,6 +23,7 @@
 		el,
 		bindText,
 		debounce,
+		markdownToPlainText,
 		renderMarkdownField,
 		renderTextField: renderTextFieldCommon,
 		renderLabeledMarkdownField,
@@ -609,7 +610,7 @@
 			for (const generator of fileGeneratorOptions) {
 				const option = /** @type {HTMLOptionElement} */ (el('option', { text: generator.name }));
 				option.value = `custom:${generator.name}`;
-				option.title = generator.description;
+				option.title = markdownToPlainText(generator.description, 600);
 				group.appendChild(option);
 			}
 			formatSelect.appendChild(group);
@@ -2281,7 +2282,11 @@
 				for (const option of options) {
 					const opt = /** @type {HTMLOptionElement} */ (el('option', { text: option.label }));
 					opt.value = option.id;
-					opt.title = option.description;
+					// The dropdown is drawn natively, so its tooltip cannot render
+					// Markdown - it gets the description as readable plain text
+					// rather than raw asterisks and backticks (the sidebar shows
+					// the same text rendered).
+					opt.title = markdownToPlainText(option.description, 600);
 					group.appendChild(opt);
 				}
 				select.appendChild(group);
