@@ -627,24 +627,39 @@ body.col-resizing .col-resize-handle {
 
 .fk-twisty {
 	flex: 0 0 auto;
+	width: 14px;
 	font-size: 14px;
 	color: var(--vscode-descriptionForeground);
 }
 
 .fk-group,
-.fk-column {
+.fk-column,
+.fk-expandable {
 	cursor: pointer;
 }
 
 .fk-group:hover,
-.fk-column:hover {
+.fk-column:hover,
+.fk-expandable:hover {
 	background-color: var(--vscode-list-hoverBackground);
 }
 
 .fk-group:focus-visible,
-.fk-column:focus-visible {
+.fk-column:focus-visible,
+.fk-expandable:focus-visible {
 	outline: 1px solid var(--vscode-focusBorder);
 	outline-offset: -1px;
+}
+
+/* Spaltenzahl hinter dem Tabellennamen — zeigt vorab, was das Aufklappen
+   bringt, ohne die Zeile zu dominieren. */
+.fk-count {
+	margin-left: auto;
+	padding-left: 12px;
+	color: var(--vscode-descriptionForeground);
+	font-weight: normal;
+	font-variant-numeric: tabular-nums;
+	font-size: 0.9em;
 }
 
 /* Tabellenzeilen sind Überschriften: sie zeigen an, wozu die Spalten darunter

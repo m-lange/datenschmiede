@@ -2740,8 +2740,15 @@
 		const treeWrap = el('div', { className: 'fk-tree' });
 		dialog.appendChild(treeWrap);
 
-		/** Groups collapsed by the user; everything starts expanded so the tree is scannable. */
+		/** Namespace groups collapsed by the user — those start expanded. */
 		const collapsed = new Set();
+		/**
+		 * Tables expanded by the user. Tables start COLLAPSED (a workspace can
+		 * hold dozens, each with a dozen columns), except the one currently
+		 * referenced — so re-opening the picker shows the present pick in place.
+		 * A search expands everything it matches, so typing stays a one-click path.
+		 */
+		const expandedTables = new Set(column.fkTable.trim() ? [column.fkTable.trim()] : []);
 
 		/** Applies the reference and closes. */
 		const pick = (label, columnName) => {
@@ -2829,17 +2836,47 @@
 					}
 					shown++;
 
-					const tableRow = el('div', { className: 'fk-node fk-table' });
+					const hasColumns = columns.length > 0;
+					const open = !!query || expandedTables.has(table.label);
+					const tableRow = el('div', { className: `fk-node fk-table${hasColumns ? ' fk-expandable' : ''}` });
 					tableRow.style.paddingLeft = `${depth * 16}px`;
+					if (hasColumns) {
+						tableRow.appendChild(
+							el('i', { className: `codicon codicon-chevron-${open ? 'down' : 'right'} fk-twisty` }),
+						);
+					} else {
+						// Keeps the name aligned with the expandable rows above it.
+						tableRow.appendChild(el('span', { className: 'fk-twisty' }));
+					}
 					tableRow.appendChild(el('i', { className: 'codicon codicon-table fk-icon' }));
 					tableRow.appendChild(el('span', { text: table.name }));
 					if (table.columns.length === 0) {
 						// Nothing to reference — shown, but not selectable.
 						tableRow.appendChild(el('span', { className: 'fk-empty', text: strings.fkColumnEmptyOption }));
+					} else {
+						tableRow.appendChild(el('span', { className: 'fk-count', text: String(table.columns.length) }));
+					}
+					if (hasColumns) {
+						tableRow.tabIndex = 0;
+						const toggleTable = () => {
+							if (expandedTables.has(table.label)) {
+								expandedTables.delete(table.label);
+							} else {
+								expandedTables.add(table.label);
+							}
+							renderTree();
+						};
+						tableRow.addEventListener('click', toggleTable);
+						tableRow.addEventListener('keydown', (event) => {
+							if (event.key === 'Enter' || event.key === ' ') {
+								event.preventDefault();
+								toggleTable();
+							}
+						});
 					}
 					parent.appendChild(tableRow);
 
-					for (const name of columns) {
+					for (const name of open ? columns : []) {
 						const isCurrent = table.label === column.fkTable.trim() && name === column.fkColumn.trim();
 						const columnRow = el('div', {
 							className: `fk-node fk-column${isCurrent ? ' fk-selected' : ''}`,

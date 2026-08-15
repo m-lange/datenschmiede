@@ -161,8 +161,33 @@ Das ist der Weg, wenn eine **vorgegebene Liste von Schlüsseln** die
 Grundlage bilden soll — Geschäftspartner-IDs, Mandanten, Filialen: die Liste
 einmal pflegen, und alle abhängigen Tabellen hängen sich per Fremdschlüssel
 daran. Da jede Zeile genau einmal vorkommt, bleibt die Schlüsselspalte ein
-echter Primärschlüssel. Beispiel:
-[`samples/tables/business_partners.td`](samples/tables/business_partners.td).
+echter Primärschlüssel.
+
+**Beispiel** — die drei Dateien zusammen zeigen das ganze Muster:
+
+1. [`samples/lookups/business_partners.lkp`](samples/lookups/business_partners.lkp)
+   gibt zwölf Geschäftspartner fest vor (`partner_id`, `partner_name`,
+   `segment`)
+2. [`samples/tables/business_partners.td`](samples/tables/business_partners.td)
+   wählt diese Liste als führend und bekommt dadurch **genau zwölf
+   Datensätze** — jede ID einmal, `partner_name` und `segment` immer aus
+   derselben Listenzeile
+3. [`samples/tables/partner_contracts.td`](samples/tables/partner_contracts.td)
+   hängt per Fremdschlüssel daran; im Projekt bekommt sie eine Kardinalität
+   *je Partner* (z. B. `1..3`) und erzeugt entsprechend viele Verträge pro ID
+
+```
+business_partners.csv          partner_contracts.csv  (Kardinalität 1..3)
+BP-1001  Nordwind Handels…     CTR-00001  BP-1001  Nordwind Handels…
+BP-1002  Südstern Logistik…    CTR-00002  BP-1001  Nordwind Handels…
+BP-1003  Ostsee Werften KG     CTR-00003  BP-1001  Nordwind Handels…
+…        (12 Zeilen)           CTR-00004  BP-1002  Südstern Logistik…
+                               …          (21 Zeilen)
+```
+
+`partner_name` in den Verträgen kommt über den Generator `parent_value`
+(intern `ctx.related`) **zeilentreu** vom referenzierten Partner — er passt
+also immer zur `partner_id` daneben.
 
 ### Zielstruktur (JSON / XML)
 

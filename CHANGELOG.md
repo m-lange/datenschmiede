@@ -12,6 +12,14 @@
   **Stift neben dem Spaltengenerator**; der Fremdschlüssel-Generator zeigt in
   seiner Anzeige jetzt das Ziel (`Fremdschlüssel → shop.core.customers.id`),
   und fehlende oder ungültige Ziele erscheinen als Warnung an dieser Zelle.
+  Im Baum lassen sich **Namensräume und Tabellen auf- und zuklappen**;
+  Tabellen starten zugeklappt (mit der Spaltenzahl dahinter), die aktuell
+  referenzierte ist offen, und eine Suche klappt alles Passende auf.
+- **Zweite Beispieltabelle zur führenden Nachschlageliste**:
+  `samples/tables/partner_contracts.td` hängt per Fremdschlüssel an
+  `business_partners` und zeigt damit den eigentlichen Zweck des Musters —
+  eine vorgegebene Schlüsselliste, an der abhängige Tabellen mit eigener
+  Kardinalität hängen.
 - Die **Datei-Vorschau** trägt jetzt ein **Auge-Symbol** statt des
   Play-Symbols (in der Titelleiste wie im Spalten-Tab), meldet sich bei
   Excel und temporären Tabellen als **Warnung** statt als Hinweis und zeigt
