@@ -2,6 +2,39 @@
 
 ## 0.10.0
 
+- **Eigene Seitenleiste** (Symbol in der Aktivitätsleiste) mit vier Ansichten:
+  **Projekte** und **Nachschlagelisten** als flache Liste — jeweils mit dem
+  Namen *aus der Datei* statt dem Dateinamen und dem Pfad daneben —,
+  **Generatoren** als Baum mit den beiden Punkten „Daten“ (`.tdgen`) und
+  „Datei“ (`.filegen`) sowie **Schema** als Baum aus Namensräumen und
+  Tabellen wie im Projekt-Editor. Eine Datei mit kaputtem TOML verschwindet
+  nicht, sondern steht mit Warnsymbol und Pfad in der Liste.
+- **Datensatzzahlen berücksichtigen die führende Nachschlageliste**: Die
+  Schätzung im Projekt-Editor kannte sie nicht und ließ die geführte Tabelle
+  — und alles, was per Fremdschlüssel daran hängt — leer bzw. falsch. Sie
+  zählt jetzt die Zeilen der Liste.
+- **ER-Kästen und Dateiübersicht zeigen beide Zahlen**: was der letzte Lauf
+  wirklich erzeugt hat *und* was der nächste erzeugen wird. Die Kardinalität
+  (`1..3`) steht am Pfeil, in der Dateiübersicht steht der letzte Lauf
+  rechtsbündig mit einem Balken daneben (Länge relativ zum größten Wert, wie
+  im Verteilungsdiagramm einer Nachschlageliste), und der Zeitpunkt des
+  letzten Laufs steht in der Karte „Testdaten generieren“.
+- **Ein Datumsformat überall**: `yyyy-MM-dd HH:mm:ss` in Ortszeit, in jeder
+  Oberfläche, jedem Tooltip und im Ausgabe-Kanal.
+- **Karten neu geschnitten**: Projekt-Editor mit eigener Karte für die
+  Python-Umgebung (Interpreter + `requirements.txt`), fürs Generieren und für
+  die erzeugten Dateien; Table Editor mit getrennten Karten für Dateiname und
+  Dateityp. Das Schema-Feld ist so groß wie der Name, die gerenderte
+  Beschreibung im Übersicht-Tab hat keinen Feldhintergrund mehr.
+- Eine Tabelle, die aus dem Projekt-Editor geöffnet wird (Tabellen-Tab oder
+  ER-Diagramm), **landet in einem eigenen Tab** und verdrängt das Projekt
+  nicht mehr aus der Vorschau-Position.
+- Die **Auswahl der `requirements.txt`** sitzt jetzt neben dem Feld statt
+  darunter: Ein einfaches Textfeld belegte in dieser Zeile die volle Breite
+  und drückte den Knopf in die nächste Zeile.
+- Die **Nachschlagelisten** haben ebenfalls den Knopf „Spaltenbreiten an den
+  Inhalt anpassen“ — als einzige Ansicht mit Spalten-Grid fehlte er dort.
+
 - **Suchfelder haben jetzt ein Löschen-×** (Tabellen-Tab des Projekt-Editors,
   Fremdschlüssel-Auswahl) — es erscheint nur, solange Text drinsteht; Escape
   leert das Feld weiterhin. Beide Felder teilen sich denselben Baustein.
