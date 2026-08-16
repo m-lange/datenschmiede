@@ -6,6 +6,13 @@
 	"l10n": "./l10n",
 	"publisher": "datenschmiede",
 	"private": true,
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/m-lange/datenschmiede.git"
+	},
+	"bugs": {
+		"url": "https://github.com/m-lange/datenschmiede/issues"
+	},
 	"engines": {
 		"vscode": "^1.125.0"
 	},
@@ -387,12 +394,14 @@
 		"compile": "node esbuild.js",
 		"watch": "node esbuild.js --watch",
 		"package": "node esbuild.js --production",
+		"vsix": "vsce package",
 		"check-types": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@types/node": "^26.2.0",
 		"@types/vscode": "^1.125.0",
 		"@vscode/codicons": "^0.0.46-24",
+		"@vscode/vsce": "^3.9.2",
 		"esbuild": "^0.28.2",
 		"typescript": "^7.0.2"
 	},

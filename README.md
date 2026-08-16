@@ -27,6 +27,33 @@ verschoben werden, ohne Referenzen zu brechen; wird dagegen ein *Name*
 geändert oder eine Datei gelöscht, melden alle betroffenen Stellen das als
 Problem (siehe unten).
 
+## Installation
+
+Die Extension wird nicht über den Marketplace verteilt, sondern als
+`.vsix`-Paket. Fertige Pakete liegen unter
+[Releases](https://github.com/m-lange/datenschmiede/releases): dort die
+`.vsix` der gewünschten Version herunterladen und in VS Code über die
+Befehlspalette → **„Extensions: Install from VSIX…“** auswählen. Auf der
+Kommandozeile geht dasselbe mit:
+
+```bash
+code --install-extension datenschmiede-td-0.11.1.vsix
+```
+
+Die Python-Extension (`ms-python.python`) ist als `extensionDependencies`
+deklariert und wird beim Einspielen normalerweise automatisch mitinstalliert;
+schlägt das fehl (etwa ohne Marketplace-Zugriff), muss sie vorher installiert
+werden. Für den eigentlichen Lauf braucht es zusätzlich ein Python 3.10+ mit
+`pandas`/`numpy` — siehe [Python-Interpreter](#python-interpreter).
+
+Ein Paket selbst bauen (Ergebnis: `datenschmiede-td-<version>.vsix` im
+Projektordner):
+
+```bash
+npm install
+npm run vsix
+```
+
 ## Beispielprojekt
 
 Unter [`samples/`](samples/) liegen **zwei Beispielprojekte**, die zusammen
@@ -678,6 +705,7 @@ npm install
 npm run watch          # esbuild im Watch-Modus
 npm run check-types    # TypeScript-Typprüfung
 npm run package        # Produktions-Build (dist/extension.js)
+npm run vsix           # .vsix-Paket (ruft Typprüfung und Produktions-Build auf)
 ```
 
 Anschließend in VS Code mit **F5** starten („Extension ausführen“) — öffnet
@@ -686,6 +714,23 @@ als `extensionDependencies` deklariert, muss diese im Extension Development
 Host-Profil installiert sein (bei einem frischen Profil ggf. einmalig
 manuell — die automatische Installation von `extensionDependencies` greift
 nur beim regulären Marketplace-Install).
+
+### Release
+
+Ein Release entsteht über den Workflow
+[`.github/workflows/release.yml`](.github/workflows/release.yml). Version in
+`package.json` und Abschnitt in `CHANGELOG.md` setzen, committen, dann:
+
+```bash
+git tag v0.11.1        # muss zur Version in package.json passen
+git push origin v0.11.1
+```
+
+Der Workflow baut die `.vsix`, hängt sie an ein neues GitHub-Release und
+übernimmt den passenden CHANGELOG-Abschnitt als Beschreibung. Passt der Tag
+nicht zur Version in `package.json`, bricht er ab. Ein manueller Start
+(**Actions → VSIX → Run workflow**) baut die `.vsix` ebenfalls, legt sie aber
+nur als Workflow-Artefakt ab, ohne ein Release anzulegen.
 
 ## Roadmap
 

@@ -1,0 +1,84 @@
+# Packages the extension as a .vsix and offers it for download:
+#   - pushing a tag "v<version>" publishes a GitHub release with the .vsix attached
+#   - a manual run only uploads the .vsix as a workflow artifact
+name: VSIX
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The package file name follows the version in package.json.
+      - name: Read version from package.json
+        id: meta
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "vsix=datenschmiede-td-$version.vsix" >> "$GITHUB_OUTPUT"
+
+      # A tag that disagrees with package.json would produce a release whose
+      # name does not match the packaged version, so stop right here.
+      - name: Check tag against package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json ${{ steps.meta.outputs.version }}." >&2
+            exit 1
+          fi
+
+      # vsce runs the vscode:prepublish script, i.e. type check and production build.
+      - name: Build VSIX
+        run: npx vsce package --out "${{ steps.meta.outputs.vsix }}"
+
+      - name: Upload VSIX as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: datenschmiede-td-${{ steps.meta.outputs.version }}
+          path: ${{ steps.meta.outputs.vsix }}
+          if-no-files-found: error
+
+      # The matching CHANGELOG section becomes the release description.
+      - name: Create release and attach VSIX
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v marker="## ${{ steps.meta.outputs.version }}" \
+            '$0 == marker { inSection = 1; next } /^## / { inSection = 0 } inSection' \
+            CHANGELOG.md > notes.md
+          cat >> notes.md <<'EOF'
+
+          ## Installation
+
+          Die `.vsix` herunterladen und in VS Code über *Extensions: Install from VSIX…*
+          (Befehlspalette) auswählen. Alternativ auf der Kommandozeile:
+
+          ```
+          code --install-extension datenschmiede-td-<version>.vsix
+          ```
+
+          Die Extension setzt die Python-Extension (`ms-python.python`) voraus; VS Code
+          installiert sie beim Einspielen automatisch mit.
+          EOF
+          gh release create "$GITHUB_REF_NAME" "${{ steps.meta.outputs.vsix }}" \
+            --title "${{ steps.meta.outputs.version }}" \
+            --notes-file notes.md

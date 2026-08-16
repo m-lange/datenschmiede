@@ -1,11 +1,15 @@
 .vscode/**
 .vscode-test/**
+.github/**
+.claude/**
 src/**
 samples/**
 esbuild.js
 tsconfig.json
 .gitignore
-*.map
+.editorconfig
+.hintrc
+**/*.map
 **/.eslintrc*
 node_modules/**
 **/__pycache__/**
