@@ -728,9 +728,19 @@ git push origin v0.11.1
 
 Der Workflow baut die `.vsix`, hängt sie an ein neues GitHub-Release und
 übernimmt den passenden CHANGELOG-Abschnitt als Beschreibung. Passt der Tag
-nicht zur Version in `package.json`, bricht er ab. Ein manueller Start
-(**Actions → VSIX → Run workflow**) baut die `.vsix` ebenfalls, legt sie aber
-nur als Workflow-Artefakt ab, ohne ein Release anzulegen.
+nicht zur Version in `package.json`, bricht er ab.
+
+Alternativ über die Weboberfläche: **Releases → Draft a new release → Choose
+a tag**, dort den neuen Tag eintippen (**Create new tag: … on publish**) und
+das Release veröffentlichen. Der Tag entsteht dabei erst beim Publish und
+löst denselben Workflow aus; weil Release und Beschreibung dann schon
+existieren, hängt er nur noch die `.vsix` an. Ein bereits vorhandener Tag
+löst dagegen nichts aus — in dem Fall die `.vsix` manuell bauen und im
+Release hochladen.
+
+Ein manueller Start (**Actions → VSIX → Run workflow**) baut die `.vsix`
+ebenfalls, legt sie aber nur als Workflow-Artefakt ab, ohne ein Release
+anzulegen.
 
 ## Roadmap
 
