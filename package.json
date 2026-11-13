@@ -298,27 +298,39 @@
 				"when": "activeCustomEditorId == datenschmiede.tableEditor"
 			}
 		],
+		"submenus": [
+			{
+				"id": "datenschmiede.explorerSubmenu",
+				"label": "Datenschmiede"
+			}
+		],
 		"menus": {
 			"explorer/context": [
 				{
-					"command": "datenschmiede.newTable",
-					"group": "navigation"
-				},
+					"submenu": "datenschmiede.explorerSubmenu",
+					"group": "z_datenschmiede"
+				}
+			],
+			"datenschmiede.explorerSubmenu": [
 				{
 					"command": "datenschmiede.newProject",
-					"group": "navigation"
+					"group": "navigation@1"
+				},
+				{
+					"command": "datenschmiede.newTable",
+					"group": "navigation@2"
 				},
 				{
 					"command": "datenschmiede.newLookup",
-					"group": "navigation"
+					"group": "navigation@3"
 				},
 				{
 					"command": "datenschmiede.newGenerator",
-					"group": "navigation"
+					"group": "navigation@4"
 				},
 				{
 					"command": "datenschmiede.newFileGenerator",
-					"group": "navigation"
+					"group": "navigation@5"
 				}
 			],
 			"editor/title/run": [
